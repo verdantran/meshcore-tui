@@ -1,0 +1,289 @@
+package ui
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+
+	"meshcore-tui/internal/config"
+	"meshcore-tui/internal/motion"
+	"meshcore-tui/internal/radio"
+	"meshcore-tui/internal/theme"
+)
+
+// stubRadio feeds nothing; tests push events straight into Update.
+type stubRadio struct{ ch chan radio.Event }
+
+func (s *stubRadio) Start(context.Context)      {}
+func (s *stubRadio) Events() <-chan radio.Event { return s.ch }
+func (s *stubRadio) Close() error               { return nil }
+func (s *stubRadio) Describe() string           { return "/dev/cu.test" }
+func (s *stubRadio) Transport() string          { return "USB" }
+func (s *stubRadio) SendText(context.Context, [32]byte, string) (radio.Sent, error) {
+	return radio.Sent{Ack: 1, Timeout: time.Second}, nil
+}
+func (s *stubRadio) SendChannel(context.Context, int, string) error { return nil }
+func (s *stubRadio) ResetPath(context.Context, [32]byte) error      { return nil }
+
+type clock struct{ t time.Time }
+
+func (c *clock) now() time.Time { return c.t }
+
+func newTestModel(t *testing.T, level motion.Level, w, h int) (*Model, *clock) {
+	t.Helper()
+	c := &clock{t: time.Date(2026, 10, 13, 10, 3, 0, 0, time.UTC)}
+	m := New(Options{
+		Theme: theme.Neon, Motion: level, Clock: c.now,
+		Dial:  func(Target) radio.Radio { return &stubRadio{ch: make(chan radio.Event)} },
+		Start: &Target{Kind: "USB", Addr: "/dev/cu.test"},
+	})
+	m.Init()
+	m.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	return m, c
+}
+
+// tick advances the clock and delivers a frame, as the frame clock would.
+func tick(m *Model, c *clock, d time.Duration) {
+	c.t = c.t.Add(d)
+	m.Update(frameMsg(c.t))
+}
+
+func send(m *Model, c *clock, after time.Duration, e radio.Event) {
+	c.t = c.t.Add(after)
+	m.Update(eventMsg{e})
+}
+
+func screen(t *testing.T, m *Model) []string {
+	t.Helper()
+	lines := strings.Split(m.View().Content, "\n")
+	if len(lines) > m.h {
+		t.Fatalf("rendered %d rows for a %d-row terminal", len(lines), m.h)
+	}
+	for i, l := range lines {
+		if w := ansi.StringWidth(l); w != m.w {
+			t.Fatalf("row %d is %d cells wide, want %d: %q", i, w, m.w, ansi.Strip(l))
+		}
+	}
+	return lines
+}
+
+func plain(lines []string) string { return ansi.Strip(strings.Join(lines, "\n")) }
+
+var ready = radio.Ready{
+	Self:     radio.SelfInfo{Name: "MeshCore-k4", FreqKHz: 869618, BwHz: 62500, SF: 8},
+	Device:   radio.DeviceInfo{Model: "Heltec V4", Firmware: "v1.17.1"},
+	Contacts: 47, Channels: 3, Battery: radio.Battery{MilliVolts: 4020},
+}
+
+func boot(m *Model, c *clock) {
+	send(m, c, 0, radio.BootStep{Key: "link", Label: "LINK", State: radio.StepWait})
+	send(m, c, 200*time.Millisecond, radio.BootStep{Key: "link", Label: "LINK", Detail: "/dev/cu.test", State: radio.StepOK})
+	send(m, c, 200*time.Millisecond, radio.BootStep{Key: "hello", Label: "HELLO", Detail: "MeshCore-k4", State: radio.StepOK})
+	send(m, c, 500*time.Millisecond, ready)
+}
+
+func TestBootThenMainScreen(t *testing.T) {
+	for _, size := range [][2]int{{80, 24}, {120, 40}, {200, 60}} {
+		m, c := newTestModel(t, motion.Full, size[0], size[1])
+		boot(m, c)
+		got := plain(screen(t, m))
+		for _, want := range []string{"LINK SEQUENCE", "LINK", "[ OK ]", "LINK ESTABLISHED"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("%v boot screen missing %q:\n%s", size, want, got)
+			}
+		}
+
+		tick(m, c, time.Second)
+		if m.phase != phaseMain {
+			t.Fatalf("%v: still in boot after the handover delay", size)
+		}
+		send(m, c, 100*time.Millisecond, radio.Packet{SNR: 7.25, RSSI: -92, Raw: []byte{0x15, 0x02, 0xA3, 0x5F, 0x01, 0x02}})
+		send(m, c, 0, radio.Log{Text: "PATH UPDATED  Alice → A3", Tone: radio.ToneOK})
+		tick(m, c, 2*time.Second)
+		got = plain(screen(t, m))
+		for _, want := range []string{"MeshCore-k4", "Heltec V4", "869.618 SF8 BW62.5", "LINKED", "1 CHATS", "SYSTEM LOG", "PATH UPDATED", "SNR +7.25"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("%v main screen missing %q:\n%s", size, want, got)
+			}
+		}
+	}
+}
+
+func TestTabsDebugAndMotionOff(t *testing.T) {
+	m, c := newTestModel(t, motion.Off, 100, 30)
+	boot(m, c)
+	if m.phase != phaseMain {
+		t.Fatal("motion off should go straight to the main screen")
+	}
+	send(m, c, 0, radio.Frame{Dir: radio.ToRadio, Code: 22, Name: "DEVICE_QUERY", Bytes: []byte{22, 3}})
+	m.Update(tea.KeyPressMsg{Code: '4', Text: "4"})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyF12})
+	got := plain(screen(t, m))
+	for _, want := range []string{"PACKETS", "FRAMES", "DEVICE_QUERY", "16 03"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q:\n%s", want, got)
+		}
+	}
+	if m.animating() {
+		t.Error("nothing should animate with motion off")
+	}
+}
+
+func TestFailedBootStopsTicking(t *testing.T) {
+	m, c := newTestModel(t, motion.Full, 100, 30)
+	send(m, c, 0, radio.BootStep{Key: "link", Label: "LINK", State: radio.StepWait})
+	send(m, c, 100*time.Millisecond, radio.BootStep{Key: "link", Label: "LINK", Detail: "no such port", State: radio.StepFail})
+	send(m, c, 0, radio.Fatal{Err: errors.New("open serial port: no such file")})
+	tick(m, c, 2*time.Second)
+	if got := plain(screen(t, m)); !strings.Contains(got, "[FAIL]") || !strings.Contains(got, "r retry") {
+		t.Errorf("failed boot screen:\n%s", got)
+	}
+	if m.animating() {
+		t.Error("a failed boot screen should stop the frame clock once the glitch ends")
+	}
+}
+
+func TestIdleMainScreenStopsTicking(t *testing.T) {
+	m, c := newTestModel(t, motion.Full, 100, 30)
+	boot(m, c)
+	tick(m, c, time.Second)
+	tick(m, c, 30*time.Second)
+	if m.animating() {
+		t.Error("an idle main screen should not tick")
+	}
+}
+
+func TestThemeCycleCrossfades(t *testing.T) {
+	m, c := newTestModel(t, motion.Full, 100, 30)
+	boot(m, c)
+	tick(m, c, time.Second)
+	m.Update(tea.KeyPressMsg{Code: 'T', Text: "T"})
+	if m.Theme().Name != theme.Dusk.Name {
+		t.Fatalf("T should move to dusk, got %s", m.Theme().Name)
+	}
+	tick(m, c, themeFadeDur/2)
+	if m.th.Bg == theme.Neon.Bg || m.th.Bg == theme.Dusk.Bg {
+		t.Error("halfway through the fade the background should be a blend")
+	}
+	tick(m, c, themeFadeDur)
+	if m.th.Bg != theme.Dusk.Bg {
+		t.Error("the fade should finish on the new theme")
+	}
+	// Every theme, mono included, renders at the full width.
+	for range theme.All {
+		m.Update(tea.KeyPressMsg{Code: 'T', Text: "T"})
+		tick(m, c, time.Second)
+		if got := plain(screen(t, m)); !strings.Contains(got, "theme "+m.Theme().Name) {
+			t.Errorf("footer doesn't name theme %s", m.Theme().Name)
+		}
+	}
+}
+
+func typeKeys(m *Model, s string) {
+	for _, r := range s {
+		k := tea.KeyPressMsg{Code: r, Text: string(r)}
+		if r == ' ' {
+			k = tea.KeyPressMsg{Code: tea.KeySpace}
+		}
+		m.Update(k)
+	}
+}
+
+func key(m *Model, code rune) { m.Update(tea.KeyPressMsg{Code: code}) }
+
+func TestPalette(t *testing.T) {
+	m, c := newTestModel(t, motion.Full, 120, 30)
+	boot(m, c)
+	tick(m, c, time.Second)
+
+	typeKeys(m, ":")
+	if !m.pal.open {
+		t.Fatal(": should open the palette")
+	}
+	typeKeys(m, "th")
+	key(m, tea.KeyTab)
+	if m.pal.input != "theme " {
+		t.Fatalf("tab completed to %q", m.pal.input)
+	}
+	typeKeys(m, "ic")
+	key(m, tea.KeyTab)
+	key(m, tea.KeyEnter)
+	if m.Theme().Name != "ice" {
+		t.Fatalf("theme ice didn't apply, got %s", m.Theme().Name)
+	}
+
+	typeKeys(m, ":contacts")
+	key(m, tea.KeyEnter)
+	if tabNames[m.tab] != "CONTACTS" {
+		t.Fatalf("contacts command left tab on %s", tabNames[m.tab])
+	}
+
+	typeKeys(m, ":bogus")
+	key(m, tea.KeyEnter)
+	if l := m.log[len(m.log)-1]; l.tone != radio.ToneFail || !strings.Contains(l.text, "bogus") {
+		t.Fatalf("unknown command logged %+v", l)
+	}
+
+	typeKeys(m, ":")
+	key(m, tea.KeyUp)
+	if m.pal.input != "bogus" {
+		t.Fatalf("history up gave %q", m.pal.input)
+	}
+	got := plain(screen(t, m))
+	if !strings.Contains(got, "mc▸ bogus") {
+		t.Errorf("prompt not shown:\n%s", got)
+	}
+	key(m, tea.KeyEscape)
+
+	typeKeys(m, "?")
+	if got := plain(screen(t, m)); !strings.Contains(got, "HELP") || !strings.Contains(got, "command palette") {
+		t.Errorf("help overlay:\n%s", got)
+	}
+	key(m, tea.KeyEscape)
+	if m.help {
+		t.Error("esc should close help")
+	}
+}
+
+func TestSavedDevices(t *testing.T) {
+	cfg, err := config.Load(t.TempDir() + "/config.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &clock{t: time.Date(2026, 10, 13, 10, 3, 0, 0, time.UTC)}
+	m := New(Options{
+		Theme: theme.Neon, Motion: motion.Off, Clock: c.now, Config: cfg,
+		Dial:  func(Target) radio.Radio { return &stubRadio{ch: make(chan radio.Event)} },
+		Ports: func() []Target { return []Target{{Kind: "USB", Addr: "/dev/cu.test", Detail: "Espressif"}} },
+	})
+	m.Init()
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	key(m, tea.KeyEnter) // the detected port
+	boot(m, c)
+	if len(cfg.Devices) != 1 || cfg.Devices[0].Name != "MeshCore-k4" || cfg.Devices[0].Addr != "/dev/cu.test" {
+		t.Fatalf("device not remembered: %+v", cfg.Devices)
+	}
+	back, _ := config.Load(cfg.Path())
+	if len(back.Devices) != 1 {
+		t.Fatal("remembered device wasn't written to disk")
+	}
+
+	// A fresh session lists it once, starred, ahead of the detected ports.
+	m2 := New(Options{Theme: theme.Neon, Motion: motion.Off, Clock: c.now, Config: back,
+		Ports: func() []Target { return []Target{{Kind: "USB", Addr: "/dev/cu.test"}} }})
+	m2.Init()
+	m2.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	got := plain(screen(t, m2))
+	if strings.Count(got, "/dev/cu.test") != 1 || !strings.Contains(got, "★USB") || !strings.Contains(got, "MeshCore-k4") {
+		t.Errorf("connect screen:\n%s", got)
+	}
+	typeKeys(m2, "d")
+	if len(back.Devices) != 0 {
+		t.Error("d should forget the saved device")
+	}
+}

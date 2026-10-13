@@ -1,0 +1,226 @@
+// Package radio connects to a companion radio and turns everything it does into a stream of events.
+package radio
+
+import (
+	"context"
+	"encoding/hex"
+	"fmt"
+	"strings"
+	"time"
+)
+
+// Radio is a connected companion: the SDK-backed Link, or the simulator.
+type Radio interface {
+	Start(ctx context.Context)
+	Events() <-chan Event
+	Close() error
+	Describe() string  // what we're connected to, e.g. a port or host
+	Transport() string // USB, TCP, BLE or SIM
+
+	SendText(ctx context.Context, to [32]byte, text string) (Sent, error)
+	SendChannel(ctx context.Context, idx int, text string) error
+	ResetPath(ctx context.Context, contact [32]byte) error
+}
+
+// MaxText is the firmware's MAX_TEXT_LEN in bytes. Channel messages share it with the "name: " prefix.
+const MaxText = 160
+
+type ContactType byte
+
+const (
+	TypeChat     ContactType = 1
+	TypeRepeater ContactType = 2
+	TypeRoom     ContactType = 3
+	TypeSensor   ContactType = 4
+)
+
+func (t ContactType) String() string {
+	switch t {
+	case TypeChat:
+		return "Chat"
+	case TypeRepeater:
+		return "Repeater"
+	case TypeRoom:
+		return "Room"
+	case TypeSensor:
+		return "Sensor"
+	}
+	return "Unknown"
+}
+
+type Contact struct {
+	Key        [32]byte
+	Name       string
+	Type       ContactType
+	Flags      byte
+	PathLen    int // hops on the stored direct route; -1 means none, so sends flood
+	Path       []byte
+	LastAdvert time.Time
+	Lat, Lon   float64
+}
+
+func (c Contact) Prefix() [6]byte {
+	var p [6]byte
+	copy(p[:], c.Key[:6])
+	return p
+}
+
+func KeyHex(k []byte) string { return strings.ToUpper(hex.EncodeToString(k)) }
+
+type Channel struct {
+	Idx    int
+	Name   string
+	Secret [16]byte
+}
+
+// Incoming is a received text message, from a contact or a channel.
+type Incoming struct {
+	At         time.Time
+	Channel    bool
+	ChannelIdx int
+	From       [6]byte // sender's key prefix, for direct messages
+	Hops       int     // -1 when it came over a direct route
+	SentAt     time.Time
+	Text       string // channel messages arrive as "name: text"
+	SNR        float32
+	HasSNR     bool
+	Signed     bool
+}
+
+// Sent is the radio's receipt for a direct message; Ack matches the later Acked event.
+type Sent struct {
+	Ack     uint32
+	Flood   bool
+	Timeout time.Duration
+}
+
+type Acked struct {
+	Ack uint32
+	RTT time.Duration
+}
+
+// ContactUpdated carries a new or changed contact, such as after an advert or a path update.
+type ContactUpdated struct{ Contact Contact }
+
+type Event any
+
+type StepState int
+
+const (
+	StepWait StepState = iota
+	StepOK
+	StepFail
+)
+
+// BootStep is one stage of the connect sequence. The same Key is sent again when it finishes.
+type BootStep struct {
+	Key    string
+	Label  string
+	Detail string
+	State  StepState
+}
+
+type SelfInfo struct {
+	Name     string
+	PubKey   [32]byte
+	FreqKHz  uint32
+	BwHz     uint32
+	SF, CR   byte
+	TxPower  byte
+	Lat, Lon float64
+}
+
+// Radio params formatted like the header: 869.618 SF8 BW62.5.
+func (s SelfInfo) Params() string {
+	return fmt.Sprintf("%.3f SF%d BW%s", float64(s.FreqKHz)/1000, s.SF, trimFloat(float64(s.BwHz)/1000))
+}
+
+func trimFloat(f float64) string {
+	s := fmt.Sprintf("%.1f", f)
+	if len(s) > 2 && s[len(s)-2:] == ".0" {
+		return s[:len(s)-2]
+	}
+	return s
+}
+
+type DeviceInfo struct {
+	Model       string
+	Firmware    string
+	BuildDate   string
+	MaxContacts int
+	MaxChannels int
+}
+
+// Ready is sent once the connect sequence has finished.
+type Ready struct {
+	Self        SelfInfo
+	Device      DeviceInfo
+	Contacts    int
+	Channels    int
+	Battery     Battery
+	ContactList []Contact
+	ChannelList []Channel
+}
+
+type Battery struct {
+	MilliVolts uint16
+}
+
+// Percent is a rough single-cell Li-ion estimate.
+func (b Battery) Percent() int {
+	v := float64(b.MilliVolts) / 1000
+	return int(min(max((v-3.3)/(4.2-3.3)*100, 0), 100) + 0.5)
+}
+
+// Packet is a raw on-air packet the radio heard (PUSH_CODE_LOG_RX_DATA).
+type Packet struct {
+	At   time.Time
+	SNR  float32
+	RSSI int8
+	Raw  []byte
+}
+
+// Transmit marks something going out over the air, for the TX lamp.
+type Transmit struct {
+	At   time.Time
+	What string
+}
+
+type Tone int
+
+const (
+	ToneInfo Tone = iota
+	ToneOK
+	ToneWarn
+	ToneFail
+)
+
+// Log is a line for the system log, such as a path update or an advert.
+type Log struct {
+	At   time.Time
+	Text string
+	Tone Tone
+}
+
+// Lost and Restored bracket a dropped connection; the transport reconnects on its own.
+type Lost struct{ Err error }
+type Restored struct{}
+
+// Fatal means the connection can't be made at all.
+type Fatal struct{ Err error }
+
+type Dir int
+
+const (
+	ToRadio Dir = iota
+	FromRadio
+)
+
+// Frame is one companion-protocol frame, for the debug pane.
+type Frame struct {
+	At    time.Time
+	Dir   Dir
+	Code  byte
+	Name  string
+	Bytes []byte // command bytes; responses arrive parsed, so these are empty for FromRadio
+}

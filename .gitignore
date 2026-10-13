@@ -1,0 +1,6 @@
+/meshcore-tui
+/dist/
+
+# OSM-derived map data (ODbL) is distributed separately from the code.
+prototypes/map/packs/*.json
+prototypes/map/packs/src/
