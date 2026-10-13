@@ -73,6 +73,7 @@ func contacts() []radio.Contact {
 
 var chatter = map[string][]string{
 	"#bristol": {
+		"@MeshCore-k4 are you hearing Purdown from Bedminster?", "@MeshCore-k4 nice advert, came in at 3 hops",
 		"anyone hearing the coast relay this morning?", "Purdown's back up after the power cut",
 		"new repeater going up on Lansdown this weekend", "getting 3 hops to Bath from Bedminster now",
 		"is the #hilltop channel still a thing?", "solid -2 dB to Clevedon from the harbourside",
@@ -280,7 +281,7 @@ func (s *Sim) chatter(now time.Time) {
 		}
 	}
 	s.mu.Unlock()
-	if owed != "" || s.float() < 0.3 {
+	if owed != "" || s.float() < 0.45 {
 		name := owed
 		if name == "" {
 			name = []string{"Alice", "Bob", "Carol", "Dan"}[s.intn(4)]

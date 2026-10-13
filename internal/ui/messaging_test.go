@@ -142,3 +142,31 @@ func TestFilterSearchAndExport(t *testing.T) {
 		}
 	}
 }
+
+func TestNotifyCommand(t *testing.T) {
+	m, _, _ := newChatModel(t)
+	typeKeys(m, ":notify")
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	var raw string
+	var walk func(tea.Cmd)
+	walk = func(cmd tea.Cmd) {
+		if cmd == nil {
+			return
+		}
+		switch msg := cmd().(type) {
+		case tea.BatchMsg:
+			for _, c := range msg {
+				walk(c)
+			}
+		case tea.RawMsg:
+			raw += msg.Msg.(string)
+		}
+	}
+	walk(cmd)
+	if !strings.Contains(raw, "\a") || !strings.Contains(raw, "\x1b]9;meshcore-tui · test") {
+		t.Fatalf(":notify wrote %q", raw)
+	}
+	if l := m.log[len(m.log)-1]; !strings.Contains(l.text, "NOTIFIED  test · via terminal escape + bell") {
+		t.Fatalf("log = %q", l.text)
+	}
+}

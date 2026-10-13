@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"meshcore-tui/internal/notify"
+	"meshcore-tui/internal/radio"
 	"meshcore-tui/internal/store"
 )
 
@@ -82,9 +83,35 @@ func (m *Model) flushNotes() tea.Cmd {
 		body = strings.Join(who, ", ")
 	}
 	n.pending = nil
+	return m.sendNote(title, body)
+}
+
+// sendNote writes a notification now, and logs it, so it's visible even if the terminal swallows it.
+func (m *Model) sendNote(title, body string) tea.Cmd {
+	n := &m.notes
+	m.addLog(m.now, "NOTIFIED  "+strings.TrimPrefix(title, "meshcore-tui · ")+" · via "+n.describe(), radio.ToneInfo)
 	cmds := []tea.Cmd{tea.Raw(notify.Escape(n.method, title, body, n.bell, n.env))}
 	if n.method == notify.OS {
 		cmds = append(cmds, func() tea.Msg { notify.Desktop(title, body); return nil })
 	}
 	return tea.Batch(cmds...)
+}
+
+func (n *notifier) describe() string {
+	how := map[notify.Method]string{notify.Terminal: "terminal escape", notify.OS: "system notification", notify.BellOnly: "bell only", notify.Off: "nothing (off)"}[n.method]
+	if n.bell && n.method != notify.Off && n.method != notify.BellOnly {
+		how += " + bell"
+	}
+	return how
+}
+
+func notifyCommand() command {
+	return command{name: "notify", help: "send a test notification, to check your terminal shows it",
+		run: func(m *Model, _ []string) error {
+			if m.notes.method == notify.Off {
+				return fmt.Errorf("notifications are off; set desktop in [notifications] to turn them on")
+			}
+			m.queued = m.sendNote("meshcore-tui · test", "If you can see or hear this, notifications work.")
+			return nil
+		}}
 }

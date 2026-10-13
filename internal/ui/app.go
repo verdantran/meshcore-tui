@@ -138,7 +138,7 @@ func New(opt Options) *Model {
 	m.chats = newChats()
 	m.notes = newNotifier(opt)
 	m.focused = true
-	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand())
+	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand(), notifyCommand())
 	m.connect = newConnect(opt.Ports, m.savedTargets)
 	m.ticker = newTicker()
 	return m
