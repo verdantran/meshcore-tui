@@ -33,6 +33,9 @@ type Options struct {
 	Clock  func() time.Time
 	Config *config.Config // nil in tests; settings changed in the app are saved here
 	Store  *store.Store   // message history; nil disables chats
+
+	Env       func(string) string // environment lookups for notification detection; nil uses the process's
+	ExportDir string              // where :export writes; empty uses the data directory
 }
 
 type phase int
@@ -79,6 +82,10 @@ type Model struct {
 	chats chatsModel
 
 	queued tea.Cmd // a radio call started by a palette command
+
+	notes   notifier
+	focused bool // the terminal window has focus, as far as we know
+	search  searchModel
 
 	pal           palette
 	help          bool
@@ -129,7 +136,9 @@ func New(opt Options) *Model {
 		m.chat = chat.New(opt.Store, retries, flood)
 	}
 	m.chats = newChats()
-	m.extraCommands = append(m.extraCommands, msgCommand())
+	m.notes = newNotifier(opt)
+	m.focused = true
+	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand())
 	m.connect = newConnect(opt.Ports, m.savedTargets)
 	m.ticker = newTicker()
 	return m
@@ -190,6 +199,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.radio != nil {
 			cmds = append(cmds, waitEvent(m.radio.Events()))
 		}
+	case tea.FocusMsg:
+		m.focused = true
+	case tea.BlurMsg:
+		m.focused = false
+	case notifyFlushMsg:
+		cmds = append(cmds, m.flushNotes())
 	case sendResultMsg:
 		cmds = append(cmds, m.chatResult(msg))
 	case ackTimeoutMsg:
@@ -351,6 +366,14 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 		}
 		return nil, false
 	}
+	if m.search.open {
+		m.searchKey(s)
+		return nil, false
+	}
+	if s == "ctrl+f" && m.phase == phaseMain {
+		m.openSearch()
+		return nil, false
+	}
 	if m.phase == phaseMain && m.tab == 0 && m.chat != nil {
 		if cmd, handled := m.chatsKey(s); handled {
 			return cmd, false
@@ -499,7 +522,8 @@ func (m *Model) screenKeys() []string {
 	}
 	if m.tab == 0 {
 		return []string{key("↑↓ j k", "choose a conversation"), key("enter i", "write a message; enter sends"),
-			key("esc", "stop writing"), key("K J", "scroll history"), ""}
+			key("esc", "stop writing, or clear the filter"), key("/", "filter this conversation"),
+			key("ctrl+f", "search every conversation"), key("K J", "scroll history"), ""}
 	}
 	return nil
 }

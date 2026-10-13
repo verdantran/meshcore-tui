@@ -107,3 +107,44 @@ func TestMessagesUnreadAndDelivery(t *testing.T) {
 		t.Fatalf("latest-one query = %+v", got)
 	}
 }
+
+func TestSearchAllAndUnread(t *testing.T) {
+	s, _ := Open(":memory:")
+	defer s.Close()
+	ch, dm := ChannelConvo(1), ContactConvo([32]byte{0x3A})
+	for _, m := range []Message{
+		{Convo: ch, Sender: "Carol", Text: "Purdown is back"},
+		{Convo: ch, Sender: "Bob", Text: "100% battery_now"},
+		{Convo: dm, Sender: "Alice", Text: "purdown route works"},
+	} {
+		m := m
+		s.AddMessage(dev, &m)
+	}
+	got, _ := s.Search(dev, "purdown", "", 10)
+	if len(got) != 2 || got[0].Text != "purdown route works" {
+		t.Fatalf("global search = %+v", got)
+	}
+	if got, _ := s.Search(dev, "purdown", ch, 10); len(got) != 1 {
+		t.Fatalf("channel search = %+v", got)
+	}
+	// LIKE wildcards in the query are literal.
+	if got, _ := s.Search(dev, "100%", "", 10); len(got) != 1 {
+		t.Fatalf("%% should be literal: %+v", got)
+	}
+	if got, _ := s.Search(dev, "y_n", "", 10); len(got) != 1 {
+		t.Fatalf("_ should be literal: %+v", got)
+	}
+	if got, _ := s.Search(dev, "Carol", "", 10); len(got) != 1 {
+		t.Fatalf("sender search = %+v", got)
+	}
+	if all, _ := s.All(dev, ""); len(all) != 3 {
+		t.Fatalf("all = %d", len(all))
+	}
+	if u, _ := s.Unread(dev, ch); len(u) != 2 {
+		t.Fatalf("unread = %d", len(u))
+	}
+	s.MarkRead(dev, ch)
+	if u, _ := s.Unread(dev, ch); len(u) != 0 {
+		t.Fatalf("unread after read = %d", len(u))
+	}
+}

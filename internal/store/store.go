@@ -233,38 +233,12 @@ func scanMessage(sc interface{ Scan(...any) error }, extra ...any) (Message, err
 
 // Messages returns up to limit of the latest messages in a conversation, oldest first.
 func (s *Store) Messages(device string, c Convo, limit int) ([]Message, error) {
-	rows, err := s.db.Query(`SELECT `+messageCols+` FROM (SELECT * FROM messages WHERE device = ? AND convo = ? ORDER BY id DESC LIMIT ?) ORDER BY id`, device, string(c), limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Message
-	for rows.Next() {
-		m, err := scanMessage(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, m)
-	}
-	return out, rows.Err()
+	return s.queryMessages(`SELECT `+messageCols+` FROM (SELECT * FROM messages WHERE device = ? AND convo = ? ORDER BY id DESC LIMIT ?) ORDER BY id`, device, string(c), limit)
 }
 
 // Unfinished lists outgoing messages still waiting on the radio or an ack, e.g. after a restart.
 func (s *Store) Unfinished(device string) ([]Message, error) {
-	rows, err := s.db.Query(`SELECT `+messageCols+` FROM messages WHERE device = ? AND out = 1 AND state IN (?, ?) ORDER BY id`, device, int(Pending), int(Sent))
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Message
-	for rows.Next() {
-		m, err := scanMessage(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, m)
-	}
-	return out, rows.Err()
+	return s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? AND out = 1 AND state IN (?, ?) ORDER BY id`, device, int(Pending), int(Sent))
 }
 
 // Conversations summarises every conversation with messages: the latest one and the unread count.
@@ -295,4 +269,54 @@ func (s *Store) MarkRead(device string, c Convo) error {
 	_, err := s.db.Exec(`INSERT OR REPLACE INTO reads VALUES (?, ?, COALESCE((SELECT MAX(id) FROM messages WHERE device = ? AND convo = ?), 0))`,
 		device, string(c), device, string(c))
 	return err
+}
+
+func (s *Store) queryMessages(query string, args ...any) ([]Message, error) {
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Message
+	for rows.Next() {
+		m, err := scanMessage(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func likePattern(q string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return "%" + r.Replace(q) + "%"
+}
+
+// Search finds messages whose text or sender contains q, newest first. An empty convo searches everything.
+func (s *Store) Search(device, q string, c Convo, limit int) ([]Message, error) {
+	if strings.TrimSpace(q) == "" {
+		return nil, nil
+	}
+	if c == "" {
+		return s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? AND (text LIKE ? ESCAPE '\' OR sender LIKE ? ESCAPE '\') ORDER BY id DESC LIMIT ?`,
+			device, likePattern(q), likePattern(q), limit)
+	}
+	return s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? AND convo = ? AND (text LIKE ? ESCAPE '\' OR sender LIKE ? ESCAPE '\') ORDER BY id DESC LIMIT ?`,
+		device, string(c), likePattern(q), likePattern(q), limit)
+}
+
+// All returns every message in a conversation, or in all of them when convo is empty, oldest first.
+func (s *Store) All(device string, c Convo) ([]Message, error) {
+	if c == "" {
+		return s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? ORDER BY convo, id`, device)
+	}
+	return s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? AND convo = ? ORDER BY id`, device, string(c))
+}
+
+// Unread returns the incoming messages in a conversation that haven't been read yet.
+func (s *Store) Unread(device string, c Convo) ([]Message, error) {
+	return s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? AND convo = ? AND out = 0
+		AND id > COALESCE((SELECT last_read FROM reads WHERE device = ? AND convo = ?), 0) ORDER BY id`,
+		device, string(c), device, string(c))
 }

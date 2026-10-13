@@ -4,8 +4,10 @@
 package chat
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"time"
@@ -24,11 +26,12 @@ const (
 
 // Info is one row in the conversation list.
 type Info struct {
-	Convo  store.Convo
-	Title  string
-	Kind   Kind
-	Unread int
-	Last   *store.Message
+	Convo   store.Convo
+	Title   string
+	Kind    Kind
+	Unread  int
+	Mention bool // an unread message mentions you
+	Last    *store.Message
 }
 
 // Send is a radio call for the UI to make; its outcome comes back through Result.
@@ -310,6 +313,12 @@ func (s *Service) Conversations() ([]Info, error) {
 		info := Info{Convo: store.ChannelConvo(ch.Idx), Title: ch.Name, Kind: KindChannel}
 		if sm, ok := byConvo[info.Convo]; ok {
 			info.Unread, info.Last = sm.Unread, &sm.Last
+			if sm.Unread > 0 {
+				unread, _ := s.store.Unread(s.device, info.Convo)
+				for _, m := range unread {
+					info.Mention = info.Mention || s.Mentions(m.Text)
+				}
+			}
 		}
 		out = append(out, info)
 	}
@@ -341,4 +350,99 @@ func (s *Service) Conversations() ([]Info, error) {
 	}
 	sort.Slice(rest, func(i, j int) bool { return strings.ToLower(rest[i].Title) < strings.ToLower(rest[j].Title) })
 	return append(append(out, direct...), rest...), nil
+}
+
+// Mentions reports whether text @-mentions this radio's name, ignoring case.
+func (s *Service) Mentions(text string) bool {
+	if s.self == "" {
+		return false
+	}
+	lower, name := strings.ToLower(text), "@"+strings.ToLower(s.self)
+	for i := strings.Index(lower, name); i >= 0; {
+		end := i + len(name)
+		if end == len(lower) || !isNameRune(rune(lower[end])) {
+			return true
+		}
+		next := strings.Index(lower[end:], name)
+		if next < 0 {
+			break
+		}
+		i = end + next
+	}
+	return false
+}
+
+func isNameRune(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_' || r == '-'
+}
+
+func (s *Service) Self() string { return s.self }
+
+func (s *Service) Search(q string, c store.Convo, limit int) ([]store.Message, error) {
+	return s.store.Search(s.device, q, c, limit)
+}
+
+type exported struct {
+	Conversation string    `json:"conversation"`
+	From         string    `json:"from"`
+	Outgoing     bool      `json:"outgoing"`
+	Text         string    `json:"text"`
+	Sent         time.Time `json:"sent"`
+	Received     time.Time `json:"received"`
+	Hops         *int      `json:"hops,omitempty"`
+	SNR          *float32  `json:"snr,omitempty"`
+	Status       string    `json:"status,omitempty"`
+	RoundTripMS  int64     `json:"round_trip_ms,omitempty"`
+}
+
+var stateNames = map[store.State]string{store.Received: "", store.Pending: "pending", store.Sent: "sent", store.Delivered: "delivered", store.Failed: "failed"}
+
+// Export writes a conversation, or every conversation when c is empty, as text or JSON. It returns the count.
+func (s *Service) Export(w io.Writer, c store.Convo, asJSON bool) (int, error) {
+	ms, err := s.store.All(s.device, c)
+	if err != nil {
+		return 0, err
+	}
+	if asJSON {
+		out := make([]exported, 0, len(ms))
+		for _, m := range ms {
+			e := exported{Conversation: s.Title(m.Convo), From: m.Sender, Outgoing: m.Out, Text: m.Text,
+				Sent: m.SentAt, Received: m.RecvAt, Status: stateNames[m.State], RoundTripMS: m.RTT.Milliseconds()}
+			if !m.Out {
+				hops := m.Hops
+				e.Hops = &hops
+				if m.HasSNR {
+					snr := m.SNR
+					e.SNR = &snr
+				}
+			}
+			out = append(out, e)
+		}
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		return len(ms), enc.Encode(out)
+	}
+	var last store.Convo
+	for _, m := range ms {
+		if m.Convo != last {
+			if last != "" {
+				fmt.Fprintln(w)
+			}
+			fmt.Fprintf(w, "# %s\n\n", s.Title(m.Convo))
+			last = m.Convo
+		}
+		detail := ""
+		switch {
+		case m.Out && m.State == store.Delivered:
+			detail = fmt.Sprintf("  (delivered, %.1fs)", m.RTT.Seconds())
+		case m.Out && m.State == store.Failed:
+			detail = "  (not delivered)"
+		case !m.Out && m.Hops < 0:
+			detail = "  (direct)"
+		case !m.Out:
+			detail = fmt.Sprintf("  (%d hops)", m.Hops)
+		}
+		fmt.Fprintf(w, "[%s] %s: %s%s\n", m.RecvAt.Local().Format("2006-01-02 15:04:05"), m.Sender, m.Text, detail)
+	}
+	return len(ms), nil
 }

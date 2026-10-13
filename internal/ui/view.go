@@ -32,6 +32,7 @@ func (m *Model) View() tea.View {
 	}
 	v := tea.NewView(strings.Join(lines, "\n"))
 	v.AltScreen = true
+	v.ReportFocus = true
 	if !m.th.Mono {
 		v.BackgroundColor = m.th.Bg.Color()
 	}
@@ -251,6 +252,10 @@ func (m *Model) body(w, h int) []string {
 		box := m.panel("HELP", m.helpLines(), w, mainH, th.Cyan, true)
 		return append(box, debug...)
 	}
+	if m.search.open {
+		box := m.panel("SEARCH ALL CONVERSATIONS", m.searchLines(w-4, mainH-2), w, mainH, th.Cyan, true)
+		return append(box, debug...)
+	}
 	if m.tab == 0 && m.chat != nil {
 		title := tabNames[0]
 		if m.chats.unread > 0 {
@@ -332,7 +337,7 @@ func (m *Model) footer() []string {
 	if n := len(m.log); n > 0 {
 		logLine = " " + m.logRow(m.log[n-1], true)
 	}
-	keys := th.Fg(th.Dim, false).Render(" 1-7 screens · : command · ? help · T theme · v motion · F12 frames · q quit")
+	keys := th.Fg(th.Dim, false).Render(" 1-7 screens · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit")
 	if m.pal.open {
 		keys = m.paletteLine()
 	}

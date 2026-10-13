@@ -1,0 +1,90 @@
+package ui
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+
+	"meshcore-tui/internal/notify"
+	"meshcore-tui/internal/store"
+)
+
+// Notifications that land close together are grouped into one alert.
+const noteGather = 1200 * time.Millisecond
+
+type note struct {
+	title, body string
+}
+
+type notifyFlushMsg struct{}
+
+type notifier struct {
+	method  notify.Method
+	bell    bool
+	events  []string
+	env     func(string) string
+	pending []note
+	waiting bool
+}
+
+func newNotifier(o Options) notifier {
+	n := notifier{method: notify.Resolve("auto", o.Env), bell: true, events: []string{"dm", "mention"}, env: o.Env}
+	if c := o.Config; c != nil {
+		n.method = notify.Resolve(c.Notifications.Desktop, o.Env)
+		n.bell = c.Notifications.Bell
+		n.events = c.Notifications.Events
+	}
+	return n
+}
+
+// considerNote queues a notification for a received message unless you're already looking at it.
+func (m *Model) considerNote(msg store.Message, title string) tea.Cmd {
+	n := &m.notes
+	channel := strings.HasPrefix(string(msg.Convo), "ch:")
+	mention := m.chat.Mentions(msg.Text)
+	if channel && !(mention && slices.Contains(n.events, "mention")) || !channel && !slices.Contains(n.events, "dm") {
+		return nil
+	}
+	if cur, ok := m.selectedConvo(); ok && m.focused && m.phase == phaseMain && m.tab == 0 && cur.Convo == msg.Convo {
+		return nil
+	}
+	head := msg.Sender
+	if channel {
+		head = msg.Sender + " in " + title
+	}
+	n.pending = append(n.pending, note{title: head, body: msg.Text})
+	if n.waiting {
+		return nil
+	}
+	n.waiting = true
+	return tea.Tick(noteGather, func(time.Time) tea.Msg { return notifyFlushMsg{} })
+}
+
+func (m *Model) flushNotes() tea.Cmd {
+	n := &m.notes
+	n.waiting = false
+	if len(n.pending) == 0 || n.method == notify.Off {
+		n.pending = nil
+		return nil
+	}
+	title, body := "meshcore-tui · "+n.pending[0].title, n.pending[0].body
+	if len(n.pending) > 1 {
+		var who []string
+		for _, p := range n.pending {
+			if !slices.Contains(who, p.title) {
+				who = append(who, p.title)
+			}
+		}
+		title = fmt.Sprintf("meshcore-tui · %d new messages", len(n.pending))
+		body = strings.Join(who, ", ")
+	}
+	n.pending = nil
+	cmds := []tea.Cmd{tea.Raw(notify.Escape(n.method, title, body, n.bell, n.env))}
+	if n.method == notify.OS {
+		cmds = append(cmds, func() tea.Msg { notify.Desktop(title, body); return nil })
+	}
+	return tea.Batch(cmds...)
+}

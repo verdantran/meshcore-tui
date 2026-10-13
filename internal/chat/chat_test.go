@@ -182,3 +182,37 @@ func TestUnfinishedFromLastSessionFail(t *testing.T) {
 		t.Fatalf("leftover = %+v", ms)
 	}
 }
+
+func TestMentionsAndExport(t *testing.T) {
+	s := newService(t, 3, true)
+	for text, want := range map[string]bool{
+		"hey @MeshCore-k4 you there": true, "@meshcore-k4": true, "ping @MeshCore-k4x": false,
+		"MeshCore-k4 without the at": false, "@MeshCore-k4, and @MeshCore-k42": true,
+	} {
+		if got := s.Mentions(text); got != want {
+			t.Errorf("Mentions(%q) = %v, want %v", text, got, want)
+		}
+	}
+	s.Incoming(radio.Incoming{At: t0, Channel: true, ChannelIdx: 1, Text: "Carol: @meshcore-k4 is Purdown up?", Hops: 3, SNR: 6.5, HasSNR: true})
+	s.Incoming(radio.Incoming{At: t0, From: alice.Prefix(), Text: "hi", Hops: -1})
+	infos, _ := s.Conversations()
+	if !infos[1].Mention || infos[0].Mention {
+		t.Fatalf("mention flags: %+v", infos[:2])
+	}
+
+	var text strings.Builder
+	n, err := s.Export(&text, "", false)
+	if err != nil || n != 2 {
+		t.Fatalf("export n=%d err=%v", n, err)
+	}
+	for _, want := range []string{"# #bristol", "Carol: @meshcore-k4 is Purdown up?  (3 hops)", "# Alice", "Alice: hi  (direct)"} {
+		if !strings.Contains(text.String(), want) {
+			t.Errorf("text export missing %q:\n%s", want, text.String())
+		}
+	}
+	var js strings.Builder
+	s.Export(&js, store.ChannelConvo(1), true)
+	if !strings.Contains(js.String(), `"conversation": "#bristol"`) || !strings.Contains(js.String(), `"snr": 6.5`) || strings.Contains(js.String(), "Alice") {
+		t.Errorf("json export:\n%s", js.String())
+	}
+}

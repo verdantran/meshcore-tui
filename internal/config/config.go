@@ -33,6 +33,11 @@ type Config struct {
 		DMRetries     int  `toml:"dm_retries"`
 		FloodFallback bool `toml:"flood_fallback"`
 	} `toml:"messages"`
+	Notifications struct {
+		Events  []string `toml:"events"` // dm, mention
+		Bell    bool     `toml:"bell"`
+		Desktop string   `toml:"desktop"` // auto, terminal, os, bell or off
+	} `toml:"notifications"`
 	Devices []Device `toml:"devices"`
 
 	path string
@@ -45,6 +50,9 @@ func Default() *Config {
 	c.Connection.TimeSyncDrift = 5
 	c.Messages.DMRetries = 3
 	c.Messages.FloodFallback = true
+	c.Notifications.Events = []string{"dm", "mention"}
+	c.Notifications.Bell = true
+	c.Notifications.Desktop = "auto"
 	return c
 }
 

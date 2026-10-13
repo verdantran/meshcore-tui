@@ -287,3 +287,35 @@ func TestSavedDevices(t *testing.T) {
 		t.Error("d should forget the saved device")
 	}
 }
+
+func TestThemeChoicePersists(t *testing.T) {
+	path := t.TempDir() + "/config.toml"
+	cfg, _ := config.Load(path)
+	c := &clock{t: time.Date(2026, 10, 13, 10, 3, 0, 0, time.UTC)}
+	m := New(Options{Theme: theme.ByName(cfg.UI.Theme), Motion: motion.Full, Clock: c.now, Config: cfg,
+		Ports: func() []Target { return nil }})
+	m.Init()
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	typeKeys(m, "T") // works on the connect screen too
+	back, _ := config.Load(path)
+	if back.UI.Theme != "dusk" {
+		t.Fatalf("after T the saved theme is %q", back.UI.Theme)
+	}
+	typeKeys(m, "TT")
+	back, _ = config.Load(path)
+	if back.UI.Theme != "amber" {
+		t.Fatalf("after three presses the saved theme is %q", back.UI.Theme)
+	}
+
+	m2, c2 := newTestModel(t, motion.Full, 100, 30)
+	m2.opt.Config = back
+	boot(m2, c2)
+	tick(m2, c2, time.Second)
+	typeKeys(m2, ":theme ice")
+	key(m2, tea.KeyEnter)
+	back, _ = config.Load(path)
+	if back.UI.Theme != "ice" {
+		t.Fatalf("after :theme ice the saved theme is %q", back.UI.Theme)
+	}
+}

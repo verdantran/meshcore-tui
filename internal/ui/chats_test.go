@@ -70,7 +70,9 @@ func newChatModel(t *testing.T) (*Model, *clock, *scriptRadio) {
 	r := &scriptRadio{stubRadio: stubRadio{ch: make(chan radio.Event)}}
 	c := &clock{t: time.Date(2026, 10, 13, 10, 3, 0, 0, time.UTC)}
 	m := New(Options{Theme: theme.Neon, Motion: motion.Full, Clock: c.now, Store: st,
-		Dial: func(Target) radio.Radio { return r }, Start: &Target{Kind: "USB", Addr: "/dev/cu.test"}})
+		Dial: func(Target) radio.Radio { return r }, Start: &Target{Kind: "USB", Addr: "/dev/cu.test"},
+		Env:       func(k string) string { return map[string]string{"TERM_PROGRAM": "ghostty"}[k] },
+		ExportDir: t.TempDir()})
 	m.Init()
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 34})
 	send(m, c, 0, radio.BootStep{Key: "link", Label: "LINK", State: radio.StepOK})
@@ -116,6 +118,9 @@ func follow(t *testing.T, m *Model, c *clock, cmd tea.Cmd, timeouts bool) {
 
 func selectConvo(t *testing.T, m *Model, title string) {
 	t.Helper()
+	for range m.chats.infos {
+		key(m, 'k')
+	}
 	for i := 0; i < 10; i++ {
 		if cur, _ := m.selectedConvo(); cur.Title == title {
 			return
