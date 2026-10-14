@@ -225,12 +225,12 @@ func (m *Model) tabs() string {
 
 var pending = map[int]string{
 	0: "Message history isn't available: the store couldn't be opened.",
-	1: "The contact table, path editor, traces and sharing arrive in milestone 4.",
-	2: "The map comes last, in milestone 9; the design work so far is in prototypes/map.",
-	3: "The live packet inspector arrives in milestone 5. Raw packets already scroll along the footer.",
-	4: "Repeater and room-server administration arrives in milestone 6.",
-	5: "Local radio configuration arrives in milestone 7.",
-	6: "Radio and mesh statistics arrive in milestone 7.",
+	1: "The contact table, path editor, traces and sharing arrive in milestone 3.",
+	2: "The map arrives in milestone 8; the design work so far is in prototypes/map.",
+	3: "The live packet inspector arrives in milestone 4. Raw packets already scroll along the footer.",
+	4: "Repeater and room-server administration arrives in milestone 5.",
+	5: "Local radio configuration arrives in milestone 6.",
+	6: "Radio and mesh statistics arrive in milestone 6.",
 }
 
 func (m *Model) body(w, h int) []string {
