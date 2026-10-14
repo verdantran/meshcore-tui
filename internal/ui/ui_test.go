@@ -45,6 +45,14 @@ func (s *stubRadio) ExportContact(context.Context, [32]byte) (string, error) {
 func (s *stubRadio) AdvertPath(context.Context, [32]byte) (radio.AdvertPath, error) {
 	return radio.AdvertPath{}, nil
 }
+func (s *stubRadio) Login(context.Context, [32]byte, string) error    { return nil }
+func (s *stubRadio) Logout(context.Context, [32]byte) error           { return nil }
+func (s *stubRadio) RequestStatus(context.Context, [32]byte) error    { return nil }
+func (s *stubRadio) RequestTelemetry(context.Context, [32]byte) error { return nil }
+func (s *stubRadio) SendCLI(context.Context, [32]byte, string) error  { return nil }
+func (s *stubRadio) BinaryRequest(context.Context, [32]byte, []byte) (uint32, error) {
+	return 1, nil
+}
 
 type clock struct{ t time.Time }
 

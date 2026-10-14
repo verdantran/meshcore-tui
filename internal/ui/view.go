@@ -234,7 +234,6 @@ var pending = map[int]string{
 	1: "The contact table, path editor, traces and sharing arrive in milestone 3.",
 	2: "The map arrives in milestone 7; the design work so far is in prototypes/map.",
 	3: "The live packet inspector arrives in milestone 4. Raw packets already scroll along the footer.",
-	4: "Repeater and room-server administration arrives in milestone 5.",
 	5: "Local radio configuration arrives in milestone 6.",
 	6: "Radio and mesh statistics arrive in milestone 6.",
 }
@@ -272,6 +271,10 @@ func (m *Model) body(w, h int) []string {
 	}
 	if m.tab == 3 {
 		box := m.panel(m.inspectorTitle(), m.renderInspector(w-4, mainH-2), w, mainH, accent, true)
+		return append(m.effects(box, w), debug...)
+	}
+	if m.tab == 4 && m.chat != nil {
+		box := m.panel(m.adminTitle(), m.renderAdmin(w-4, mainH-2), w, mainH, accent, true)
 		return append(m.effects(box, w), debug...)
 	}
 	if m.tab == 1 && m.chat != nil {

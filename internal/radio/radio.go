@@ -32,6 +32,40 @@ type Radio interface {
 	ImportContact(ctx context.Context, link string) error
 	AutoAdd(ctx context.Context) (AutoAdd, error)
 	SetAutoAdd(ctx context.Context, a AutoAdd) error
+
+	// Remote administration of repeaters and room servers. The radio tracks one outstanding
+	// login, status or binary request at a time; a new one cancels the last, so callers queue them.
+	Login(ctx context.Context, key [32]byte, password string) error // answered by a LoginResult
+	Logout(ctx context.Context, key [32]byte) error
+	RequestStatus(ctx context.Context, key [32]byte) error                        // answered by a StatusReport
+	RequestTelemetry(ctx context.Context, key [32]byte) error                     // answered by a Telemetry
+	BinaryRequest(ctx context.Context, key [32]byte, data []byte) (uint32, error) // answered by a BinaryReply with this tag
+	SendCLI(ctx context.Context, key [32]byte, command string) error              // replies arrive as Incoming with CLI set
+}
+
+// LoginResult answers a login. Permissions is the server's level: 0 guest, 1 read-only, 2 read-write, 3 admin.
+type LoginResult struct {
+	Prefix      [6]byte
+	OK          bool
+	Admin       bool
+	Permissions byte
+}
+
+// StatusReport is a GET_STATUS reply body, decoded by whoever knows if it came from a repeater or a room.
+type StatusReport struct {
+	Prefix [6]byte
+	Data   []byte
+}
+
+// Telemetry is a Cayenne LPP reading set from a remote node.
+type Telemetry struct {
+	Prefix [6]byte
+	LPP    []byte
+}
+
+type BinaryReply struct {
+	Tag  uint32
+	Data []byte
 }
 
 // FlagFavourite marks a contact as a favourite in its flags byte.
@@ -140,6 +174,8 @@ type Incoming struct {
 	SNR        float32
 	HasSNR     bool
 	Signed     bool
+	Author     [4]byte // for signed messages, such as room posts: the writer's key prefix
+	CLI        bool    // a reply from a repeater's command console, not a chat message
 }
 
 // Sent is the radio's receipt for a direct message; Ack matches the later Acked event.
@@ -215,6 +251,7 @@ type Ready struct {
 	Battery     Battery
 	ContactList []Contact
 	ChannelList []Channel
+	Console     bool // a repeater's own serial console rather than a companion radio
 }
 
 type Battery struct {

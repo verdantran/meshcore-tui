@@ -10,7 +10,7 @@ import (
 	"go.bug.st/serial/enumerator"
 
 	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/radio"
+	"meshcore-tui/internal/repeaterserial"
 	"meshcore-tui/internal/sim"
 	"meshcore-tui/internal/ui"
 )
@@ -142,8 +142,8 @@ func TestSortPorts(t *testing.T) {
 }
 
 func TestDial(t *testing.T) {
-	if _, ok := dial(uiTarget("USB", "/dev/cu.x")).(*radio.Link); !ok {
-		t.Error("USB should dial a link")
+	if _, ok := dial(uiTarget("USB", "/dev/cu.x")).(*repeaterserial.USB); !ok {
+		t.Error("USB should try a companion, then a repeater console")
 	}
 	if r := dial(uiTarget("TCP", "10.0.0.4")); r.Transport() != "TCP" {
 		t.Error("TCP should dial a TCP link")

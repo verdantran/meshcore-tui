@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	meshcore "github.com/OwlShack/meshcore-go"
 	"github.com/OwlShack/meshcore-go/companion"
 )
 
@@ -394,5 +395,78 @@ func TestBatteryPoll(t *testing.T) {
 	next[Ready](t, l, nil)
 	if b := next[Battery](t, l, nil); b.MilliVolts != 4020 {
 		t.Errorf("battery = %+v", b)
+	}
+}
+
+func TestAdmin(t *testing.T) {
+	f := newFakeDevice()
+	f.queue = nil
+	l := startLink(t, f)
+	next[Ready](t, l, nil)
+	ctx := context.Background()
+	dundry := [32]byte{0xA3, 0x01}
+
+	if err := l.Login(ctx, dundry, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	if r := next[LoginResult](t, l, nil); !r.OK || !r.Admin || r.Permissions != 3 || r.Prefix != [6]byte{0xA3, 0x01} {
+		t.Errorf("admin login = %+v", r)
+	}
+	l.Login(ctx, dundry, "guest")
+	if r := next[LoginResult](t, l, nil); !r.OK || r.Admin || r.Permissions != 0 {
+		t.Errorf("guest login on an older server = %+v", r)
+	}
+	l.Login(ctx, dundry, "wrong")
+	if r := next[LoginResult](t, l, nil); r.OK {
+		t.Errorf("bad password = %+v", r)
+	}
+	if err := l.Logout(ctx, dundry); err != nil {
+		t.Fatal(err)
+	}
+
+	l.RequestStatus(ctx, dundry)
+	st := next[StatusReport](t, l, nil)
+	stats, err := meshcore.ParseRepeaterStats(st.Data)
+	if err != nil || stats.BattMilliVolts != 4110 || stats.NoiseFloor != -112 {
+		t.Errorf("status = %+v, %v", stats, err)
+	}
+	l.RequestTelemetry(ctx, dundry)
+	tel := next[Telemetry](t, l, nil)
+	readings, err := meshcore.LPPDecode(tel.LPP)
+	if err != nil || len(readings) != 1 || readings[0].Type != meshcore.LPPVoltage {
+		t.Errorf("telemetry = %+v, %v", readings, err)
+	}
+
+	tag, err := l.BinaryRequest(ctx, dundry, []byte{meshcore.ReqTypeGetNeighbours, 0, 8})
+	if err != nil || tag != 0x51 {
+		t.Fatalf("binary request tag = %x, %v", tag, err)
+	}
+	if br := next[BinaryReply](t, l, nil); br.Tag != tag || br.Data[1] != meshcore.ReqTypeGetNeighbours {
+		t.Errorf("binary reply = %+v", br)
+	}
+
+	if err := l.SendCLI(ctx, dundry, "get tx"); err != nil {
+		t.Fatal(err)
+	}
+	in := next[Incoming](t, l, nil)
+	if !in.CLI || in.Text != "> get tx" {
+		t.Errorf("console reply = %+v", in)
+	}
+	f.mu.Lock()
+	f.fail[companion.CmdSendBinaryReq] = true
+	f.mu.Unlock()
+	if _, err := l.BinaryRequest(ctx, dundry, []byte{1}); err == nil {
+		t.Error("a refused binary request should error")
+	}
+}
+
+func TestSignedRoomPost(t *testing.T) {
+	f := newFakeDevice()
+	f.queue = [][]byte{companion.ContactMsgRecvV3Response{PubKeyPrefix: [6]byte{0x6C}, PathLen: 2, TxtType: companion.TxtTypeSignedPlain,
+		SenderPrefix: []byte{0x3A, 0xAA, 0, 0}, Text: "meet at Cabot Tower"}.ToBytes()}
+	l := startLink(t, f)
+	in := next[Incoming](t, l, nil)
+	if !in.Signed || in.Author != [4]byte{0x3A, 0xAA} || in.CLI {
+		t.Errorf("room post = %+v", in)
 	}
 }

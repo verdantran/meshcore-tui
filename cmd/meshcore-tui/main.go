@@ -15,9 +15,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"go.bug.st/serial/enumerator"
 
+	"meshcore-tui/internal/admin"
 	"meshcore-tui/internal/config"
 	"meshcore-tui/internal/motion"
 	"meshcore-tui/internal/radio"
+	"meshcore-tui/internal/repeaterserial"
 	"meshcore-tui/internal/sim"
 	"meshcore-tui/internal/store"
 	"meshcore-tui/internal/theme"
@@ -65,7 +67,7 @@ func ports() []ui.Target {
 func dial(t ui.Target) radio.Radio {
 	switch t.Kind {
 	case "USB":
-		return radio.NewSerial(t.Addr)
+		return repeaterserial.NewUSB(t.Addr)
 	case "TCP":
 		return radio.NewTCP(t.Addr)
 	}
@@ -121,7 +123,7 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 		level = l
 	}
 
-	opt := ui.Options{Theme: th, Motion: level, Dial: dial, Ports: ports, Config: cfg}
+	opt := ui.Options{Theme: th, Motion: level, Dial: dial, Ports: ports, Config: cfg, Keychain: admin.OSKeychain{}}
 	if d, ok := cfg.Device(cfg.Connection.AutoConnect); ok {
 		opt.Start = &ui.Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name}
 	}

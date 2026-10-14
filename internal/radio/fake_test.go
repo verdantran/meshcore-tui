@@ -150,6 +150,39 @@ func (f *fakeDevice) Send(cmd []byte) error {
 		f.mu.Unlock()
 		// The 10-byte form current firmware sends: flood flag, expected ack, timeout.
 		f.push(companion.SentResponse{HasExtended: true, IsFlood: false, Tag: ack, EstTimeout: 4200}.ToBytes())
+		if c.TxtType == companion.TxtTypeCLIData {
+			// A repeater answers a console command with a CLI-typed message of its own.
+			f.mu.Lock()
+			f.queue = append(f.queue, companion.ContactMsgRecvV3Response{PubKeyPrefix: c.PubKeyPrefix, PathLen: 0xFF,
+				TxtType: companion.TxtTypeCLIData, Text: "> " + c.Text}.ToBytes())
+			f.mu.Unlock()
+			f.push(companion.PushMsgWaitingResponse{}.ToBytes())
+		}
+	case companion.SendLoginCommand:
+		f.push(companion.SentResponse{HasExtended: true, Tag: 1, EstTimeout: 5000}.ToBytes())
+		prefix := [6]byte(c.PublicKey[:6])
+		switch c.Password {
+		case "admin":
+			f.push(companion.PushLoginSuccessResponse{Permissions: 1, PubKeyPrefix: prefix, HasServerInfo: true, ServerTime: 1, ACL: 3, FirmwareLevel: 1}.ToBytes())
+		case "guest":
+			f.push(companion.PushLoginSuccessResponse{Permissions: 0, PubKeyPrefix: prefix}.ToBytes())
+		default:
+			f.push(companion.PushLoginFailResponse{PubKeyPrefix: prefix}.ToBytes())
+		}
+	case companion.LogoutCommand:
+		f.push(ok)
+	case companion.SendStatusReqCommand:
+		f.push(companion.SentResponse{HasExtended: true, Tag: 2, EstTimeout: 5000}.ToBytes())
+		stats := meshcore.BuildRepeaterStats(meshcore.RepeaterStats{CommonStats: meshcore.CommonStats{BattMilliVolts: 4110, NoiseFloor: -112, UpTimeSecs: 1051200}})
+		f.push(companion.PushStatusResp{PubKeyPrefix: [6]byte(c.PublicKey[:6]), StatusData: stats}.ToBytes())
+	case companion.SendTelemetryReqCommand:
+		f.push(companion.SentResponse{HasExtended: true, Tag: 3, EstTimeout: 5000}.ToBytes())
+		lpp := meshcore.NewLPPEncoder()
+		lpp.AddVoltage(1, 4.11)
+		f.push(companion.PushTelemetryResp{PubKeyPrefix: [6]byte(c.PublicKey[:6]), LPPData: lpp.Bytes()}.ToBytes())
+	case companion.SendBinaryReqCommand:
+		f.push(companion.SentResponse{HasExtended: true, Tag: 0x51, EstTimeout: 5000}.ToBytes())
+		f.push(companion.PushBinaryResp{Tag: 0x51, ResponseData: append([]byte{0xEE}, c.RequestData...)}.ToBytes())
 	case companion.SendTracePathCommand, companion.SendPathDiscoveryReqCommand:
 		f.push(companion.SentResponse{HasExtended: true, IsFlood: true, Tag: 1, EstTimeout: 9000}.ToBytes())
 	case companion.GetAdvertPathCommand:

@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"meshcore-tui/internal/admin"
 	"meshcore-tui/internal/chat"
 	"meshcore-tui/internal/config"
 	"meshcore-tui/internal/motion"
@@ -36,6 +37,7 @@ type Options struct {
 
 	Env       func(string) string // environment lookups for notification detection; nil uses the process's
 	ExportDir string              // where :export writes; empty uses the data directory
+	Keychain  admin.Keychain      // node passwords; nil keeps them only while the program runs
 }
 
 type phase int
@@ -80,6 +82,8 @@ type Model struct {
 
 	chat      *chat.Service
 	chats     chatsModel
+	admin     *admin.Service
+	adm       adminModel
 	contacts  contactsModel
 	inspector inspectorModel
 
@@ -140,6 +144,11 @@ func New(opt Options) *Model {
 	m.chats = newChats()
 	m.contacts = newContacts()
 	m.inspector = newInspector()
+	m.admin = admin.New(m.adminNames)
+	if m.opt.Keychain == nil {
+		m.opt.Keychain = &admin.MemoryKeychain{}
+	}
+	m.adm = newAdmin()
 	m.notes = newNotifier(opt)
 	m.focused = true
 	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand(), notifyCommand(), traceCommand())
@@ -212,6 +221,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case contactsSyncedMsg, advertPathMsg, traceStartedMsg, traceTimeoutMsg, exportedMsg, autoAddMsg, opDoneMsg:
 		cmd, _ := m.contactsMsg(msg)
 		cmds = append(cmds, cmd)
+	case jobSentMsg, jobTimeoutMsg, cmdSentMsg, cmdTimeoutMsg, autoStatusMsg, fleetPollMsg:
+		cmds = append(cmds, m.adminMsg(msg))
 	case sendResultMsg:
 		cmds = append(cmds, m.chatResult(msg))
 	case ackTimeoutMsg:
@@ -258,7 +269,7 @@ func (m *Model) animating() bool {
 		motion.Running(m.stats.rxLamp, lampDur, now) || motion.Running(m.stats.txLamp, lampDur, now) ||
 		motion.Running(m.stats.snrAt, countDur, now) || motion.Running(m.stats.battAt, countDur, now) ||
 		motion.Running(m.glitch, glitchDur, now) ||
-		m.latestTyping() || m.linked == linkLost || m.chatsAnimating() || m.contactsAnimating() || m.inspectorAnimating() ||
+		m.latestTyping() || m.linked == linkLost || m.chatsAnimating() || m.contactsAnimating() || m.inspectorAnimating() || m.adminAnimating() ||
 		m.ticker.moving(m.level, now, m.w)
 }
 
@@ -317,7 +328,7 @@ func (m *Model) apply(e radio.Event) tea.Cmd {
 			m.frames = m.frames[len(m.frames)-400:]
 		}
 	}
-	return tea.Batch(m.chatEvent(e), m.contactsEvent(e))
+	return tea.Batch(m.chatEvent(e), m.contactsEvent(e), m.adminEvent(e))
 }
 
 func (s *stats) currentSNR(now time.Time) float64 {
@@ -389,6 +400,11 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 	}
 	if m.phase == phaseMain && m.tab == 1 && m.chat != nil {
 		if cmd, handled := m.contactsKey(s); handled {
+			return cmd, false
+		}
+	}
+	if m.phase == phaseMain && m.tab == 4 && m.chat != nil {
+		if cmd, handled := m.adminKey(s); handled {
 			return cmd, false
 		}
 	}
@@ -541,6 +557,12 @@ func (m *Model) screenKeys() []string {
 	key := func(k, what string) string {
 		return th.Fg(th.Cyan, true).Render(fmt.Sprintf("%-12s", k)) + th.Fg(th.Muted, false).Render(what)
 	}
+	if m.tab == 4 {
+		return []string{key("↑↓ j k", "choose a repeater or room server"), key("enter", "open it, logging in first; an empty password is a guest login"),
+			key("← →", "switch between status, settings, neighbours, access, regions, telemetry, log and console"),
+			key("u", "refresh what's shown"), key("L", "log out"), key("esc", "back to the node list"),
+			key("console", "type commands as on the node's serial console; tab completes, ↑↓ recall"), ""}
+	}
 	if m.tab == 3 {
 		return []string{key("↑↓ j k", "choose a packet; g jumps back to the newest"), key("[ ]", "step through decoded fields, highlighting their bytes"),
 			key("space", "pause, so the list holds still"), key("F R n", "filter by type · route · minimum signal"), key("/", "filter by text"),
@@ -556,7 +578,8 @@ func (m *Model) screenKeys() []string {
 	if m.tab == 0 {
 		return []string{key("↑↓ j k", "choose a conversation"), key("enter i", "write a message; enter sends"),
 			key("esc", "stop writing, or clear the filter"), key("/", "filter this conversation"),
-			key("ctrl+f", "search every conversation"), key("K J", "scroll history"), ""}
+			key("ctrl+f", "search every conversation"), key("K J", "scroll history"),
+			key("L", "log in to the room server whose conversation is open"), ""}
 	}
 	return nil
 }

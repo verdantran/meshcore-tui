@@ -232,6 +232,10 @@ func (l *Link) deliver(ms []client.WaitingMessage) {
 			m := w.Contact
 			in.From, in.Hops, in.Text = m.PubKeyPrefix, hopsFrom(m.PathLen), m.Text
 			in.SentAt, in.Signed = time.Unix(int64(m.SenderTimestamp), 0), m.TxtType == companion.TxtTypeSignedPlain
+			in.CLI = m.TxtType == companion.TxtTypeCLIData
+			if in.Signed && len(m.SenderPrefix) >= 4 {
+				copy(in.Author[:], m.SenderPrefix[:4])
+			}
 		case w.Channel != nil:
 			m := w.Channel
 			in.Channel, in.ChannelIdx, in.Hops, in.Text = true, int(m.ChannelIdx), hopsFrom(m.PathLen), m.Text
@@ -359,6 +363,41 @@ func (l *Link) registerPushes() {
 	})
 	c.OnPush(companion.PushMsgWaiting, func(companion.Response) { go l.drain() })
 	c.OnPush(companion.PushContactsFull, func(companion.Response) { l.emit(ContactsFull{}) })
+	c.OnPush(companion.PushLoginSuccess, func(r companion.Response) {
+		if p, ok := r.Data.(companion.PushLoginSuccessResponse); ok {
+			// Newer servers report an access level; older ones only whether you're admin.
+			admin := p.Permissions&0x01 != 0
+			level := byte(0)
+			if admin {
+				level = 3
+			}
+			if p.HasServerInfo && p.ACL != 0 {
+				level = p.ACL & 0x03
+				admin = level == 3
+			}
+			l.emit(LoginResult{Prefix: p.PubKeyPrefix, OK: true, Admin: admin, Permissions: level})
+		}
+	})
+	c.OnPush(companion.PushLoginFail, func(r companion.Response) {
+		if p, ok := r.Data.(companion.PushLoginFailResponse); ok {
+			l.emit(LoginResult{Prefix: p.PubKeyPrefix})
+		}
+	})
+	c.OnPush(companion.PushStatusResponse, func(r companion.Response) {
+		if p, ok := r.Data.(companion.PushStatusResp); ok {
+			l.emit(StatusReport{Prefix: p.PubKeyPrefix, Data: p.StatusData})
+		}
+	})
+	c.OnPush(companion.PushTelemetryResponse, func(r companion.Response) {
+		if p, ok := r.Data.(companion.PushTelemetryResp); ok {
+			l.emit(Telemetry{Prefix: p.PubKeyPrefix, LPP: p.LPPData})
+		}
+	})
+	c.OnPush(companion.PushBinaryResponse, func(r companion.Response) {
+		if p, ok := r.Data.(companion.PushBinaryResp); ok {
+			l.emit(BinaryReply{Tag: p.Tag, Data: p.ResponseData})
+		}
+	})
 }
 
 // tap passes frames through to the SDK transport, copying each one to the debug pane.
@@ -501,4 +540,40 @@ func (l *Link) SetAutoAdd(ctx context.Context, a AutoAdd) error {
 		}
 	}
 	return l.client.SetAutoAddConfig(ctx, cfg, byte(min(max(a.MaxHops, 0), 64)))
+}
+
+func (l *Link) Login(ctx context.Context, key [32]byte, password string) error {
+	_, err := l.client.SendLogin(ctx, meshcore.NewIdentity(key), password)
+	return err
+}
+
+func (l *Link) Logout(ctx context.Context, key [32]byte) error {
+	return l.client.Logout(ctx, meshcore.NewIdentity(key))
+}
+
+func (l *Link) RequestStatus(ctx context.Context, key [32]byte) error {
+	_, err := l.client.SendStatusReq(ctx, meshcore.NewIdentity(key))
+	return err
+}
+
+func (l *Link) RequestTelemetry(ctx context.Context, key [32]byte) error {
+	_, err := l.client.SendTelemetryReq(ctx, meshcore.NewIdentity(key))
+	return err
+}
+
+// BinaryRequest sends a typed request; the reply comes back carrying the tag from the SENT frame.
+func (l *Link) BinaryRequest(ctx context.Context, key [32]byte, data []byte) (uint32, error) {
+	r, err := l.client.SendBinaryReq(ctx, meshcore.NewIdentity(key), data)
+	if err != nil {
+		return 0, err
+	}
+	if r.HasExtended {
+		return r.Tag, nil
+	}
+	return r.AckCode, nil
+}
+
+func (l *Link) SendCLI(ctx context.Context, key [32]byte, command string) error {
+	_, err := l.client.SendTextMessage(ctx, meshcore.NewIdentity(key), command, companion.TxtTypeCLIData)
+	return err
 }

@@ -294,3 +294,20 @@ func TestStoreFailuresSurface(t *testing.T) {
 		t.Error("Export should report a broken store")
 	}
 }
+
+func TestRoomPostsNameTheirAuthor(t *testing.T) {
+	s := newService(t, 3, true)
+	for _, c := range []struct {
+		author [4]byte
+		want   string
+	}{{[4]byte{0x3A, 0xAA}, "Alice"}, {[4]byte{0xC0}, "MeshCore-k4"}, {[4]byte{0xEE, 1, 2, 3}, "EE010203"}, {[4]byte{}, "Clifton Room"}} {
+		m, _ := s.Incoming(radio.Incoming{At: t0, From: room.Prefix(), Signed: true, Author: c.author, Text: "post"})
+		if m.Convo != store.ContactConvo(room.Key) || m.Sender != c.want {
+			t.Errorf("author %X → %+v", c.author, m)
+		}
+	}
+	m, _ := s.Incoming(radio.Incoming{At: t0, From: alice.Prefix(), Author: [4]byte{0xC0}, Text: "dm"})
+	if m.Sender != "Alice" {
+		t.Error("only room posts carry an author")
+	}
+}

@@ -38,6 +38,12 @@ type Config struct {
 		Bell    bool     `toml:"bell"`
 		Desktop string   `toml:"desktop"` // auto, terminal, os, bell or off
 	} `toml:"notifications"`
+	Admin struct {
+		StatusPoll   int     `toml:"status_poll_s"` // the auto-refresh interval on a node's status
+		FleetSpacing int     `toml:"fleet_poll_spacing_s"`
+		BatteryAlert float64 `toml:"battery_alert_v"`
+		StaleAfter   int     `toml:"stale_after_h"` // flag a node not heard from in this long
+	} `toml:"admin"`
 	Devices []Device `toml:"devices"`
 
 	path string
@@ -53,6 +59,10 @@ func Default() *Config {
 	c.Notifications.Events = []string{"dm", "mention"}
 	c.Notifications.Bell = true
 	c.Notifications.Desktop = "auto"
+	c.Admin.StatusPoll = 60
+	c.Admin.FleetSpacing = 20
+	c.Admin.BatteryAlert = 3.5
+	c.Admin.StaleAfter = 24
 	return c
 }
 

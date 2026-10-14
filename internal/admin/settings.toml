@@ -1,0 +1,352 @@
+# Settings a repeater or room server exposes through its command console as `get <key>` / `set <key> <value>`.
+# Keys are the ones the firmware's CommonCLI handles (firmware 1.17). `default` is what the simulator starts with.
+#
+# kind: text | password | bool (on/off) | int | float | choice | radio (freq,bw,sf,cr)
+# write: when `set` takes different words from what `get` prints, the word to send for each value
+# roles: which node types have it; empty means both
+
+[[setting]]
+key = "name"
+label = "Name"
+group = "Identity"
+kind = "text"
+default = "Dundry"
+help = "The name other nodes see in adverts."
+
+[[setting]]
+key = "lat"
+label = "Latitude"
+group = "Identity"
+kind = "float"
+min = -90.0
+max = 90.0
+default = "51.399"
+help = "Shared in adverts. Use 0 to keep the location private."
+
+[[setting]]
+key = "lon"
+label = "Longitude"
+group = "Identity"
+kind = "float"
+min = -180.0
+max = 180.0
+default = "-2.639"
+
+[[setting]]
+key = "owner.info"
+label = "Owner info"
+group = "Identity"
+kind = "text"
+default = "Bristol Mesh · ops@example.org"
+help = "Who runs this node. A | starts a new line."
+
+[[setting]]
+key = "role"
+label = "Role"
+group = "Identity"
+kind = "text"
+readonly = true
+default = "repeater"
+
+[[setting]]
+key = "public.key"
+label = "Public key"
+group = "Identity"
+kind = "text"
+readonly = true
+default = ""
+
+[[setting]]
+key = "radio"
+label = "Radio"
+group = "Radio"
+kind = "radio"
+reboot = true
+dangerous = true
+default = "869.618,62.5,8,8"
+help = "Frequency MHz, bandwidth kHz, spreading factor, coding rate. A wrong value strands the node off-frequency: try `tempradio` first."
+
+[[setting]]
+key = "tx"
+label = "Transmit power"
+group = "Radio"
+kind = "int"
+min = 1.0
+max = 22.0
+unit = "dBm"
+default = "22"
+
+[[setting]]
+key = "radio.rxgain"
+label = "Boosted receive gain"
+group = "Radio"
+kind = "bool"
+default = "on"
+
+[[setting]]
+key = "radio.fem.rxgain"
+label = "Front-end receive amplifier"
+group = "Radio"
+kind = "bool"
+default = "on"
+help = "Only on boards with an external front-end module."
+
+[[setting]]
+key = "radio.fem.txgain"
+label = "Front-end transmit amplifier"
+group = "Radio"
+kind = "bool"
+default = "on"
+help = "Only on boards with an external front-end module."
+
+[[setting]]
+key = "repeat"
+label = "Repeat packets"
+group = "Routing"
+kind = "bool"
+roles = ["repeater"]
+default = "on"
+
+[[setting]]
+key = "path.hash.mode"
+label = "Path hash size"
+group = "Routing"
+kind = "choice"
+options = ["0", "1", "2"]
+default = "0"
+help = "0, 1 or 2 for 1-, 2- or 3-byte hashes in advert paths. Older firmware only reads 1-byte hashes."
+
+[[setting]]
+key = "loop.detect"
+label = "Flood loop detection"
+group = "Routing"
+kind = "choice"
+options = ["off", "minimal", "moderate", "strict"]
+default = "minimal"
+
+[[setting]]
+key = "txdelay"
+label = "Flood retransmit delay"
+group = "Routing"
+kind = "float"
+min = 0.0
+max = 2.0
+default = "0.5"
+
+[[setting]]
+key = "direct.txdelay"
+label = "Direct retransmit delay"
+group = "Routing"
+kind = "float"
+min = 0.0
+max = 2.0
+default = "0.2"
+
+[[setting]]
+key = "rxdelay"
+label = "Weak-signal receive delay"
+group = "Routing"
+kind = "float"
+min = 0.0
+max = 20.0
+default = "0"
+help = "Experimental."
+
+[[setting]]
+key = "dutycycle"
+label = "Duty cycle limit"
+group = "Routing"
+kind = "int"
+min = 1.0
+max = 100.0
+unit = "%"
+default = "50"
+
+[[setting]]
+key = "af"
+label = "Airtime factor (deprecated)"
+group = "Routing"
+kind = "float"
+min = 0.0
+max = 9.0
+default = "1"
+help = "Replaced by the duty cycle limit."
+
+[[setting]]
+key = "int.thresh"
+label = "Interference threshold"
+group = "Routing"
+kind = "int"
+min = 0.0
+max = 255.0
+default = "14"
+
+[[setting]]
+key = "cad"
+label = "Listen before transmitting"
+group = "Routing"
+kind = "bool"
+default = "off"
+
+[[setting]]
+key = "agc.reset.interval"
+label = "AGC reset interval"
+group = "Routing"
+kind = "int"
+min = 0.0
+max = 1020.0
+unit = "s"
+default = "0"
+help = "Multiples of 4 seconds; 0 turns it off."
+
+[[setting]]
+key = "multi.acks"
+label = "Multiple acks"
+group = "Routing"
+kind = "choice"
+options = ["0", "1"]
+default = "0"
+
+[[setting]]
+key = "flood.max"
+label = "Maximum flood hops"
+group = "Flood"
+kind = "int"
+min = 0.0
+max = 64.0
+default = "64"
+
+[[setting]]
+key = "flood.max.unscoped"
+label = "Maximum hops without a region"
+group = "Flood"
+kind = "int"
+min = 0.0
+max = 64.0
+default = "64"
+
+[[setting]]
+key = "flood.max.advert"
+label = "Maximum advert hops"
+group = "Flood"
+kind = "int"
+min = 0.0
+max = 64.0
+default = "8"
+
+[[setting]]
+key = "flood.advert.interval"
+label = "Flood advert interval"
+group = "Flood"
+kind = "int"
+min = 3.0
+max = 168.0
+unit = "h"
+default = "12"
+
+[[setting]]
+key = "advert.interval"
+label = "Zero-hop advert interval"
+group = "Flood"
+kind = "int"
+min = 60.0
+max = 240.0
+unit = "min"
+default = "120"
+
+[[setting]]
+key = "guest.password"
+label = "Guest password"
+group = "Access"
+kind = "password"
+default = ""
+
+[[setting]]
+key = "allow.read.only"
+label = "Allow read-only guests"
+group = "Access"
+kind = "bool"
+roles = ["room"]
+default = "off"
+
+[[setting]]
+key = "adc.multiplier"
+label = "Battery reading multiplier"
+group = "Power"
+kind = "float"
+min = 0.0
+max = 10.0
+default = "0"
+help = "0 uses the board's own calibration."
+
+[[setting]]
+key = "pwrmgt.source"
+label = "Power source"
+group = "Power"
+kind = "text"
+readonly = true
+default = "battery"
+
+[[setting]]
+key = "bridge.enabled"
+label = "Bridge"
+group = "Bridge"
+kind = "bool"
+default = "off"
+help = "Only on firmware built with a bridge."
+
+[[setting]]
+key = "bridge.delay"
+label = "Bridge delay"
+group = "Bridge"
+kind = "int"
+min = 0.0
+max = 10000.0
+unit = "ms"
+default = "500"
+
+[[setting]]
+key = "bridge.source"
+label = "Bridge source"
+group = "Bridge"
+kind = "choice"
+options = ["logRx", "logTx"]
+write = { logRx = "rx", logTx = "tx" }
+default = "logTx"
+help = "Which packets go over the bridge: those received, or those sent."
+
+[[setting]]
+key = "bridge.channel"
+label = "ESP-NOW channel"
+group = "Bridge"
+kind = "int"
+min = 1.0
+max = 14.0
+default = "1"
+
+[[setting]]
+key = "bridge.type"
+label = "Bridge type"
+group = "Bridge"
+kind = "text"
+readonly = true
+default = "espnow"
+
+[[setting]]
+key = "bridge.secret"
+label = "ESP-NOW secret"
+group = "Bridge"
+kind = "password"
+default = ""
+help = "Shared by every node on the bridge."
+
+[[setting]]
+key = "bridge.baud"
+label = "Serial bridge speed"
+group = "Bridge"
+kind = "int"
+min = 9600.0
+max = 115200.0
+unit = "baud"
+default = "115200"
+help = "Only on firmware built with a serial (RS232) bridge."

@@ -138,6 +138,9 @@ func (m *Model) chatEvent(e radio.Event) tea.Cmd {
 		}
 		m.refreshChats()
 	case radio.Incoming:
+		if e.CLI {
+			return nil // console replies belong to the admin screen
+		}
 		msg, err := m.chat.Incoming(e)
 		if err != nil {
 			m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
@@ -286,6 +289,12 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		if len(c.infos) > 0 {
 			c.writing = true
 		}
+	case "L":
+		if ct, ok := m.selectedRoom(); ok {
+			m.loginFromChats(ct)
+			return nil, true
+		}
+		return nil, false
 	case "pgup", "K":
 		c.scroll = min(c.scroll+5, max(len(c.msgs)-1, 0))
 	case "pgdown", "J":
@@ -486,7 +495,7 @@ func (m *Model) convoPane(w, rows int) []string {
 			body = []string{th.Fg(th.Dim, false).Render("Nothing here matches.")}
 		}
 	}
-	out := []string{head, ""}
+	out := []string{head, m.roomLine(w)}
 	for i := 0; i < avail-len(body); i++ {
 		out = append(out, "")
 	}

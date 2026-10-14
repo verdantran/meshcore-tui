@@ -97,22 +97,27 @@ type Sim struct {
 	cancel context.CancelFunc
 	once   sync.Once
 
-	mu      sync.Mutex
-	rng     *rand.Rand
-	mv      uint16
-	ack     uint32
-	pending map[string]int // replies each person owes, after you message them
-	loss    float64        // chance an ack never arrives
-	book    []radio.Contact
-	quiet   bool
-	auto    radio.AutoAdd
-	tag     uint32
+	mu       sync.Mutex
+	rng      *rand.Rand
+	mv       uint16
+	ack      uint32
+	pending  map[string]int // replies each person owes, after you message them
+	loss     float64        // chance an ack never arrives
+	book     []radio.Contact
+	quiet    bool
+	servers  map[[32]byte]*server
+	sessions map[[32]byte]byte // logged-in servers and the level granted
+	posts    []post
+	born     time.Time
+	auto     radio.AutoAdd
+	tag      uint32
 }
 
 func New(seed int64) *Sim {
 	return &Sim{events: make(chan radio.Event, 256), rng: rand.New(rand.NewSource(seed)), speed: 1, mv: 4020,
 		ack: uint32(seed), pending: map[string]int{}, loss: 0.15, book: contacts(),
-		auto: radio.AutoAdd{Repeater: true, MaxHops: 0}}
+		auto: radio.AutoAdd{Repeater: true, MaxHops: 0}, servers: map[[32]byte]*server{}, sessions: map[[32]byte]byte{},
+		posts: seededPosts(time.Now()), born: time.Now()}
 }
 
 // Fast makes every delay negligible, for tests.
@@ -472,6 +477,12 @@ func (s *Sim) SendText(ctx context.Context, to [32]byte, text string) (radio.Sen
 
 	s.frame(2, 6, []byte(text)...)
 	s.emit(radio.Transmit{At: time.Now(), What: "SEND_TXT_MSG"})
+	s.mu.Lock()
+	isRoom := s.book[s.known(to)].Type == radio.TypeRoom
+	s.mu.Unlock()
+	if isRoom {
+		s.postToRoom(text)
+	}
 	if !lost {
 		go func() {
 			time.Sleep(time.Duration(float64(rtt) / s.speed))

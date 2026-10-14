@@ -291,3 +291,108 @@ func TestStrangersAndAutoAdd(t *testing.T) {
 		t.Error("with auto-add on, strangers become contacts")
 	}
 }
+
+func TestAdminServers(t *testing.T) {
+	s := New(8).Fast()
+	ctx := context.Background()
+	dundry, room := key(0xA3, "Dundry"), key(0x6C, "Clifton Room")
+
+	// Nothing answers before login.
+	s.RequestStatus(ctx, dundry)
+	s.SendCLI(ctx, dundry, "ver")
+	if err := s.Login(ctx, [32]byte{}, "x"); err == nil {
+		t.Error("login to a non-server")
+	}
+	s.Login(ctx, dundry, "wrong")
+	if r := waitFor[radio.LoginResult](t, s); r.OK {
+		t.Fatal("wrong password accepted")
+	}
+	s.Login(ctx, dundry, "")
+	if r := waitFor[radio.LoginResult](t, s); !r.OK || r.Admin {
+		t.Fatalf("guest login = %+v", r)
+	}
+	s.SendCLI(ctx, dundry, "ver") // guests get no console
+	s.Login(ctx, dundry, adminPassword)
+	if r := waitFor[radio.LoginResult](t, s); !r.OK || !r.Admin || r.Permissions != 3 {
+		t.Fatalf("admin login = %+v", r)
+	}
+
+	s.RequestStatus(ctx, dundry)
+	st := waitFor[radio.StatusReport](t, s)
+	if stats, err := meshcore.ParseRepeaterStats(st.Data); err != nil || stats.UpTimeSecs < 1051200 || stats.RecvErrors != 14 {
+		t.Errorf("status = %+v, %v", stats, err)
+	}
+	s.RequestTelemetry(ctx, dundry)
+	if tel := waitFor[radio.Telemetry](t, s); len(tel.LPP) == 0 {
+		t.Error("telemetry empty")
+	}
+	tag, _ := s.BinaryRequest(ctx, dundry, meshcore.BuildNeighboursRequest(meshcore.NeighboursRequest{Count: 10, PrefixLen: 6}, [4]byte{}))
+	br := waitFor[radio.BinaryReply](t, s)
+	if nb, err := meshcore.ParseNeighboursReply(br.Data, 6); br.Tag != tag || err != nil || len(nb.Neighbours) == 0 {
+		t.Errorf("neighbours = %+v, %v", nb, err)
+	}
+	s.BinaryRequest(ctx, dundry, meshcore.BuildRequest(meshcore.ReqTypeGetAccessList, [4]byte{}))
+	if acl, err := meshcore.ParseAccessListReply(waitFor[radio.BinaryReply](t, s).Data); err != nil || len(acl) != 2 {
+		t.Errorf("acl = %+v, %v", acl, err)
+	}
+	s.BinaryRequest(ctx, dundry, meshcore.BuildRequest(meshcore.ReqTypeGetOwnerInfo, [4]byte{}))
+	if oi, _ := meshcore.ParseOwnerInfoReply(waitFor[radio.BinaryReply](t, s).Data); oi.Name != "Dundry" {
+		t.Errorf("owner info = %+v", oi)
+	}
+
+	bob := key(0xB0, "Bob")
+	bobHex := radio.KeyHex(bob[:])
+	console := func(cmd string) string {
+		t.Helper()
+		s.SendCLI(ctx, dundry, cmd)
+		in := waitFor[radio.Incoming](t, s)
+		if !in.CLI {
+			t.Fatalf("%s: reply isn't marked as console output", cmd)
+		}
+		return in.Text
+	}
+	for _, c := range [][2]string{
+		{"get tx", "> 22"}, {"set tx 30", "Error: Transmit power must be between 1 and 22 dBm"}, {"set tx 20", "OK"},
+		{"set radio 869.525,250,11,5", "OK - reboot to apply"}, {"get nope", "Unknown config: nope"}, {"set nope 1", "Unknown config: nope"},
+		{"ver", "v1.17.1 (Build: 14 Aug 2026)"}, {"board", "Heltec V4"}, {"advert", "OK - Advert sent"}, {"advert.zerohop", "OK - zerohop advert sent"},
+		{"log start", "OK - logging started"}, {"log stop", "OK - logging stopped"}, {"log erase", "OK - log erased"},
+		{"clear stats", "OK - stats reset"}, {"password hunter2", "password now: hunter2"}, {"setperm 3a 2", "Err - invalid params"}, {"setperm " + bobHex + " 2", "OK"},
+		{"setperm b0 0", "OK"}, {"setperm ee 0", "Err - invalid params"}, {"setperm b0", "Err - bad params"},
+		{"region", "* F\n bristol^ F\n  bath F\n wales\n"}, {"region home wales", " home is now wales"},
+		{"region denyf bath", "OK"}, {"region allowf nowhere", "Err - unknown region"}, {"region put cardiff wales", "OK - (flood allowed)"},
+		{"region put x nowhere", "Err - unknown parent"}, {"region remove wales", "Err - not empty"}, {"region remove cardiff", "OK"},
+		{"region remove nowhere", "Err - not found"}, {"region put somerset", "OK - (flood allowed)"}, {"region save", "OK"},
+		{"region frob", "Err - ??"}, {"region frob bath", "Err - ??"},
+		{"region", "* F\n bristol F\n  bath\n wales^\n somerset F\n"}, {"dance", "Unknown command"},
+	} {
+		if got := console(c[0]); got != c[1] {
+			t.Errorf("%s → %q, want %q", c[0], got, c[1])
+		}
+	}
+	if got := console("get tx"); got != "> 20" {
+		t.Errorf("set didn't stick: %q", got)
+	}
+	for _, cmd := range []string{"clock", "clock sync"} {
+		if console(cmd) == "" {
+			t.Errorf("%s gave nothing", cmd)
+		}
+	}
+	s.SendCLI(ctx, dundry, "reboot") // no reply, by design
+	s.Logout(ctx, dundry)
+
+	// The room server sends its posts after login and keeps what you post.
+	s.Login(ctx, room, roomPassword)
+	waitFor[radio.LoginResult](t, s)
+	first := waitFor[radio.Incoming](t, s)
+	if !first.Signed || first.Author == [4]byte{} || !strings.Contains(first.Text, "Welcome") {
+		t.Errorf("first post = %+v", first)
+	}
+	s.SendText(ctx, room, "range test at 7?")
+	if n := len(s.posts); n != 4 {
+		t.Errorf("posts = %d", n)
+	}
+	s.RequestStatus(ctx, room)
+	if _, err := meshcore.ParseRoomStats(waitFor[radio.StatusReport](t, s).Data); err != nil {
+		t.Error(err)
+	}
+}

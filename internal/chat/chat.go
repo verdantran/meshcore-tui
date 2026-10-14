@@ -116,6 +116,19 @@ func (s *Service) contactByPrefix(p [6]byte) (radio.Contact, bool) {
 	return radio.Contact{}, false
 }
 
+// author names the writer of a room post from the first four bytes of their key.
+func (s *Service) author(p [4]byte) string {
+	if strings.HasPrefix(s.device, radio.KeyHex(p[:])) {
+		return s.self
+	}
+	for _, c := range s.contacts {
+		if [4]byte(c.Key[:4]) == p {
+			return c.Name
+		}
+	}
+	return radio.KeyHex(p[:])
+}
+
 func (s *Service) contactByConvo(c store.Convo) (radio.Contact, bool) {
 	for _, ct := range s.contacts {
 		if store.ContactConvo(ct.Key) == c {
@@ -148,6 +161,9 @@ func (s *Service) Incoming(in radio.Incoming) (store.Message, error) {
 		}
 	} else if c, ok := s.contactByPrefix(in.From); ok {
 		m.Convo, m.Sender = store.ContactConvo(c.Key), c.Name
+		if c.Type == radio.TypeRoom && in.Author != ([4]byte{}) {
+			m.Sender = s.author(in.Author)
+		}
 	} else {
 		m.Convo, m.Sender = store.UnknownConvo(in.From), radio.KeyHex(in.From[:])
 	}
