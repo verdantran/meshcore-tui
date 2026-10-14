@@ -78,9 +78,10 @@ type Model struct {
 	glitch  time.Time
 	ticking bool
 
-	chat     *chat.Service
-	chats    chatsModel
-	contacts contactsModel
+	chat      *chat.Service
+	chats     chatsModel
+	contacts  contactsModel
+	inspector inspectorModel
 
 	queued tea.Cmd // a radio call started by a palette command
 
@@ -138,6 +139,7 @@ func New(opt Options) *Model {
 	}
 	m.chats = newChats()
 	m.contacts = newContacts()
+	m.inspector = newInspector()
 	m.notes = newNotifier(opt)
 	m.focused = true
 	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand(), notifyCommand(), traceCommand())
@@ -256,7 +258,7 @@ func (m *Model) animating() bool {
 		motion.Running(m.stats.rxLamp, lampDur, now) || motion.Running(m.stats.txLamp, lampDur, now) ||
 		motion.Running(m.stats.snrAt, countDur, now) || motion.Running(m.stats.battAt, countDur, now) ||
 		motion.Running(m.glitch, glitchDur, now) ||
-		m.latestTyping() || m.linked == linkLost || m.chatsAnimating() || m.contactsAnimating() ||
+		m.latestTyping() || m.linked == linkLost || m.chatsAnimating() || m.contactsAnimating() || m.inspectorAnimating() ||
 		m.ticker.moving(m.level, now, m.w)
 }
 
@@ -300,6 +302,7 @@ func (m *Model) apply(e radio.Event) tea.Cmd {
 		s.snrFrom = s.currentSNR(now)
 		s.snrTo, s.snrAt, s.rssi = float64(e.SNR), now, e.RSSI
 		m.ticker.push(e.Raw, now, m.w)
+		m.heardPacket(e)
 	case radio.Transmit:
 		m.stats.txLamp = now
 	case radio.Battery:
@@ -386,6 +389,11 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 	}
 	if m.phase == phaseMain && m.tab == 1 && m.chat != nil {
 		if cmd, handled := m.contactsKey(s); handled {
+			return cmd, false
+		}
+	}
+	if m.phase == phaseMain && m.tab == 3 {
+		if cmd, handled := m.inspectorKey(s); handled {
 			return cmd, false
 		}
 	}
@@ -532,6 +540,11 @@ func (m *Model) screenKeys() []string {
 	th := m.th
 	key := func(k, what string) string {
 		return th.Fg(th.Cyan, true).Render(fmt.Sprintf("%-12s", k)) + th.Fg(th.Muted, false).Render(what)
+	}
+	if m.tab == 3 {
+		return []string{key("↑↓ j k", "choose a packet; g jumps back to the newest"), key("[ ]", "step through decoded fields, highlighting their bytes"),
+			key("space", "pause, so the list holds still"), key("F R n", "filter by type · route · minimum signal"), key("/", "filter by text"),
+			key("C", "clear"), key(":export packets", "save the visible packets as JSON lines"), ""}
 	}
 	if m.tab == 1 {
 		return []string{key("↑↓ j k", "choose a contact"), key("m", "message them"), key("t", "trace the route, showing signal at each hop"),

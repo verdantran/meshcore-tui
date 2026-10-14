@@ -173,8 +173,11 @@ func (m *Model) highlight(line, query string, base theme.RGB) string {
 }
 
 func exportCommand() command {
-	return command{name: "export", args: "[json] [all]", help: "save this conversation, or all of them, to a file",
+	return command{name: "export", args: "[json] [all] | packets", help: "save this conversation, all of them, or the visible packets, to a file",
 		run: func(m *Model, a []string) error {
+			if len(a) == 1 && a[0] == "packets" {
+				return m.exportPackets()
+			}
 			if m.chat == nil || m.chat.Device() == "" {
 				return fmt.Errorf("nothing to export yet")
 			}
@@ -225,5 +228,5 @@ func exportCommand() command {
 			m.addLog(m.now, fmt.Sprintf("EXPORTED  %d messages → %s", n, path), radio.ToneOK)
 			return nil
 		},
-		complete: func(*Model) []string { return []string{"json", "all"} }}
+		complete: func(*Model) []string { return []string{"json", "all", "packets"} }}
 }

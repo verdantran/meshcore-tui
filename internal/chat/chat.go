@@ -469,3 +469,6 @@ func (s *Service) RemoveContact(key [32]byte) error {
 
 // ContactByPrefix finds a contact from the 6-byte key prefix the radio uses in pushes.
 func (s *Service) ContactByPrefix(p [6]byte) (radio.Contact, bool) { return s.contactByPrefix(p) }
+
+// Channels is the radio's channel list, secrets included, as last synced.
+func (s *Service) Channels() []radio.Channel { return append([]radio.Channel(nil), s.channels...) }

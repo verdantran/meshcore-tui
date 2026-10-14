@@ -3,7 +3,7 @@ package sim
 
 import (
 	"context"
-	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -44,7 +44,9 @@ var strangers = []node{
 	{"Weston Relay", 0x3B, radio.TypeRepeater, 51.350, -2.980}, {"Portishead Room", 0x9C, radio.TypeRoom, 51.486, -2.770},
 }
 
-var channels = []radio.Channel{{Idx: 0, Name: "Public"}, {Idx: 1, Name: "#bristol"}, {Idx: 2, Name: "#hilltop"}}
+var channelNames = []string{"Public", "#bristol", "#hilltop"}
+
+var channels = simChannels()
 
 // device is what the simulated radio holds; boot details are read from it rather than scripted.
 var device = struct {
@@ -55,13 +57,6 @@ var device = struct {
 	self:  radio.SelfInfo{Name: "MeshCore-k4", PubKey: key(0xC0, "MeshCore-k4"), FreqKHz: 869618, BwHz: 62500, SF: 8, CR: 8, TxPower: 22, Lat: 51.44, Lon: -2.598},
 	info:  radio.DeviceInfo{Model: "Heltec V4", Firmware: "v1.17.1", BuildDate: "14 Aug 2026", MaxContacts: 350, MaxChannels: 40},
 	drift: 14 * time.Second,
-}
-
-// key makes a stable public key whose first byte is the node's path hash.
-func key(hash byte, name string) [32]byte {
-	k := sha256.Sum256([]byte(name))
-	k[0] = hash
-	return k
 }
 
 func contacts() []radio.Contact {
@@ -279,12 +274,129 @@ func (s *Sim) traffic(ctx context.Context) {
 }
 
 func (s *Sim) hear(now time.Time) {
-	raw, desc := s.packet()
-	s.emit(radio.Frame{At: now, Dir: radio.FromRadio, Code: 0x88, Name: radio.ResponseName(0x88)})
-	s.emit(radio.Packet{At: now, SNR: float32(s.intn(64)-20) / 4, RSSI: int8(-70 - s.intn(50)), Raw: raw})
+	raw, desc, flood := s.packet(now)
+	s.heardPacket(now, raw)
 	if desc != "" {
 		s.emit(radio.Log{At: now, Text: desc})
 	}
+	// A flood often reaches us twice, by different repeaters.
+	if flood && s.float() < 0.3 {
+		if again := s.reroute(raw); again != nil {
+			go func() {
+				time.Sleep(s.delay(150 + s.intn(400)))
+				s.heardPacket(time.Now(), again)
+			}()
+		}
+	}
+}
+
+func (s *Sim) heardPacket(at time.Time, raw []byte) {
+	s.emit(radio.Frame{At: at, Dir: radio.FromRadio, Code: 0x88, Name: radio.ResponseName(0x88)})
+	s.emit(radio.Packet{At: at, SNR: float32(s.intn(64)-20) / 4, RSSI: int8(-70 - s.intn(50)), Raw: raw})
+}
+
+// reroute is the same packet with a different path, as if heard via other repeaters.
+func (s *Sim) reroute(raw []byte) []byte {
+	p, err := meshcore.PacketFromBytes(raw)
+	if err != nil {
+		return nil
+	}
+	p.Path = s.hops(1 + s.intn(4))
+	p.PathLength = meshcore.MakePathLen(1, uint8(len(p.Path)))
+	out, err := p.ToBytes()
+	if err != nil {
+		return nil
+	}
+	return out
+}
+
+func (s *Sim) hops(n int) []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	path := make([]byte, n)
+	for i := range path {
+		path[i] = repeaters[s.rng.Intn(len(repeaters))].hash
+	}
+	return path
+}
+
+func (s *Sim) bytes(n int) []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b := make([]byte, n)
+	s.rng.Read(b)
+	return b
+}
+
+func build(route, payloadType byte, path, payload []byte) []byte {
+	p := &meshcore.Packet{Header: meshcore.MakeHeader(route, payloadType, 0), PathLength: meshcore.MakePathLen(1, uint8(len(path))),
+		Path: path, Payload: payload}
+	raw, err := p.ToBytes()
+	if err != nil {
+		panic(err) // the simulator only builds valid packets
+	}
+	return raw
+}
+
+var advertTypes = map[radio.ContactType]string{radio.TypeChat: "CHAT", radio.TypeRepeater: "REPEATER", radio.TypeRoom: "ROOM", radio.TypeSensor: "SENSOR"}
+
+// packet builds a real on-air packet. Adverts are signed and channel messages are encrypted with the
+// channel's secret, so they decode as they would off a real radio; private traffic is the right shape
+// with random ciphertext.
+func (s *Sim) packet(now time.Time) ([]byte, string, bool) {
+	all := append(append(append([]node(nil), repeaters...), people...), strangers...)
+	hops := s.hops(1 + s.intn(4))
+	encrypted := func() []byte {
+		b := s.bytes(4 + 16*(1+s.intn(3)))
+		b[0], b[1] = all[s.intn(len(all))].hash, device.self.PubKey[0] // destination and source hashes, then MAC and ciphertext
+		return b
+	}
+	switch x := s.intn(100); {
+	case x < 26:
+		n := all[s.intn(len(all))]
+		adv, err := meshcore.NewAdvert(ident(n.hash, n.name), meshcore.AdvertAppData{Type: advertTypes[n.typ], Name: n.name,
+			Lat: int32(n.lat * 1e6), Lon: int32(n.lon * 1e6), HasLocation: true}, uint32(now.Unix()))
+		if err != nil {
+			return nil, "", false
+		}
+		payload, _ := adv.ToBytes()
+		desc := ""
+		if s.intn(3) == 0 {
+			desc = fmt.Sprintf("ADVERT  %s [%02X]  %d hops", n.name, n.hash, len(hops))
+		}
+		return build(meshcore.RouteTypeFlood, meshcore.PayloadTypeAdvert, hops, payload), desc, true
+	case x < 52:
+		return s.groupText(now, hops, channels[s.intn(len(channels))], []string{"Alice", "Bob", "Carol", "Eve"}[s.intn(4)], ""), "", true
+	case x < 64:
+		return build(meshcore.RouteTypeDirect, meshcore.PayloadTypeTxtMsg, hops, encrypted()), "", false
+	case x < 78:
+		return build(meshcore.RouteTypeDirect, meshcore.PayloadTypeAck, hops, s.bytes(4)), "", false
+	case x < 84:
+		return build(meshcore.RouteTypeFlood, meshcore.PayloadTypePath, hops, encrypted()), "", true
+	case x < 90:
+		return build(meshcore.RouteTypeDirect, meshcore.PayloadTypeReq, hops, encrypted()), "", false
+	case x < 96:
+		return build(meshcore.RouteTypeDirect, meshcore.PayloadTypeResponse, hops, encrypted()), "", false
+	default:
+		tr := meshcore.Trace{Tag: binary.LittleEndian.Uint32(s.bytes(4)), PathHashes: s.hops(1 + s.intn(3))}
+		payload, _ := tr.ToBytes()
+		return build(meshcore.RouteTypeDirect, meshcore.PayloadTypeTrace, hops, payload), "", false
+	}
+}
+
+// groupText encrypts a channel message the way the sender's radio would.
+func (s *Sim) groupText(now time.Time, hops []byte, ch radio.Channel, sender, text string) []byte {
+	if text == "" {
+		lines := chatter[ch.Name]
+		text = lines[s.intn(len(lines))]
+	}
+	psk := ch.Secret
+	gt, err := (&meshcore.GroupTextPayload{Timestamp: uint32(now.Unix()), Sender: sender, Text: text}).Encrypt(meshcore.DeriveChannelHash(psk), psk[:])
+	if err != nil {
+		return nil
+	}
+	payload, _ := gt.ToBytes()
+	return build(meshcore.RouteTypeFlood, meshcore.PayloadTypeGrpTxt, hops, payload)
 }
 
 // chatter is a channel message from someone on the mesh, or a reply someone owes you.
@@ -312,8 +424,12 @@ func (s *Sim) chatter(now time.Time) {
 	ch := channels[s.intn(len(channels))]
 	lines := chatter[ch.Name]
 	who := []string{"Alice", "Bob", "Carol", "Dan", "Eve", "Hilltop Ops"}[s.intn(6)]
-	s.emit(radio.Incoming{At: now, Channel: true, ChannelIdx: ch.Idx, Hops: s.intn(4) + 1, SentAt: now,
-		Text: who + ": " + lines[s.intn(len(lines))], SNR: float32(s.intn(48)-12) / 4, HasSNR: true})
+	text := lines[s.intn(len(lines))]
+	hops := s.hops(s.intn(4) + 1)
+	// The radio hears the encrypted packet and then hands over the message it decrypted.
+	s.heardPacket(now, s.groupText(now, hops, ch, who, text))
+	s.emit(radio.Incoming{At: now, Channel: true, ChannelIdx: ch.Idx, Hops: len(hops), SentAt: now,
+		Text: who + ": " + text, SNR: float32(s.intn(48)-12) / 4, HasSNR: true})
 }
 
 func peopleHash(name string) byte {
@@ -384,56 +500,6 @@ func (s *Sim) SendChannel(ctx context.Context, idx int, text string) error {
 func (s *Sim) ResetPath(ctx context.Context, contact [32]byte) error {
 	s.frame(13, 0)
 	return nil
-}
-
-// packet builds a real on-air packet: header, path_len, hop hashes, then an opaque payload.
-func (s *Sim) packet() ([]byte, string) {
-	type kind struct {
-		route, payload byte
-		weight         int
-	}
-	kinds := []kind{
-		{meshcore.RouteTypeFlood, meshcore.PayloadTypeGrpTxt, 30},
-		{meshcore.RouteTypeFlood, meshcore.PayloadTypeAdvert, 22},
-		{meshcore.RouteTypeDirect, meshcore.PayloadTypeTxtMsg, 12},
-		{meshcore.RouteTypeDirect, meshcore.PayloadTypeAck, 14},
-		{meshcore.RouteTypeFlood, meshcore.PayloadTypePath, 6},
-		{meshcore.RouteTypeDirect, meshcore.PayloadTypeReq, 6},
-		{meshcore.RouteTypeDirect, meshcore.PayloadTypeResponse, 6},
-		{meshcore.RouteTypeFlood, meshcore.PayloadTypeTrace, 4},
-	}
-	total := 0
-	for _, k := range kinds {
-		total += k.weight
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	pick := s.rng.Intn(total)
-	var k kind
-	for _, k = range kinds {
-		if pick < k.weight {
-			break
-		}
-		pick -= k.weight
-	}
-	hops := 1 + s.rng.Intn(4)
-	path := make([]byte, hops)
-	for i := range path {
-		path[i] = repeaters[s.rng.Intn(len(repeaters))].hash
-	}
-	payload := make([]byte, 10+s.rng.Intn(40))
-	s.rng.Read(payload)
-	p := &meshcore.Packet{Header: meshcore.MakeHeader(k.route, k.payload, 0), PathLength: meshcore.MakePathLen(1, uint8(hops)), Path: path, Payload: payload}
-	raw, err := p.ToBytes()
-	if err != nil {
-		return nil, ""
-	}
-	desc := ""
-	if k.payload == meshcore.PayloadTypeAdvert && s.rng.Intn(3) == 0 {
-		r := repeaters[s.rng.Intn(len(repeaters))]
-		desc = fmt.Sprintf("ADVERT  %s [%02X]  %d hops", r.name, r.hash, hops)
-	}
-	return raw, desc
 }
 
 // SnapshotContacts is a copy of the simulated contact table.
