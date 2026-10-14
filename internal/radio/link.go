@@ -2,6 +2,9 @@ package radio
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -303,15 +306,37 @@ func (l *Link) registerPushes() {
 			l.emit(Packet{At: time.Now(), SNR: p.LastSNR, RSSI: p.LastRSSI, Raw: p.Raw})
 		}
 	})
+	// NEW_ADVERT is a node that is *not* a contact: auto-add was off for it, it was too many hops away,
+	// or the table was full. ADVERT is a contact whose details changed, including one just auto-added.
 	c.OnPush(companion.PushNewAdvert, func(r companion.Response) {
 		if p, ok := r.Data.(companion.PushNewAdvertResponse); ok {
-			l.emit(ContactUpdated{Contact: contactFrom(p.PublicKey, p.AdvertName, p.Type, p.Flags, p.OutPathLen, p.OutPath[:], p.LastAdvert, p.AdvertLatitude, p.AdvertLongitude)})
-			l.emit(Log{At: time.Now(), Text: fmt.Sprintf("NEW NODE  %s [%s]", p.AdvertName, hexPrefix(p.PublicKey[:1])), Tone: ToneOK})
+			l.emit(Heard{Contact: contactFrom(p.PublicKey, p.AdvertName, p.Type, p.Flags, p.OutPathLen, p.OutPath[:], p.LastAdvert, p.AdvertLatitude, p.AdvertLongitude)})
+			l.emit(Log{At: time.Now(), Text: fmt.Sprintf("HEARD  %s [%s], not a contact", p.AdvertName, hexPrefix(p.PublicKey[:1]))})
 		}
 	})
 	c.OnPush(companion.PushAdvert, func(r companion.Response) {
 		if p, ok := r.Data.(companion.PushAdvertResponse); ok {
 			l.emit(Log{At: time.Now(), Text: fmt.Sprintf("ADVERT  %s", hexPrefix(p.PublicKey[:6]))})
+			go l.refreshContact(p.PublicKey)
+		}
+	})
+	c.OnPush(companion.PushContactDeleted, func(r companion.Response) {
+		if p, ok := r.Data.(companion.PushContactDeletedResponse); ok {
+			l.emit(ContactRemoved{Key: p.PublicKey})
+		}
+	})
+	c.OnPush(companion.PushTraceData, func(r companion.Response) {
+		if p, ok := r.Data.(companion.PushTraceDataResponse); ok {
+			snrs := make([]float32, len(p.PathSnrs))
+			for i, b := range p.PathSnrs {
+				snrs[i] = meshcore.PathSNRdB(b)
+			}
+			l.emit(TraceResult{Tag: p.Tag, Hashes: p.PathHashes, SNRs: snrs, LastSNR: p.LastSNR})
+		}
+	})
+	c.OnPush(companion.PushPathDiscoveryResponse, func(r companion.Response) {
+		if p, ok := r.Data.(companion.PushPathDiscoveryResp); ok {
+			l.emit(PathFound{Prefix: p.PubKeyPrefix, Out: p.OutPath, In: p.InPath})
 		}
 	})
 	c.OnPush(companion.PushPathUpdated, func(r companion.Response) {
@@ -326,9 +351,7 @@ func (l *Link) registerPushes() {
 		}
 	})
 	c.OnPush(companion.PushMsgWaiting, func(companion.Response) { go l.drain() })
-	c.OnPush(companion.PushContactsFull, func(companion.Response) {
-		l.emit(Log{At: time.Now(), Text: "CONTACT TABLE FULL", Tone: ToneWarn})
-	})
+	c.OnPush(companion.PushContactsFull, func(companion.Response) { l.emit(ContactsFull{}) })
 }
 
 // tap passes frames through to the SDK transport, copying each one to the debug pane.
@@ -366,4 +389,109 @@ var overAir = map[byte]bool{
 	companion.CmdSendTracePath: true, companion.CmdSendTelemetryReq: true, companion.CmdSendBinaryReq: true,
 	companion.CmdSendPathDiscoveryReq: true, companion.CmdSendControlData: true, companion.CmdSendAnonReq: true,
 	companion.CmdSendChannelData: true, companion.CmdSendRawPacket: true,
+}
+
+func (l *Link) SyncContacts(ctx context.Context) ([]Contact, error) {
+	cs, err := l.client.GetContacts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Contact, len(cs))
+	for i, ct := range cs {
+		out[i] = contactFrom(ct.PublicKey, ct.AdvertName, ct.Type, ct.Flags, ct.OutPathLen, ct.OutPath[:], ct.LastAdvert, ct.AdvertLatitude, ct.AdvertLongitude)
+	}
+	return out, nil
+}
+
+// SaveContact writes a whole contact record; the radio adds it if it's new.
+func (l *Link) SaveContact(ctx context.Context, c Contact) error {
+	cmd := companion.AddUpdateContactCommand{
+		PublicKey: c.Key, Type: byte(c.Type), Flags: c.Flags, OutPathLen: 0xFF, Name: c.Name,
+		LastAdvert: uint32(c.LastAdvert.Unix()), Latitude: int32(c.Lat * 1e6), Longitude: int32(c.Lon * 1e6),
+		LastModified: uint32(time.Now().Unix()),
+	}
+	if c.PathLen >= 0 {
+		cmd.OutPathLen, cmd.OutPath = meshcore.MakePathLen(1, uint8(len(c.Path))), c.Path
+	}
+	return l.client.AddUpdateContactFull(ctx, cmd)
+}
+
+func (l *Link) RemoveContact(ctx context.Context, key [32]byte) error {
+	return l.client.RemoveContact(ctx, meshcore.NewIdentity(key))
+}
+
+// Trace sends a trace along path (1-byte hop hashes); the tag matches the TraceResult that comes back.
+func (l *Link) Trace(ctx context.Context, path []byte) (uint32, error) {
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return 0, err
+	}
+	tag := binary.LittleEndian.Uint32(b[:])
+	_, err := l.client.SendTracePath(ctx, tag, 0, 0, path)
+	return tag, err
+}
+
+func (l *Link) DiscoverPath(ctx context.Context, key [32]byte) error {
+	_, err := l.client.SendPathDiscoveryReq(ctx, meshcore.NewIdentity(key))
+	return err
+}
+
+func (l *Link) AdvertPath(ctx context.Context, key [32]byte) (AdvertPath, error) {
+	r, err := l.client.GetAdvertPath(ctx, meshcore.NewIdentity(key))
+	if err != nil {
+		return AdvertPath{}, err
+	}
+	return AdvertPath{At: time.Unix(int64(r.RecvTimestamp), 0), Path: r.Path}, nil
+}
+
+func (l *Link) ExportContact(ctx context.Context, key [32]byte) (string, error) {
+	r, err := l.client.ExportContact(ctx, meshcore.NewIdentity(key))
+	if err != nil {
+		return "", err
+	}
+	return LinkPrefix + hex.EncodeToString(r.AdvertData), nil
+}
+
+func (l *Link) ImportContact(ctx context.Context, link string) error {
+	data, err := ParseLink(link)
+	if err != nil {
+		return err
+	}
+	return l.client.ImportContact(ctx, data)
+}
+
+// ParseLink reads a meshcore:// contact link back into the advert bytes it carries.
+func ParseLink(link string) ([]byte, error) {
+	link = strings.TrimSpace(link)
+	if !strings.HasPrefix(link, LinkPrefix) {
+		return nil, errors.New("not a meshcore:// link")
+	}
+	data, err := hex.DecodeString(strings.TrimPrefix(link, LinkPrefix))
+	if err != nil || len(data) < 32 {
+		return nil, errors.New("the link is damaged or incomplete")
+	}
+	return data, nil
+}
+
+func (l *Link) AutoAdd(ctx context.Context) (AutoAdd, error) {
+	r, err := l.client.GetAutoAddConfig(ctx)
+	if err != nil {
+		return AutoAdd{}, err
+	}
+	return AutoAdd{
+		Chat: r.Config&companion.AutoAddChat != 0, Repeater: r.Config&companion.AutoAddRepeater != 0,
+		Room: r.Config&companion.AutoAddRoomServer != 0, Sensor: r.Config&companion.AutoAddSensor != 0,
+		OverwriteOldest: r.Config&companion.AutoAddOverwriteOldest != 0, MaxHops: int(r.MaxHops),
+	}, nil
+}
+
+func (l *Link) SetAutoAdd(ctx context.Context, a AutoAdd) error {
+	var cfg byte
+	for bit, on := range map[byte]bool{companion.AutoAddChat: a.Chat, companion.AutoAddRepeater: a.Repeater,
+		companion.AutoAddRoomServer: a.Room, companion.AutoAddSensor: a.Sensor, companion.AutoAddOverwriteOldest: a.OverwriteOldest} {
+		if on {
+			cfg |= bit
+		}
+	}
+	return l.client.SetAutoAddConfig(ctx, cfg, byte(min(max(a.MaxHops, 0), 64)))
 }

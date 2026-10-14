@@ -38,6 +38,12 @@ var people = []node{
 	{"Clifton Room", 0x6C, radio.TypeRoom, 51.456, -2.620},
 }
 
+// strangers are heard on air but aren't contacts until you add them.
+var strangers = []node{
+	{"Eve", 0xE5, radio.TypeChat, 51.410, -2.540}, {"Frank", 0xF4, radio.TypeChat, 51.330, -2.810},
+	{"Weston Relay", 0x3B, radio.TypeRepeater, 51.350, -2.980}, {"Portishead Room", 0x9C, radio.TypeRoom, 51.486, -2.770},
+}
+
 var channels = []radio.Channel{{Idx: 0, Name: "Public"}, {Idx: 1, Name: "#bristol"}, {Idx: 2, Name: "#hilltop"}}
 
 // device is what the simulated radio holds; boot details are read from it rather than scripted.
@@ -102,11 +108,16 @@ type Sim struct {
 	ack     uint32
 	pending map[string]int // replies each person owes, after you message them
 	loss    float64        // chance an ack never arrives
+	book    []radio.Contact
+	quiet   bool
+	auto    radio.AutoAdd
+	tag     uint32
 }
 
 func New(seed int64) *Sim {
 	return &Sim{events: make(chan radio.Event, 256), rng: rand.New(rand.NewSource(seed)), speed: 1, mv: 4020,
-		ack: uint32(seed), pending: map[string]int{}, loss: 0.15}
+		ack: uint32(seed), pending: map[string]int{}, loss: 0.15, book: contacts(),
+		auto: radio.AutoAdd{Repeater: true, MaxHops: 0}}
 }
 
 // Fast makes every delay negligible, for tests.
@@ -114,6 +125,9 @@ func (s *Sim) Fast() *Sim { s.speed = 1000; return s }
 
 // Lossless makes every ack arrive, for tests that need a predictable outcome.
 func (s *Sim) Lossless() *Sim { s.loss = 0; return s }
+
+// Quiet stops the background traffic, so tests see only the answers to what they ask.
+func (s *Sim) Quiet() *Sim { s.quiet = true; return s }
 
 func (s *Sim) Events() <-chan radio.Event { return s.events }
 func (s *Sim) Describe() string           { return "simulated radio" }
@@ -191,7 +205,7 @@ func (s *Sim) run(ctx context.Context) {
 	if device.drift.Abs() > 5*time.Second {
 		clock = fmt.Sprintf("synced, was %+v off", device.drift)
 	}
-	cs := contacts()
+	cs := s.SnapshotContacts()
 	waiting := queued(time.Now())
 	batt := radio.Battery{MilliVolts: s.mv}
 	steps := []struct {
@@ -223,7 +237,9 @@ func (s *Sim) run(ctx context.Context) {
 	for _, m := range waiting {
 		s.emit(m)
 	}
-	s.traffic(ctx)
+	if !s.quiet {
+		s.traffic(ctx)
+	}
 }
 
 // traffic emits a believable stream of heard packets, messages, adverts and the odd transmission.
@@ -237,8 +253,10 @@ func (s *Sim) traffic(ctx context.Context) {
 		switch x := s.float(); {
 		case x < 0.62:
 			s.hear(now)
-		case x < 0.80:
+		case x < 0.76:
 			s.chatter(now)
+		case x < 0.80:
+			s.stranger(now)
 		case x < 0.90:
 			s.frame(7, 0, 1)
 			s.emit(radio.Transmit{At: now, What: "SEND_SELF_ADVERT"})
@@ -307,11 +325,12 @@ func peopleHash(name string) byte {
 	return 0
 }
 
+// person finds a chat or room contact by key, including ones added during the session.
 func (s *Sim) person(to [32]byte) (string, bool) {
-	for _, p := range people {
-		if key(p.hash, p.name) == to {
-			return p.name, true
-		}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if i := s.known(to); i >= 0 && s.book[i].Type != radio.TypeRepeater {
+		return s.book[i].Name, true
 	}
 	return "", false
 }
@@ -330,7 +349,7 @@ func (s *Sim) SendText(ctx context.Context, to [32]byte, text string) (radio.Sen
 	ack := s.ack
 	lost := s.rng.Float64() < s.loss
 	rtt := time.Duration(600+s.rng.Intn(1900)) * time.Millisecond
-	if s.rng.Float64() < 0.5 {
+	if _, scripted := dms[name]; scripted && s.rng.Float64() < 0.5 {
 		s.pending[name]++
 	}
 	s.mu.Unlock()
@@ -415,4 +434,194 @@ func (s *Sim) packet() ([]byte, string) {
 		desc = fmt.Sprintf("ADVERT  %s [%02X]  %d hops", r.name, r.hash, hops)
 	}
 	return raw, desc
+}
+
+// SnapshotContacts is a copy of the simulated contact table.
+func (s *Sim) SnapshotContacts() []radio.Contact {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]radio.Contact(nil), s.book...)
+}
+
+func asContact(n node) radio.Contact {
+	return radio.Contact{Key: key(n.hash, n.name), Name: n.name, Type: n.typ, PathLen: -1, Lat: n.lat, Lon: n.lon, LastAdvert: time.Now()}
+}
+
+func (s *Sim) known(k [32]byte) int {
+	for i, c := range s.book {
+		if c.Key == k {
+			return i
+		}
+	}
+	return -1
+}
+
+// stranger is an advert from someone who isn't a contact; it's added only if auto-add covers its type.
+func (s *Sim) stranger(now time.Time) {
+	n := strangers[s.intn(len(strangers))]
+	c := asContact(n)
+	s.mu.Lock()
+	if s.known(c.Key) >= 0 {
+		s.mu.Unlock()
+		return
+	}
+	add := n.typ == radio.TypeChat && s.auto.Chat || n.typ == radio.TypeRepeater && s.auto.Repeater ||
+		n.typ == radio.TypeRoom && s.auto.Room || n.typ == radio.TypeSensor && s.auto.Sensor
+	if add {
+		s.book = append(s.book, c)
+	}
+	s.mu.Unlock()
+	if add {
+		s.emit(radio.ContactUpdated{Contact: c})
+		s.emit(radio.Log{At: now, Text: fmt.Sprintf("NEW CONTACT  %s [%02X], added automatically", n.name, n.hash), Tone: radio.ToneOK})
+		return
+	}
+	s.emit(radio.Heard{Contact: c})
+	s.emit(radio.Log{At: now, Text: fmt.Sprintf("HEARD  %s [%02X], not a contact", n.name, n.hash)})
+}
+
+func (s *Sim) SyncContacts(ctx context.Context) ([]radio.Contact, error) {
+	s.frame(4, 4)
+	return s.SnapshotContacts(), nil
+}
+
+func (s *Sim) SaveContact(ctx context.Context, c radio.Contact) error {
+	s.mu.Lock()
+	if i := s.known(c.Key); i >= 0 {
+		s.book[i] = c
+	} else {
+		s.book = append(s.book, c)
+	}
+	s.mu.Unlock()
+	s.frame(9, 0)
+	return nil
+}
+
+func (s *Sim) RemoveContact(ctx context.Context, k [32]byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := s.known(k)
+	if i < 0 {
+		return errors.New("not found")
+	}
+	s.book = append(s.book[:i], s.book[i+1:]...)
+	return nil
+}
+
+// linkSNR is a stable, believable signal for a hop between two hashes.
+func linkSNR(a, b byte) float32 {
+	v := int(a)*31 + int(b)*17
+	return float32(v%56-14) / 4
+}
+
+// Trace answers after a delay that grows with the path. A hop through an unknown hash is lost, so no answer comes.
+func (s *Sim) Trace(ctx context.Context, path []byte) (uint32, error) {
+	s.mu.Lock()
+	s.tag++
+	tag := s.tag
+	s.mu.Unlock()
+	s.frame(36, 6, path...)
+	s.emit(radio.Transmit{At: time.Now(), What: "SEND_TRACE_PATH"})
+	for _, h := range path {
+		ok := false
+		for _, r := range append(append([]node(nil), repeaters...), strangers...) {
+			ok = ok || r.hash == h && r.typ == radio.TypeRepeater
+		}
+		if !ok {
+			return tag, nil
+		}
+	}
+	go func() {
+		time.Sleep(s.delay(400 + 300*len(path)))
+		snrs := make([]float32, len(path))
+		prev := device.self.PubKey[0]
+		for i, h := range path {
+			snrs[i] = linkSNR(prev, h)
+			prev = h
+		}
+		s.emit(radio.Frame{At: time.Now(), Dir: radio.FromRadio, Code: 0x89, Name: radio.ResponseName(0x89)})
+		s.emit(radio.TraceResult{Tag: tag, Hashes: append([]byte(nil), path...), SNRs: snrs, LastSNR: linkSNR(prev, device.self.PubKey[0])})
+	}()
+	return tag, nil
+}
+
+// DiscoverPath finds a route after a moment and stores it on the contact, as the firmware does.
+func (s *Sim) DiscoverPath(ctx context.Context, k [32]byte) error {
+	s.mu.Lock()
+	i := s.known(k)
+	if i < 0 {
+		s.mu.Unlock()
+		return errors.New("not a contact")
+	}
+	routes := [][]byte{{0xA3}, {0xA3, 0x1E}, {0x77, 0x5F}, {0x1E, 0x4D}, {0xA3, 0xB2, 0xE1}}
+	out := routes[s.rng.Intn(len(routes))]
+	s.book[i].PathLen, s.book[i].Path = len(out), append([]byte(nil), out...)
+	s.mu.Unlock()
+	s.frame(52, 6)
+	s.emit(radio.Transmit{At: time.Now(), What: "SEND_PATH_DISCOVERY_REQ"})
+	go func() {
+		time.Sleep(s.delay(1500))
+		in := make([]byte, len(out))
+		for j, h := range out {
+			in[len(out)-1-j] = h
+		}
+		s.emit(radio.Frame{At: time.Now(), Dir: radio.FromRadio, Code: 0x8D, Name: radio.ResponseName(0x8D)})
+		s.emit(radio.PathFound{Prefix: prefix(k), Out: out, In: in})
+	}()
+	return nil
+}
+
+func (s *Sim) AdvertPath(ctx context.Context, k [32]byte) (radio.AdvertPath, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := s.known(k)
+	if i < 0 {
+		return radio.AdvertPath{}, errors.New("not found")
+	}
+	paths := [][]byte{{}, {0xA3}, {0x1E, 0xA3}, {0x90, 0x77}, {0xE1, 0xB2, 0xA3}}
+	return radio.AdvertPath{At: s.book[i].LastAdvert, Path: paths[int(k[1])%len(paths)]}, nil
+}
+
+// simLink marks links made by the simulator; real ones carry a signed advert it can't produce.
+const simLink = 0x5A
+
+func (s *Sim) ExportContact(ctx context.Context, k [32]byte) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := s.known(k)
+	if i < 0 {
+		return "", errors.New("not found")
+	}
+	c := s.book[i]
+	data := append([]byte{simLink}, c.Key[:]...)
+	data = append(data, byte(c.Type))
+	data = append(data, []byte(c.Name)...)
+	return radio.LinkPrefix + fmt.Sprintf("%x", data), nil
+}
+
+func (s *Sim) ImportContact(ctx context.Context, link string) error {
+	data, err := radio.ParseLink(link)
+	if err != nil {
+		return err
+	}
+	if data[0] != simLink || len(data) < 35 {
+		return errors.New("the simulator can only import links it made; real links need a real radio")
+	}
+	var k [32]byte
+	copy(k[:], data[1:33])
+	return s.SaveContact(ctx, radio.Contact{Key: k, Type: radio.ContactType(data[33]), Name: string(data[34:]), PathLen: -1, LastAdvert: time.Now()})
+}
+
+func (s *Sim) AutoAdd(ctx context.Context) (radio.AutoAdd, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.auto, nil
+}
+
+func (s *Sim) SetAutoAdd(ctx context.Context, a radio.AutoAdd) error {
+	s.mu.Lock()
+	s.auto = a
+	s.mu.Unlock()
+	s.frame(58, 0)
+	return nil
 }

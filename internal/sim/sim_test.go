@@ -3,6 +3,7 @@ package sim
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,5 +82,77 @@ func TestBootDetailsMatchReady(t *testing.T) {
 				return
 			}
 		}
+	}
+}
+
+func waitFor[T any](t *testing.T, s *Sim) T {
+	t.Helper()
+	timeout := time.After(3 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			var zero T
+			t.Fatalf("timed out waiting for %T", zero)
+		case e := <-s.Events():
+			if v, ok := e.(T); ok {
+				return v
+			}
+		}
+	}
+}
+
+func TestContactOperations(t *testing.T) {
+	s := New(3).Fast()
+	ctx := context.Background()
+	book, _ := s.SyncContacts(ctx)
+	n := len(book)
+
+	tag, err := s.Trace(ctx, []byte{0xA3, 0x1E, 0xA3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := waitFor[radio.TraceResult](t, s)
+	if tr.Tag != tag || len(tr.SNRs) != 3 {
+		t.Fatalf("trace result = %+v", tr)
+	}
+
+	alice := key(0x3A, "Alice")
+	if err := s.DiscoverPath(ctx, alice); err != nil {
+		t.Fatal(err)
+	}
+	pf := waitFor[radio.PathFound](t, s)
+	if pf.Prefix != prefix(alice) || len(pf.Out) == 0 || len(pf.In) != len(pf.Out) {
+		t.Fatalf("path found = %+v", pf)
+	}
+	book, _ = s.SyncContacts(ctx)
+	for _, c := range book {
+		if c.Key == alice && c.PathLen != len(pf.Out) {
+			t.Fatalf("discovery should store the route; alice = %+v", c)
+		}
+	}
+
+	link, err := s.ExportContact(ctx, alice)
+	if err != nil || !strings.HasPrefix(link, radio.LinkPrefix) {
+		t.Fatalf("export = %q, %v", link, err)
+	}
+	if err := s.RemoveContact(ctx, alice); err != nil {
+		t.Fatal(err)
+	}
+	if book, _ = s.SyncContacts(ctx); len(book) != n-1 {
+		t.Fatalf("after remove: %d contacts", len(book))
+	}
+	if err := s.ImportContact(ctx, link); err != nil {
+		t.Fatal(err)
+	}
+	if book, _ = s.SyncContacts(ctx); len(book) != n {
+		t.Fatalf("after import: %d contacts", len(book))
+	}
+	if err := s.ImportContact(ctx, "meshcore://zz"); err == nil {
+		t.Fatal("a damaged link should be refused")
+	}
+
+	s.SetAutoAdd(ctx, radio.AutoAdd{Chat: true})
+	if a, _ := s.AutoAdd(ctx); !a.Chat || a.Repeater {
+		t.Fatalf("auto-add = %+v", a)
 	}
 }

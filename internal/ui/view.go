@@ -103,6 +103,12 @@ func (m *Model) panel(title string, body []string, w, h int, accent theme.RGB, f
 	top := e.Render(tl+hz) + head + e.Render(strings.Repeat(hz, max(w-4-visibleWidth(head), 0))+hz+tr)
 	out := []string{top}
 	inner := w - 4
+	// A row must never contain a line break, or the panel would draw taller than it thinks.
+	var rows []string
+	for _, b := range body {
+		rows = append(rows, strings.Split(b, "\n")...)
+	}
+	body = rows
 	for i := 0; i < h-2; i++ {
 		content := ""
 		if i < len(body) {
@@ -262,6 +268,10 @@ func (m *Model) body(w, h int) []string {
 			title += fmt.Sprintf(" · %d UNREAD", m.chats.unread)
 		}
 		box := m.panel(title, m.renderChats(w-4, mainH-2), w, mainH, accent, true)
+		return append(m.effects(box, w), debug...)
+	}
+	if m.tab == 1 && m.chat != nil {
+		box := m.panel(m.contactsTitle(), m.renderContacts(w-4, mainH-2), w, mainH, accent, true)
 		return append(m.effects(box, w), debug...)
 	}
 	var content []string

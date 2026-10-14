@@ -281,3 +281,34 @@ func msgCommand() command {
 			return out
 		}}
 }
+
+func traceCommand() command {
+	return command{name: "trace", args: "<contact>", help: "trace the route to a contact, showing signal at each hop",
+		run: func(m *Model, a []string) error {
+			if m.chat == nil || len(a) == 0 {
+				return fmt.Errorf("trace needs a contact")
+			}
+			for _, ct := range m.chat.Contacts() {
+				if slug(ct.Name) == strings.ToLower(a[0]) {
+					m.setTab(1)
+					for i, row := range m.contactRows() {
+						if row.Key == ct.Key {
+							m.contacts.sel = i
+						}
+					}
+					m.queued = m.startTrace(ct)
+					return nil
+				}
+			}
+			return fmt.Errorf("no contact called %q", a[0])
+		},
+		complete: func(m *Model) []string {
+			var out []string
+			if m.chat != nil {
+				for _, ct := range m.chat.Contacts() {
+					out = append(out, slug(ct.Name))
+				}
+			}
+			return out
+		}}
+}

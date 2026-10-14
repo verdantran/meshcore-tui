@@ -446,3 +446,26 @@ func (s *Service) Export(w io.Writer, c store.Convo, asJSON bool) (int, error) {
 	}
 	return len(ms), nil
 }
+
+// Contacts is every contact on the radio, as last synced.
+func (s *Service) Contacts() []radio.Contact { return append([]radio.Contact(nil), s.contacts...) }
+
+// ReplaceContacts takes a fresh copy of the radio's table, such as after an import or a removal.
+func (s *Service) ReplaceContacts(cs []radio.Contact) error {
+	s.contacts = cs
+	return s.store.SaveContacts(s.device, cs)
+}
+
+// RemoveContact forgets a contact the radio dropped; its message history stays.
+func (s *Service) RemoveContact(key [32]byte) error {
+	for i, c := range s.contacts {
+		if c.Key == key {
+			s.contacts = append(s.contacts[:i], s.contacts[i+1:]...)
+			break
+		}
+	}
+	return s.store.SaveContacts(s.device, s.contacts)
+}
+
+// ContactByPrefix finds a contact from the 6-byte key prefix the radio uses in pushes.
+func (s *Service) ContactByPrefix(p [6]byte) (radio.Contact, bool) { return s.contactByPrefix(p) }

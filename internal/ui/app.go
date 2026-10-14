@@ -78,8 +78,9 @@ type Model struct {
 	glitch  time.Time
 	ticking bool
 
-	chat  *chat.Service
-	chats chatsModel
+	chat     *chat.Service
+	chats    chatsModel
+	contacts contactsModel
 
 	queued tea.Cmd // a radio call started by a palette command
 
@@ -136,9 +137,10 @@ func New(opt Options) *Model {
 		m.chat = chat.New(opt.Store, retries, flood)
 	}
 	m.chats = newChats()
+	m.contacts = newContacts()
 	m.notes = newNotifier(opt)
 	m.focused = true
-	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand(), notifyCommand())
+	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand(), notifyCommand(), traceCommand())
 	m.connect = newConnect(opt.Ports, m.savedTargets)
 	m.ticker = newTicker()
 	return m
@@ -205,6 +207,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.focused = false
 	case notifyFlushMsg:
 		cmds = append(cmds, m.flushNotes())
+	case contactsSyncedMsg, advertPathMsg, traceStartedMsg, traceTimeoutMsg, exportedMsg, autoAddMsg, opDoneMsg:
+		cmd, _ := m.contactsMsg(msg)
+		cmds = append(cmds, cmd)
 	case sendResultMsg:
 		cmds = append(cmds, m.chatResult(msg))
 	case ackTimeoutMsg:
@@ -251,7 +256,7 @@ func (m *Model) animating() bool {
 		motion.Running(m.stats.rxLamp, lampDur, now) || motion.Running(m.stats.txLamp, lampDur, now) ||
 		motion.Running(m.stats.snrAt, countDur, now) || motion.Running(m.stats.battAt, countDur, now) ||
 		motion.Running(m.glitch, glitchDur, now) ||
-		m.latestTyping() || m.linked == linkLost || m.chatsAnimating() ||
+		m.latestTyping() || m.linked == linkLost || m.chatsAnimating() || m.contactsAnimating() ||
 		m.ticker.moving(m.level, now, m.w)
 }
 
@@ -309,7 +314,7 @@ func (m *Model) apply(e radio.Event) tea.Cmd {
 			m.frames = m.frames[len(m.frames)-400:]
 		}
 	}
-	return m.chatEvent(e)
+	return tea.Batch(m.chatEvent(e), m.contactsEvent(e))
 }
 
 func (s *stats) currentSNR(now time.Time) float64 {
@@ -379,6 +384,11 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 			return cmd, false
 		}
 	}
+	if m.phase == phaseMain && m.tab == 1 && m.chat != nil {
+		if cmd, handled := m.contactsKey(s); handled {
+			return cmd, false
+		}
+	}
 	if s == "T" && !(m.phase == phaseConnect && m.connect.editing) {
 		m.cycleTheme()
 		return nil, false
@@ -436,6 +446,9 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 		if len(s) == 1 && s[0] >= '1' && s[0] <= '7' {
 			m.setTab(int(s[0] - '1'))
 		}
+	}
+	if m.tab == 1 {
+		return m.onSelectContact(), false
 	}
 	return nil, false
 }
@@ -519,6 +532,13 @@ func (m *Model) screenKeys() []string {
 	th := m.th
 	key := func(k, what string) string {
 		return th.Fg(th.Cyan, true).Render(fmt.Sprintf("%-12s", k)) + th.Fg(th.Muted, false).Render(what)
+	}
+	if m.tab == 1 {
+		return []string{key("↑↓ j k", "choose a contact"), key("m", "message them"), key("t", "trace the route, showing signal at each hop"),
+			key("d", "discover a fresh route"), key("p", "set the route by hand"), key("r", "reset the route, so messages flood"),
+			key("f", "favourite"), key("e", "share as a QR code and meshcore:// link"), key("x", "remove from the radio"),
+			key("I", "import a meshcore:// link"), key("a", "nodes heard but not added"), key("A", "auto-add settings"),
+			key("P", "suggest contacts to prune"), key("F s /", "filter by type · sort · filter by name"), ""}
 	}
 	if m.tab == 0 {
 		return []string{key("↑↓ j k", "choose a conversation"), key("enter i", "write a message; enter sends"),

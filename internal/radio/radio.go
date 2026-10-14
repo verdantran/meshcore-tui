@@ -20,6 +20,61 @@ type Radio interface {
 	SendText(ctx context.Context, to [32]byte, text string) (Sent, error)
 	SendChannel(ctx context.Context, idx int, text string) error
 	ResetPath(ctx context.Context, contact [32]byte) error
+
+	// Contacts and routes.
+	SyncContacts(ctx context.Context) ([]Contact, error)
+	SaveContact(ctx context.Context, c Contact) error // add, or update the route and flags
+	RemoveContact(ctx context.Context, key [32]byte) error
+	Trace(ctx context.Context, path []byte) (tag uint32, err error) // answered by a TraceResult
+	DiscoverPath(ctx context.Context, key [32]byte) error           // answered by a PathFound
+	AdvertPath(ctx context.Context, key [32]byte) (AdvertPath, error)
+	ExportContact(ctx context.Context, key [32]byte) (string, error) // a meshcore:// link
+	ImportContact(ctx context.Context, link string) error
+	AutoAdd(ctx context.Context) (AutoAdd, error)
+	SetAutoAdd(ctx context.Context, a AutoAdd) error
+}
+
+// FlagFavourite marks a contact as a favourite in its flags byte.
+const FlagFavourite byte = 0x01
+
+// LinkPrefix starts a contact link: the hex of the radio's exported advert, as the official apps use.
+const LinkPrefix = "meshcore://"
+
+// AdvertPath is the route a contact's latest advert took to reach us.
+type AdvertPath struct {
+	At   time.Time
+	Path []byte
+}
+
+// AutoAdd controls which kinds of newly heard node the radio adds as contacts by itself.
+type AutoAdd struct {
+	Chat, Repeater, Room, Sensor bool
+	OverwriteOldest              bool // when full, replace the least recently heard non-favourite
+	MaxHops                      int  // 0 means no limit
+}
+
+// Heard is a node whose advert arrived but which isn't a contact (auto-add is off for it, or the table is full).
+type Heard struct{ Contact Contact }
+
+// ContactRemoved is sent when the radio dropped a contact to make room.
+type ContactRemoved struct{ Key [32]byte }
+
+// ContactsFull is sent when a new node couldn't be added because the table is full.
+type ContactsFull struct{}
+
+// TraceResult carries the signal at each hop of a trace; Tag matches the Trace call.
+type TraceResult struct {
+	Tag     uint32
+	Hashes  []byte
+	SNRs    []float32 // what each hop heard, in path order
+	LastSNR float32   // what we heard on the way back
+}
+
+// PathFound is a fresh route from path discovery, in both directions.
+type PathFound struct {
+	Prefix [6]byte
+	Out    []byte
+	In     []byte
 }
 
 // MaxText is the firmware's MAX_TEXT_LEN in bytes. Channel messages share it with the "name: " prefix.
