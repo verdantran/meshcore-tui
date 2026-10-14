@@ -88,3 +88,34 @@ func TestBlendEnds(t *testing.T) {
 		t.Fatal("blend should start on the old theme and end on the new one")
 	}
 }
+
+func TestLookupsAndStyles(t *testing.T) {
+	if ByName("ice").Name != "ice" || ByName("nope").Name != "neon" || (Theme{Name: "nope"}).Next().Name != "neon" {
+		t.Error("lookups fall back to neon")
+	}
+	if len(Names()) != len(All) {
+		t.Error("names")
+	}
+	t.Setenv("NO_COLOR", "")
+	if Default("dusk").Name != "dusk" {
+		t.Error("default by name")
+	}
+	t.Setenv("NO_COLOR", "1")
+	if Default("dusk").Name != "mono" {
+		t.Error("NO_COLOR forces mono")
+	}
+	if Hex("#ff2ec4") != (RGB{0xff, 0x2e, 0xc4}) || Neon.Magenta.Color() == nil {
+		t.Error("colours")
+	}
+	plain := Mono.Fg(Mono.Text, true).Render("x")
+	coloured := Neon.Fg(Neon.Text, false).Render("x")
+	if plain == coloured || Mono.Block(Mono.Bg, Mono.Magenta).Render("x") == Neon.Block(Neon.Bg, Neon.Magenta).Render("x") {
+		t.Error("mono should drop colour")
+	}
+	if Neon.SNR(5) != Neon.Green || Neon.SNR(0) != Neon.Yellow || Neon.SNR(-0.25) != Neon.Red {
+		t.Error("signal scale")
+	}
+	if Blend(Mono, Neon, 0.2).Name != "mono" || Blend(Mono, Neon, 0.8).Name != "neon" {
+		t.Error("mono switches at the midpoint")
+	}
+}

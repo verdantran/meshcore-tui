@@ -32,11 +32,11 @@ func Detect(env func(string) string) Method {
 	if env("SSH_CONNECTION") != "" {
 		return BellOnly
 	}
-	switch runtime.GOOS {
+	switch goos {
 	case "darwin":
 		return OS
 	case "linux":
-		if _, err := exec.LookPath("notify-send"); err == nil {
+		if _, err := lookPath("notify-send"); err == nil {
 			return OS
 		}
 	}
@@ -84,14 +84,21 @@ func Escape(m Method, title, body string, bell bool, env func(string) string) st
 	return b.String()
 }
 
+// run starts an external command; tests replace it so they don't raise real notifications.
+var run = func(name string, args ...string) error { return exec.Command(name, args...).Run() }
+
+var (
+	goos     = runtime.GOOS
+	lookPath = exec.LookPath
+)
+
 // Desktop sends an OS notification; it's only used when the method is OS.
 func Desktop(title, body string) error {
-	switch runtime.GOOS {
+	switch goos {
 	case "darwin":
-		script := `display notification ` + appleQuote(body) + ` with title ` + appleQuote(title)
-		return exec.Command("osascript", "-e", script).Run()
+		return run("osascript", "-e", `display notification `+appleQuote(body)+` with title `+appleQuote(title))
 	case "linux":
-		return exec.Command("notify-send", "--app-name=meshcore-tui", title, body).Run()
+		return run("notify-send", "--app-name=meshcore-tui", clean(title), clean(body))
 	}
 	return nil
 }

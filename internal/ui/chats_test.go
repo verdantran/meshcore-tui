@@ -18,16 +18,20 @@ import (
 // scriptRadio records sends and acks nothing on its own; tests deliver acks as events.
 type scriptRadio struct {
 	stubRadio
-	mu     sync.Mutex
-	texts  []string
-	resets int
-	chans  []string
-	ack    uint32
+	failSend error
+	mu       sync.Mutex
+	texts    []string
+	resets   int
+	chans    []string
+	ack      uint32
 }
 
 func (r *scriptRadio) SendText(_ context.Context, _ [32]byte, text string) (radio.Sent, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.failSend != nil {
+		return radio.Sent{}, r.failSend
+	}
 	r.ack++
 	r.texts = append(r.texts, text)
 	return radio.Sent{Ack: r.ack, Timeout: 20 * time.Millisecond}, nil

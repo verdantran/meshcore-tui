@@ -24,8 +24,10 @@ const (
 	appVersion    = 3
 	stepTimeout   = 6 * time.Second
 	clockDriftMax = 5 * time.Second
-	batteryEvery  = 60 * time.Second
 )
+
+// batteryEvery is how often the battery is read; tests shorten it.
+var batteryEvery = 60 * time.Second
 
 // sdkTransport is the SDK's serial and TCP transports, which also report drops and reconnects.
 type sdkTransport interface {
@@ -267,7 +269,12 @@ func (l *Link) SendText(ctx context.Context, to [32]byte, text string) (Sent, er
 	if err != nil {
 		return Sent{}, err
 	}
-	return Sent{Ack: r.AckCode, Flood: r.IsFlood, Timeout: time.Duration(r.EstTimeout) * time.Millisecond}, nil
+	// Current firmware sends the 10-byte form, with the expected ack code in the field the SDK calls Tag.
+	ack := r.AckCode
+	if r.HasExtended {
+		ack = r.Tag
+	}
+	return Sent{Ack: ack, Flood: r.IsFlood, Timeout: time.Duration(r.EstTimeout) * time.Millisecond}, nil
 }
 
 func (l *Link) SendChannel(ctx context.Context, idx int, text string) error {

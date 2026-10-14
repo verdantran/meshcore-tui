@@ -1,6 +1,7 @@
 package store
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -146,5 +147,58 @@ func TestSearchAllAndUnread(t *testing.T) {
 	s.MarkRead(dev, ch)
 	if u, _ := s.Unread(dev, ch); len(u) != 0 {
 		t.Fatalf("unread after read = %d", len(u))
+	}
+}
+
+func TestUpsertAllAndFailures(t *testing.T) {
+	s, _ := Open(":memory:")
+	c := radio.Contact{Key: [32]byte{0x3A}, Name: "Alice", PathLen: -1}
+	if err := s.UpsertContact(dev, c); err != nil {
+		t.Fatal(err)
+	}
+	c.Name = "Alice B"
+	s.UpsertContact(dev, c)
+	if cs, _ := s.Contacts(dev); len(cs) != 1 || cs[0].Name != "Alice B" {
+		t.Fatalf("upsert = %+v", cs)
+	}
+	if UnknownConvo([6]byte{0xEE, 1}) != "dm?:EE0100000000" {
+		t.Errorf("unknown convo = %s", UnknownConvo([6]byte{0xEE, 1}))
+	}
+	m := Message{Convo: ChannelConvo(2), Text: "x"}
+	s.AddMessage(dev, &m)
+	if got, _ := s.All(dev, ChannelConvo(2)); len(got) != 1 {
+		t.Fatalf("all in one conversation = %d", len(got))
+	}
+	if got, _ := s.Search(dev, "   ", "", 5); got != nil {
+		t.Error("a blank search finds nothing")
+	}
+
+	// Every query reports errors once the database is gone.
+	s.Close()
+	checks := map[string]error{}
+	_, checks["contacts"] = s.Contacts(dev)
+	checks["save contacts"] = s.SaveContacts(dev, []radio.Contact{c})
+	checks["save channels"] = s.SaveChannels(dev, nil)
+	_, checks["channels"] = s.Channels(dev)
+	checks["add"] = s.AddMessage(dev, &m)
+	_, checks["messages"] = s.Messages(dev, ChannelConvo(2), 5)
+	_, checks["conversations"] = s.Conversations(dev)
+	_, checks["unfinished"] = s.Unfinished(dev)
+	checks["mark read"] = s.MarkRead(dev, ChannelConvo(2))
+	for what, err := range checks {
+		if err == nil {
+			t.Errorf("%s after close should fail", what)
+		}
+	}
+	nested, err := Open(filepath.Join(t.TempDir(), "new", "folder", "x.db"))
+	if err != nil {
+		t.Errorf("missing folders should be created: %v", err)
+	} else {
+		nested.Close()
+	}
+	file := filepath.Join(t.TempDir(), "f")
+	os.WriteFile(file, nil, 0o644)
+	if _, err := Open(filepath.Join(file, "x.db")); err == nil {
+		t.Error("a database under a file can't be opened")
 	}
 }

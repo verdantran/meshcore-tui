@@ -216,3 +216,81 @@ func TestMentionsAndExport(t *testing.T) {
 		t.Errorf("json export:\n%s", js.String())
 	}
 }
+
+func TestContactChangesAndTitles(t *testing.T) {
+	s := newService(t, 3, true)
+	moved := alice
+	moved.PathLen, moved.Path = 1, []byte{0x77}
+	if err := s.ContactUpdated(moved); err != nil {
+		t.Fatal(err)
+	}
+	eve := radio.Contact{Key: [32]byte{0xE5}, Name: "Eve", Type: radio.TypeChat, PathLen: -1}
+	s.ContactUpdated(eve)
+	if got, ok := s.Contact(store.ContactConvo(alice.Key)); !ok || got.PathLen != 1 {
+		t.Errorf("updated contact = %+v", got)
+	}
+	if len(s.Contacts()) != 4 {
+		t.Fatalf("contacts = %d", len(s.Contacts()))
+	}
+	if c, ok := s.ContactByPrefix(eve.Prefix()); !ok || c.Name != "Eve" {
+		t.Error("prefix lookup")
+	}
+	s.RemoveContact(eve.Key)
+	if len(s.Contacts()) != 3 {
+		t.Error("remove")
+	}
+	if err := s.ReplaceContacts([]radio.Contact{alice}); err != nil || len(s.Contacts()) != 1 {
+		t.Error("replace")
+	}
+	if s.Title(store.ChannelConvo(9)) != "channel 9" || s.Title(store.UnknownConvo([6]byte{0xAB})) != "AB0000000000" {
+		t.Error("titles for unknown conversations")
+	}
+	if len(s.Channels()) != 2 || s.Self() != "MeshCore-k4" {
+		t.Error("channels and self")
+	}
+	if _, _, err := s.Compose(store.ChannelConvo(9), "hi", t0); err == nil {
+		t.Error("a channel that isn't on the radio can't be sent to")
+	}
+	if _, _, err := s.Compose(store.ChannelConvo(0), "   ", t0); err == nil {
+		t.Error("blank messages are refused")
+	}
+	empty := New(nil, 0, false)
+	if empty.Mentions("@anyone") {
+		t.Error("with no name, nothing mentions you")
+	}
+	// An ack that matches nothing, and a stale timeout, are ignored.
+	if _, ok, _ := s.Acked(radio.Acked{Ack: 999}); ok {
+		t.Error("unknown ack")
+	}
+	if m, next, _ := s.Timeout(Wait{ID: 12345}); next != nil || m.ID != 0 {
+		t.Error("unknown timeout")
+	}
+	if m, wait, _ := s.Result(Send{ID: 12345}, radio.Sent{}, nil); wait != nil || m.ID != 0 {
+		t.Error("result for a settled message")
+	}
+	if _, err := s.Search("anything", "", 5); err != nil {
+		t.Error(err)
+	}
+	if s.MarkRead(store.ChannelConvo(0)) != nil {
+		t.Error("mark read")
+	}
+}
+
+func TestStoreFailuresSurface(t *testing.T) {
+	st, _ := store.Open(":memory:")
+	s := New(st, 3, true)
+	st.Close()
+	if err := s.Ready(radio.Ready{Self: radio.SelfInfo{Name: "me"}}); err == nil {
+		t.Error("Ready should report a broken store")
+	}
+	if _, err := s.Incoming(radio.Incoming{Text: "x"}); err == nil {
+		t.Error("Incoming should report a broken store")
+	}
+	if _, err := s.Conversations(); err == nil {
+		t.Error("Conversations should report a broken store")
+	}
+	var sb strings.Builder
+	if _, err := s.Export(&sb, "", false); err == nil {
+		t.Error("Export should report a broken store")
+	}
+}

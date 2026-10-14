@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -37,5 +38,37 @@ func TestRoundTripAndRemember(t *testing.T) {
 	back.Forget("TCP", "10.0.0.4:5000")
 	if _, ok := back.Device("Shed"); ok {
 		t.Error("forgotten device still there")
+	}
+}
+
+func TestPathsAndFailures(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", "/x/config")
+	t.Setenv("XDG_DATA_HOME", "/x/data")
+	if Dir() != "/x/config/meshcore-tui" || DataDir() != "/x/data/meshcore-tui" {
+		t.Errorf("XDG paths: %s %s", Dir(), DataDir())
+	}
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("HOME", "/home/me")
+	if Dir() != "/home/me/.config/meshcore-tui" || DataDir() != "/home/me/.local/share/meshcore-tui" {
+		t.Errorf("home paths: %s %s", Dir(), DataDir())
+	}
+
+	if err := Default().Save(); err != nil {
+		t.Error("a config with no path saves nowhere, quietly")
+	}
+	file := filepath.Join(t.TempDir(), "file")
+	os.WriteFile(file, nil, 0o644)
+	c, _ := Load(filepath.Join(file, "config.toml"))
+	if err := c.Save(); err == nil {
+		t.Error("saving under a file should fail")
+	}
+	if _, ok := Default().Device("nobody"); ok {
+		t.Error("unknown device found")
+	}
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "config.toml"), []byte("[ui]\ntheme = 3"), 0o644)
+	if _, err := Load(filepath.Join(dir, "config.toml")); err == nil {
+		t.Error("a wrongly typed value should fail to load")
 	}
 }

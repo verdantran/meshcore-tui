@@ -1,6 +1,9 @@
 package notify
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func env(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
 
@@ -40,3 +43,51 @@ func TestEscape(t *testing.T) {
 		t.Errorf("off should be silent, got %q", got)
 	}
 }
+
+func TestDesktopAndPlatforms(t *testing.T) {
+	saved, savedOS, savedLook := run, goos, lookPath
+	t.Cleanup(func() { run, goos, lookPath = saved, savedOS, savedLook })
+	var calls [][]string
+	run = func(name string, args ...string) error {
+		calls = append(calls, append([]string{name}, args...))
+		return nil
+	}
+
+	goos = "darwin"
+	if Detect(env(nil)) != OS {
+		t.Error("macOS without a known terminal uses system notifications")
+	}
+	Desktop(`say "hi"`, "line\nbreak \\ done")
+	if len(calls) != 1 || calls[0][0] != "osascript" || calls[0][2] != `display notification "line break \\ done" with title "say \"hi\""` {
+		t.Errorf("osascript call = %q", calls)
+	}
+
+	goos = "linux"
+	lookPath = func(string) (string, error) { return "/usr/bin/notify-send", nil }
+	if Detect(env(nil)) != OS {
+		t.Error("Linux with notify-send uses it")
+	}
+	Desktop("Alice", "hi\x07")
+	if calls[1][0] != "notify-send" || calls[1][3] != "hi " {
+		t.Errorf("notify-send call = %q", calls[1])
+	}
+	lookPath = func(string) (string, error) { return "", errNotFound }
+	if Detect(env(nil)) != BellOnly {
+		t.Error("Linux without notify-send falls back to the bell")
+	}
+
+	goos = "plan9"
+	if Detect(env(nil)) != BellOnly || Desktop("a", "b") != nil {
+		t.Error("other systems ring the bell only")
+	}
+	for _, m := range []string{"terminal", "os", "bell"} {
+		if Resolve(m, nil) != Method(m) {
+			t.Errorf("Resolve(%s)", m)
+		}
+	}
+	if Resolve("auto", env(map[string]string{"TERM_PROGRAM": "iTerm.app"})) != Terminal {
+		t.Error("auto detects iTerm2")
+	}
+}
+
+var errNotFound = errors.New("not found")

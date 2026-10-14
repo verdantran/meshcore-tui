@@ -2,10 +2,13 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -30,11 +33,8 @@ var likelyRadios = map[string]string{
 	"2886": "Seeed nRF52",
 }
 
-func ports() []ui.Target {
-	list, err := enumerator.GetDetailedPortsList()
-	if err != nil {
-		return nil
-	}
+// sortPorts lists USB serial ports with likely radios first.
+func sortPorts(list []*enumerator.PortDetails) []ui.Target {
 	var likely, other []ui.Target
 	for _, p := range list {
 		if !p.IsUSB || strings.Contains(p.Name, "/dev/tty.") {
@@ -54,6 +54,14 @@ func ports() []ui.Target {
 	return append(likely, other...)
 }
 
+func ports() []ui.Target {
+	list, err := enumerator.GetDetailedPortsList()
+	if err != nil {
+		return nil
+	}
+	return sortPorts(list)
+}
+
 func dial(t ui.Target) radio.Radio {
 	switch t.Kind {
 	case "USB":
@@ -64,26 +72,43 @@ func dial(t ui.Target) radio.Radio {
 	return sim.New(time.Now().UnixNano())
 }
 
-func main() {
-	serialPort := flag.String("serial", "", "connect to a USB serial port, e.g. /dev/cu.usbmodem1101")
-	tcp := flag.String("tcp", "", "connect to a WiFi companion at host[:port] (default port 5000)")
-	demo := flag.Bool("demo", false, "run against a simulated radio")
-	motionFlag := flag.String("motion", "", "full | reduced | off (default full, or reduced over SSH)")
-	themeFlag := flag.String("theme", "", strings.Join(theme.Names(), " | "))
-	configPath := flag.String("config", filepath.Join(config.Dir(), "config.toml"), "config file")
-	flag.Parse()
+var errUsage = errors.New("usage")
+
+// setup turns the command line, config file and environment into the app's options.
+// Flags win over the config file only when they're given.
+func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options, error) {
+	fs := flag.NewFlagSet("meshcore-tui", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	serialPort := fs.String("serial", "", "connect to a USB serial port, e.g. /dev/cu.usbmodem1101")
+	tcp := fs.String("tcp", "", "connect to a WiFi companion at host[:port] (default port 5000)")
+	demo := fs.Bool("demo", false, "run against a simulated radio")
+	motionFlag := fs.String("motion", "", "full | reduced | off (default full, or reduced over SSH)")
+	themeFlag := fs.String("theme", "", strings.Join(theme.Names(), " | "))
+	configPath := fs.String("config", filepath.Join(config.Dir(), "config.toml"), "config file")
+	if err := fs.Parse(args); err != nil {
+		return ui.Options{}, errUsage
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "can't read %s: %v\n", *configPath, err)
-		os.Exit(2)
+		return ui.Options{}, fmt.Errorf("can't read %s: %w", *configPath, err)
 	}
-	// Flags win over the config file only when they're given.
 	themeName := cfg.UI.Theme
 	if *themeFlag != "" {
 		themeName = *themeFlag
 	}
-	level := motion.DefaultLevel()
+	if !slices.Contains(theme.Names(), themeName) {
+		return ui.Options{}, fmt.Errorf("unknown theme %q; choose from %s", themeName, strings.Join(theme.Names(), ", "))
+	}
+	th := theme.ByName(themeName)
+	if env("NO_COLOR") != "" {
+		th = theme.Mono
+	}
+
+	level := motion.Full
+	if env("SSH_CONNECTION") != "" {
+		level = motion.Reduced
+	}
 	motionName := cfg.UI.Motion
 	if *motionFlag != "" {
 		motionName = *motionFlag
@@ -91,22 +116,12 @@ func main() {
 	if motionName != "" {
 		l, ok := motion.ParseLevel(motionName)
 		if !ok {
-			fmt.Fprintln(os.Stderr, "unknown motion level:", motionName)
-			os.Exit(2)
+			return ui.Options{}, fmt.Errorf("unknown motion level %q; choose full, reduced or off", motionName)
 		}
 		level = l
 	}
-	dbPath := filepath.Join(config.DataDir(), "meshcore-tui.db")
-	db, err := store.Open(dbPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "can't open message history at %s (%v); this session's messages won't be kept\n", dbPath, err)
-		if db, err = store.Open(":memory:"); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-	}
-	defer db.Close()
-	opt := ui.Options{Theme: theme.Default(themeName), Motion: level, Dial: dial, Ports: ports, Config: cfg, Store: db}
+
+	opt := ui.Options{Theme: th, Motion: level, Dial: dial, Ports: ports, Config: cfg}
 	if d, ok := cfg.Device(cfg.Connection.AutoConnect); ok {
 		opt.Start = &ui.Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name}
 	}
@@ -118,10 +133,40 @@ func main() {
 	case *demo:
 		opt.Start = &ui.Target{Kind: "SIM", Addr: "demo"}
 	}
-
-	if _, err := tea.NewProgram(ui.New(opt)).Run(); err != nil {
-		db.Close()
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	return opt, nil
 }
+
+// openStore opens the message history, falling back to memory (with a warning) if the file can't be used.
+func openStore(path string, stderr io.Writer) (*store.Store, error) {
+	db, err := store.Open(path)
+	if err == nil {
+		return db, nil
+	}
+	fmt.Fprintf(stderr, "can't open message history at %s (%v); this session's messages won't be kept\n", path, err)
+	return store.Open(":memory:")
+}
+
+func run(args []string, env func(string) string, stderr io.Writer) int {
+	opt, err := setup(args, env, stderr)
+	if errors.Is(err, errUsage) {
+		return 2
+	}
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	db, err := openStore(filepath.Join(config.DataDir(), "meshcore-tui.db"), stderr)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	defer db.Close()
+	opt.Store = db
+	if _, err := tea.NewProgram(ui.New(opt)).Run(); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	return 0
+}
+
+func main() { os.Exit(run(os.Args[1:], os.Getenv, os.Stderr)) }
