@@ -62,6 +62,7 @@ func commands() []command {
 				return nil
 			},
 			complete: func(*Model) []string { return []string{"on", "off"} }},
+		{name: "close", help: "close the focused pane", run: func(m *Model, _ []string) error { return m.closePane() }},
 		{name: "frames", help: "show or hide the protocol frames pane", run: func(m *Model, _ []string) error { m.debug = !m.debug; return nil }},
 		{name: "help", help: "list keys and commands", run: func(m *Model, _ []string) error { m.help = true; return nil }},
 		{name: "quit", help: "leave meshcore-tui", run: func(m *Model, _ []string) error { m.quitting = true; return nil }},
@@ -69,6 +70,7 @@ func commands() []command {
 	for i := range tabNames {
 		cs = append(cs, screenCommand(i))
 	}
+	cs = append(cs, splitCommand())
 	return cs
 }
 
@@ -238,7 +240,11 @@ func (m *Model) helpLines() []string {
 	lines := []string{th.Fg(th.Muted, true).Render("KEYS")}
 	lines = append(lines, m.screenKeys()...)
 	lines = append(lines,
-		key("1-7", "switch screen"), key("tab", "next screen"), key(":", "command palette"),
+		key("1-7", "switch screen"), key("tab", "next screen"), key(":", "command palette"), "",
+		th.Fg(th.Muted, true).Render("PANES"),
+		key("ctrl+w v", "split right"), key("ctrl+w s", "split down"), key("ctrl+w ←↑↓→", "move between panes; h j k l and w too"),
+		key("ctrl+w q", "close the pane"), key("ctrl+w < >", "narrower · wider"), key("ctrl+w - +", "shorter · taller"),
+		key("ctrl+w =", "even out the panes"), key("ctrl+w z", "zoom the pane, and back"), "",
 		key("T", "next theme"), key("v", "cycle motion: full, reduced, off"), key("F12", "protocol frames"),
 		key("?", "this help"), key("q", "quit"), "",
 		th.Fg(th.Muted, true).Render("COMMANDS"))

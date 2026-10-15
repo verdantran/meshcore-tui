@@ -124,11 +124,12 @@ func (m *Model) panel(title string, body []string, w, h int, accent theme.RGB, f
 
 const footerRows = 4
 
+func (m *Model) bodyHeight() int { return max(m.h-2-footerRows, 3) }
+
 func (m *Model) renderMain() []string {
 	var out []string
 	out = append(out, m.header(), m.tabs())
-	bodyH := max(m.h-2-footerRows, 3)
-	body := m.body(m.w, bodyH)
+	body := m.body(m.w, m.bodyHeight())
 	out = append(out, body...)
 	out = append(out, m.footer()...)
 	if m.level.Allows(motion.Wipe) && motion.Running(m.mainAt, slideDur, m.now) {
@@ -227,6 +228,8 @@ func (m *Model) tabs() string {
 		label := fmt.Sprintf("%d %s", i+1, n)
 		if i == m.tab {
 			parts = append(parts, th.Fg(th.Magenta, true).Underline(true).Render(label))
+		} else if m.visible(i) {
+			parts = append(parts, th.Fg(th.Cyan, false).Render(label))
 		} else {
 			parts = append(parts, th.Fg(th.Dim, false).Render(label))
 		}
@@ -242,12 +245,7 @@ var pending = map[int]string{
 }
 
 func (m *Model) body(w, h int) []string {
-	th, now := m.th, m.now
-	accent := th.Magenta
-	glitching := m.level.Allows(motion.Glitch) && motion.Running(m.glitch, glitchDur, now)
-	if glitching || m.linked != linkUp {
-		accent = th.Red
-	}
+	th := m.th
 	mainH := h
 	var debug []string
 	if m.debug {
@@ -264,44 +262,58 @@ func (m *Model) body(w, h int) []string {
 		box := m.panel("SEARCH ALL CONVERSATIONS", m.searchLines(w-4, mainH-2), w, mainH, th.Cyan, true)
 		return append(box, debug...)
 	}
-	if m.tab == 0 && m.chat != nil {
-		title := tabNames[0]
+	return append(m.panes(w, mainH), debug...)
+}
+
+// screenBox draws one screen in its box.
+func (m *Model) screenBox(tab, w, h int, focused bool) []string {
+	th, now := m.th, m.now
+	accent := th.Magenta
+	glitching := m.level.Allows(motion.Glitch) && motion.Running(m.glitch, glitchDur, now)
+	if glitching || m.linked != linkUp {
+		accent = th.Red
+	}
+	if !focused {
+		accent = th.Muted
+	}
+	iw, ih := w-4, h-2
+	var title string
+	var content []string
+	switch {
+	case tab == 0 && m.chat != nil:
+		title = tabNames[0]
 		if m.chats.unread > 0 {
 			title += fmt.Sprintf(" · %d UNREAD", m.chats.unread)
 		}
-		box := m.panel(title, m.renderChats(w-4, mainH-2), w, mainH, accent, true)
-		return append(m.effects(box, w), debug...)
+		content = m.renderChats(iw, ih)
+	case tab == 3:
+		title, content = m.inspectorTitle(), m.renderInspector(iw, ih)
+	case tab == 5 && m.phase == phaseMain:
+		title, content = m.deviceTitle(), m.renderDevice(iw, ih)
+	case tab == 6 && m.phase == phaseMain:
+		title, content = m.statsTitle(), m.renderStats(iw, ih)
+	case tab == 4 && m.chat != nil:
+		title, content = m.adminTitle(), m.renderAdmin(iw, ih)
+	case tab == 1 && m.chat != nil:
+		title, content = m.contactsTitle(), m.renderContacts(iw, ih)
+	default:
+		title = tabNames[tab]
+		content = append(content, th.Fg(th.Yellow, true).Render("[PENDING] ")+th.Fg(th.Muted, false).Render(pending[tab]))
+		content = append(content, "", th.Fg(th.Muted, true).Render("SYSTEM LOG"))
+		room := ih - len(content)
+		start := max(len(m.log)-room, 0)
+		for _, l := range m.log[start:] {
+			content = append(content, m.logRow(l, false))
+		}
 	}
-	if m.tab == 3 {
-		box := m.panel(m.inspectorTitle(), m.renderInspector(w-4, mainH-2), w, mainH, accent, true)
-		return append(m.effects(box, w), debug...)
+	if m.lay.zoomed {
+		title += " · ZOOMED"
 	}
-	if m.tab == 5 && m.phase == phaseMain {
-		box := m.panel(m.deviceTitle(), m.renderDevice(w-4, mainH-2), w, mainH, accent, true)
-		return append(m.effects(box, w), debug...)
+	box := m.panel(title, content, w, h, accent, focused)
+	if !focused {
+		return box
 	}
-	if m.tab == 6 && m.phase == phaseMain {
-		box := m.panel(m.statsTitle(), m.renderStats(w-4, mainH-2), w, mainH, accent, true)
-		return append(m.effects(box, w), debug...)
-	}
-	if m.tab == 4 && m.chat != nil {
-		box := m.panel(m.adminTitle(), m.renderAdmin(w-4, mainH-2), w, mainH, accent, true)
-		return append(m.effects(box, w), debug...)
-	}
-	if m.tab == 1 && m.chat != nil {
-		box := m.panel(m.contactsTitle(), m.renderContacts(w-4, mainH-2), w, mainH, accent, true)
-		return append(m.effects(box, w), debug...)
-	}
-	var content []string
-	content = append(content, th.Fg(th.Yellow, true).Render("[PENDING] ")+th.Fg(th.Muted, false).Render(pending[m.tab]))
-	content = append(content, "", th.Fg(th.Muted, true).Render("SYSTEM LOG"))
-	room := mainH - 2 - len(content)
-	start := max(len(m.log)-room, 0)
-	for _, l := range m.log[start:] {
-		content = append(content, m.logRow(l, false))
-	}
-	box := m.panel(tabNames[m.tab], content, w, mainH, accent, true)
-	return append(m.effects(box, w), debug...)
+	return m.effects(box, w)
 }
 
 // effects applies the panel glitch and the screen-switch wipe.
@@ -369,9 +381,12 @@ func (m *Model) footer() []string {
 	if n := len(m.log); n > 0 {
 		logLine = " " + m.logRow(m.log[n-1], true)
 	}
-	keys := th.Fg(th.Dim, false).Render(" 1-7 screens · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit")
+	keys := th.Fg(th.Dim, false).Render(" 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit")
 	if m.pal.open {
 		keys = m.paletteLine()
+	}
+	if m.paneKey {
+		keys = th.Fg(th.Magenta, true).Render(" PANES ") + th.Fg(th.Muted, false).Render(" v split right · s split down · ←↑↓→ move · w next · q close · z zoom · < > - + = size")
 	}
 	tick := ""
 	if m.tickerOn {

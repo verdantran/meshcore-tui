@@ -255,7 +255,7 @@ func (m *Model) inspectorKey(s string) (tea.Cmd, bool) {
 
 func (m *Model) inspectorAnimating() bool {
 	in := &m.inspector
-	if m.tab != 3 {
+	if !m.visible(3) {
 		return false
 	}
 	if motion.Running(in.selAt, hexReveal, m.now) {
@@ -321,9 +321,29 @@ func (m *Model) renderInspector(w, rows int) []string {
 	return append(out, detail...)
 }
 
+// compactPackets is the width below which the list keeps only time, type, signal, copies and summary.
+const compactPackets = 100
+
+func (m *Model) typeColour(r *packetRow) theme.RGB {
+	th := m.th
+	switch {
+	case r.dec.Err != nil:
+		return th.Red
+	case r.dec.Decrypted:
+		return th.Green
+	case r.dec.Type == "ADVERT":
+		return th.Cyan
+	}
+	return th.Muted
+}
+
 func (m *Model) packetTable(list []*packetRow, w, rows int) []string {
 	th, in, now := m.th, &m.inspector, m.now
+	compact := w < compactPackets
 	head := fmt.Sprintf("  %-8s %-6s %-8s %4s  %-14s %6s %5s %4s %3s  %s", "TIME", "ROUTE", "TYPE", "HOPS", "PATH", "SNR", "RSSI", "LEN", "×", "SUMMARY")
+	if compact {
+		head = fmt.Sprintf("  %-5s %-8s %6s %2s  %s", "TIME", "TYPE", "SNR", "×", "SUMMARY")
+	}
 	out := []string{th.Fg(th.Muted, true).Render(truncate(head, w))}
 	start := min(max(in.sel-(rows-1)/2, 0), max(len(list)-(rows-1), 0))
 	for i := start; i < len(list) && len(out) < rows; i++ {
@@ -342,6 +362,17 @@ func (m *Model) packetTable(list []*packetRow, w, rows int) []string {
 			path = "—"
 		}
 		summary := r.dec.Summary
+		if compact {
+			at, typ, snr, n := r.first.Local().Format("15:04")+" ", fmt.Sprintf("%-8s ", truncate(r.dec.Type, 8)), fmt.Sprintf("%+6.2f ", c.snr), fmt.Sprintf("%2s  ", times)
+			if i == in.sel {
+				out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(" "+at+typ+snr+n+summary, w-1)))
+			} else {
+				out = append(out, "  "+th.Fg(th.Dim, false).Render(at)+th.Fg(m.typeColour(r), true).Render(typ)+
+					th.Fg(th.SNR(float64(c.snr)), false).Render(snr)+th.Fg(th.Magenta, true).Render(n)+
+					th.Fg(th.Text, false).Render(truncate(summary, max(w-28, 4))))
+			}
+			continue
+		}
 		if i == in.sel {
 			line := fmt.Sprintf("%-8s %-6s %-8s %4d  %-14s %+6.2f %5d %4d %3s  %s", r.first.Local().Format("15:04:05"), route, truncate(r.dec.Type, 8),
 				len(r.dec.Path), truncate(path, 14), c.snr, c.rssi, len(r.dec.Raw), times, summary)
@@ -352,15 +383,7 @@ func (m *Model) packetTable(list []*packetRow, w, rows int) []string {
 		if m.level.Allows(motion.Flash) && motion.Running(r.first, rowArrival, now) {
 			bar = th.Fg(th.Cyan.Lerp(th.Bg, motion.Progress(r.first, rowArrival, now)), true).Render("▌")
 		}
-		typeCol := th.Muted
-		switch {
-		case r.dec.Err != nil:
-			typeCol = th.Red
-		case r.dec.Decrypted:
-			typeCol = th.Green
-		case r.dec.Type == "ADVERT":
-			typeCol = th.Cyan
-		}
+		typeCol := m.typeColour(r)
 		out = append(out, bar+" "+th.Fg(th.Dim, false).Render(r.first.Local().Format("15:04:05")+" ")+
 			th.Fg(th.Muted, false).Render(fmt.Sprintf("%-6s ", route))+th.Fg(typeCol, true).Render(fmt.Sprintf("%-8s ", truncate(r.dec.Type, 8)))+
 			th.Fg(th.Muted, false).Render(fmt.Sprintf("%4d  ", len(r.dec.Path)))+th.Fg(th.Cyan, false).Render(fmt.Sprintf("%-14s ", truncate(path, 14)))+

@@ -21,6 +21,8 @@ type fakeDevice struct {
 	frames      chan []byte
 	connectErr  error
 	fail        map[byte]bool // command codes that get RESP_CODE_ERR
+	mute        map[byte]bool // command codes that get no answer at all
+	resets      int
 	self        companion.SelfInfoResponse
 	contacts    []companion.ContactResponse
 	channels    []companion.ChannelInfoResponse
@@ -34,7 +36,7 @@ type fakeDevice struct {
 }
 
 func newFakeDevice() *fakeDevice {
-	f := &fakeDevice{frames: make(chan []byte, 256), fail: map[byte]bool{}, drift: 30 * time.Second, nextAck: 0xA0C0}
+	f := &fakeDevice{frames: make(chan []byte, 256), fail: map[byte]bool{}, mute: map[byte]bool{}, drift: 30 * time.Second, nextAck: 0xA0C0}
 	f.self = companion.SelfInfoResponse{Name: "MeshCore-k4", PublicKey: [32]byte{0xC0, 0x4F}, RadioFrequency: 869618,
 		RadioBandwidth: 62500, RadioSpreadFactor: 8, RadioCodingRate: 8, TxPower: 22, AdvertLatitude: 51440000, AdvertLongitude: -2598000}
 	var direct [64]byte
@@ -83,6 +85,12 @@ func (f *fakeDevice) SetResponseHandler(h func(companion.Response)) {
 	f.mu.Unlock()
 }
 
+func (f *fakeDevice) Reset() {
+	f.mu.Lock()
+	f.resets++
+	f.mu.Unlock()
+}
+
 func (f *fakeDevice) commands() []any {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -96,8 +104,11 @@ func (f *fakeDevice) Send(cmd []byte) error {
 	}
 	f.mu.Lock()
 	f.sent = append(f.sent, parsed)
-	fail := f.fail[cmd[0]]
+	fail, mute := f.fail[cmd[0]], f.mute[cmd[0]]
 	f.mu.Unlock()
+	if mute {
+		return nil
+	}
 	if fail {
 		f.push(companion.ErrResponse{ErrorCode: companion.ErrCodeNotFound, HasErrorCode: true}.ToBytes())
 		return nil

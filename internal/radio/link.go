@@ -7,8 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
-	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -17,7 +15,6 @@ import (
 	meshcore "github.com/OwlShack/meshcore-go"
 	"github.com/OwlShack/meshcore-go/companion"
 	"github.com/OwlShack/meshcore-go/companion/client"
-	"github.com/OwlShack/meshcore-go/companion/transport"
 )
 
 const (
@@ -26,11 +23,15 @@ const (
 	stepTimeout   = 6 * time.Second
 	fetchTimeout  = 30 * time.Second // long, because the fetch queues behind whatever command is running
 	fetchTries    = 3
+	silentPolls   = 2 // battery polls unanswered before the link is redialled
 	clockDriftMax = 5 * time.Second
 )
 
 // batteryEvery is how often the battery is read; tests shorten it.
 var batteryEvery = 60 * time.Second
+
+// pollTimeout bounds each battery poll; tests shorten it.
+var pollTimeout = stepTimeout
 
 // fetchRetry is the pause before fetching again after a failure; tests shorten it.
 var fetchRetry = 3 * time.Second
@@ -53,26 +54,28 @@ type Link struct {
 	closeOnce      sync.Once
 	slots          atomic.Int32 // how many channels the radio holds, from DEVICE_QUERY
 	waiting        chan struct{}
+
+	pendMu  sync.Mutex
+	pending []Event
+	kick    chan struct{}
+	done    chan struct{}
 }
 
-// quiet keeps the SDK's own logging off the terminal the UI is drawing on.
-var quiet = slog.New(slog.NewTextHandler(io.Discard, nil))
-
 func NewSerial(port string) *Link {
-	t := transport.NewSerialTransport(transport.SerialConfig{Port: port, BaudRate: 115200, BaseConfig: transport.BaseConfig{Logger: quiet}})
-	return newLink(port, "USB", t)
+	return newLink(port, "USB", serialStream(port))
 }
 
 func NewTCP(addr string) *Link {
 	if !strings.Contains(addr, ":") {
 		addr += ":5000"
 	}
-	t := transport.NewTCPTransport(transport.TCPConfig{Address: addr, BaseConfig: transport.BaseConfig{Logger: quiet}})
-	return newLink(addr, "TCP", t)
+	return newLink(addr, "TCP", tcpStream(addr))
 }
 
 func newLink(describe, kind string, t sdkTransport) *Link {
-	l := &Link{describe: describe, kind: kind, raw: t, events: make(chan Event, 256), waiting: make(chan struct{}, 1)}
+	l := &Link{describe: describe, kind: kind, raw: t, events: make(chan Event, 256), waiting: make(chan struct{}, 1),
+		kick: make(chan struct{}, 1), done: make(chan struct{})}
+	go l.pump()
 	l.tap = &tap{inner: t, emit: l.emit}
 	l.client = client.New(l.tap)
 	return l
@@ -88,16 +91,51 @@ func (l *Link) Close() error {
 		if l.cancel != nil {
 			l.cancel()
 		}
+		close(l.done)
 		err = l.client.Close()
 	})
 	return err
 }
 
-// emit never blocks the SDK's goroutines; if the UI falls badly behind, the oldest detail is dropped.
+// maxPending bounds the backlog when the UI falls behind; past it only frames and raw packets are dropped.
+const maxPending = 4096
+
+// emit never blocks the reading goroutines, and never loses a message: pump hands events on in order.
 func (l *Link) emit(e Event) {
+	l.pendMu.Lock()
+	switch e.(type) {
+	case Frame, Packet, Transmit:
+		if len(l.pending) >= maxPending {
+			l.pendMu.Unlock()
+			return
+		}
+	}
+	l.pending = append(l.pending, e)
+	l.pendMu.Unlock()
 	select {
-	case l.events <- e:
+	case l.kick <- struct{}{}:
 	default:
+	}
+}
+
+func (l *Link) pump() {
+	for {
+		select {
+		case <-l.done:
+			return
+		case <-l.kick:
+		}
+		l.pendMu.Lock()
+		batch := l.pending
+		l.pending = nil
+		l.pendMu.Unlock()
+		for _, e := range batch {
+			select {
+			case l.events <- e:
+			case <-l.done:
+				return
+			}
+		}
 	}
 }
 
@@ -346,19 +384,32 @@ func (l *Link) ResetPath(ctx context.Context, contact [32]byte) error {
 	return l.client.ResetPath(ctx, meshcore.NewIdentity(contact))
 }
 
+// pollBattery doubles as a watchdog: a radio that stops answering is redialled, since a USB link
+// can go quiet without reporting an error, after the computer sleeps for instance.
 func (l *Link) pollBattery(ctx context.Context) {
 	t := time.NewTicker(batteryEvery)
 	defer t.Stop()
+	misses := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			sctx, cancel := context.WithTimeout(ctx, stepTimeout)
+			sctx, cancel := context.WithTimeout(ctx, pollTimeout)
 			b, err := l.client.GetBattAndStorage(sctx)
 			cancel()
-			if err == nil {
+			switch {
+			case err == nil:
+				misses = 0
 				l.emit(Battery{b.BatteryMilliVolts})
+			case errors.Is(err, context.DeadlineExceeded):
+				if misses++; misses == silentPolls {
+					misses = 0
+					if r, ok := l.raw.(interface{ Reset() }); ok {
+						l.emit(Log{At: time.Now(), Text: "NO ANSWER  the radio has stopped answering; reconnecting", Tone: ToneWarn})
+						r.Reset()
+					}
+				}
 			}
 		}
 	}

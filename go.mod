@@ -7,7 +7,6 @@ require (
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/BurntSushi/toml v1.6.0
 	github.com/OwlShack/meshcore-go v1.9.0
-	github.com/OwlShack/meshcore-go/companion/transport v1.9.0
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/zalando/go-keyring v0.2.8
 	go.bug.st/serial v1.8.0

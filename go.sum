@@ -8,8 +8,6 @@ github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/OwlShack/meshcore-go v1.9.0 h1:+GZKmZlXtKhK6TDdWR8bA3Rvyz+rz8Y9/uKiibDmP9A=
 github.com/OwlShack/meshcore-go v1.9.0/go.mod h1:qfj3TwM7IgZQ2n/ML+6JtaFmvYdV6r1GAkiC0D9V+kg=
-github.com/OwlShack/meshcore-go/companion/transport v1.9.0 h1:CbOtqvWpSUBLZ5GrI1UQ1BcoZh4ROncmkf/RrRQQdUQ=
-github.com/OwlShack/meshcore-go/companion/transport v1.9.0/go.mod h1:S0vicvKnZzrHHc+dmPDQpdqgYm2Q1L5z7UFEm7BMPDc=
 github.com/aymanbagabas/go-udiff v0.4.1 h1:OEIrQ8maEeDBXQDoGCbbTTXYJMYRCRO1fnodZ12Gv5o=
 github.com/aymanbagabas/go-udiff v0.4.1/go.mod h1:0L9PGwj20lrtmEMeyw4WKJ/TMyDtvAoK9bf2u/mNo3w=
 github.com/charmbracelet/colorprofile v0.4.3 h1:QPa1IWkYI+AOB+fE+mg/5/4HRMZcaXex9t5KX76i20Q=

@@ -70,8 +70,10 @@ type Model struct {
 	ready   radio.Ready
 	linked  linkState
 
-	tab     int
+	tab     int // the focused pane's screen
 	tabAt   time.Time
+	lay     layout
+	paneKey bool // ctrl+w was pressed; the next key works the panes
 	debug   bool
 	frames  []radio.Frame
 	log     []logLine
@@ -135,10 +137,13 @@ func New(opt Options) *Model {
 	if opt.Clock == nil {
 		opt.Clock = time.Now
 	}
-	m := &Model{opt: opt, th: opt.Theme, themeTo: opt.Theme, level: opt.Motion, now: opt.Clock(), tickerOn: true}
+	m := &Model{opt: opt, th: opt.Theme, themeTo: opt.Theme, level: opt.Motion, now: opt.Clock(), tickerOn: true, lay: newLayout(0)}
 	retries, flood := 3, true
 	if opt.Config != nil {
 		m.tickerOn = opt.Config.UI.PacketTicker
+		if l, ok := parseLayout(opt.Config.UI.Layout); ok {
+			m.lay, m.tab = l, l.focus.tab
+		}
 		retries, flood = opt.Config.Messages.DMRetries, opt.Config.Messages.FloodFallback
 	}
 	if opt.Store != nil {
@@ -403,6 +408,14 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 		m.searchKey(s)
 		return nil, false
 	}
+	if m.paneKey {
+		m.paneKey = false
+		return m.paneKeyPressed(s), false
+	}
+	if s == "ctrl+w" && m.phase == phaseMain {
+		m.paneKey = true
+		return nil, false
+	}
 	if s == "ctrl+f" && m.phase == phaseMain {
 		m.openSearch()
 		return nil, false
@@ -481,10 +494,16 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 		m.debug = !m.debug
 	case "v":
 		m.setMotion((m.level + 1) % 3)
-	case "tab":
-		m.setTab((m.tab + 1) % len(tabNames))
-	case "shift+tab":
-		m.setTab((m.tab + len(tabNames) - 1) % len(tabNames))
+	case "tab", "shift+tab":
+		step := 1
+		if s == "shift+tab" {
+			step = len(tabNames) - 1
+		}
+		next := (m.tab + step) % len(tabNames)
+		for m.visible(next) && next != m.tab { // screens open in other panes are skipped
+			next = (next + step) % len(tabNames)
+		}
+		m.setTab(next)
 	default:
 		if len(s) == 1 && s[0] >= '1' && s[0] <= '7' {
 			m.setTab(int(s[0] - '1'))
@@ -501,28 +520,38 @@ func (m *Model) screenData() tea.Cmd {
 	if m.phase != phaseMain {
 		return nil
 	}
-	if m.tab == 4 && !m.adm.keysChecked {
+	if m.visible(4) && !m.adm.keysChecked {
 		return m.checkKeys()
 	}
 	if m.dev() == nil {
 		return nil
 	}
 	switch {
-	case m.tab == 5 && !m.device.loaded && !m.device.loading && m.device.err == nil:
+	case m.visible(5) && !m.device.loaded && !m.device.loading && m.device.err == nil:
 		return m.loadDevice()
-	case m.tab == 6 && !m.rstats.polling:
+	case m.visible(6) && !m.rstats.polling:
 		return m.pollStats()
 	}
 	return nil
 }
 
+// setTab shows a screen in the focused pane, or moves the focus to the pane already showing it.
 func (m *Model) setTab(i int) {
-	if i != m.tab {
-		m.tab = i
-		m.tabAt = m.now
-		if i == 0 {
-			m.refreshChats() // marks the open conversation read
+	if i == m.tab {
+		return
+	}
+	if p := m.lay.showing(i); p != nil && !m.lay.zoomed {
+		m.focusPane(p)
+	} else {
+		if p != nil {
+			p.tab = m.tab // zoomed: the hidden pane takes the screen being left
 		}
+		m.lay.focus.tab = i
+		m.tab, m.tabAt = i, m.now
+		m.saveLayout()
+	}
+	if i == 0 {
+		m.refreshChats() // marks the open conversation read
 	}
 }
 

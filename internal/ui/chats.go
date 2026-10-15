@@ -100,7 +100,7 @@ func (m *Model) refreshChats() {
 	if !ok {
 		return
 	}
-	if m.phase == phaseMain && m.tab == 0 && cur.Unread > 0 {
+	if m.phase == phaseMain && m.visible(0) && cur.Unread > 0 {
 		m.chat.MarkRead(cur.Convo)
 		c.infos[c.sel].Unread = 0
 	}
@@ -348,7 +348,7 @@ func (m *Model) chatsAnimating() bool {
 			return true
 		}
 	}
-	if m.tab == 0 {
+	if m.visible(0) {
 		for _, msg := range m.chats.msgs {
 			channel := strings.HasPrefix(string(msg.Convo), "ch:")
 			listening := channel && msg.State == store.Sent && msg.Repeats == 0 && now.Sub(msg.SentAt) < listenFor

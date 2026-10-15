@@ -49,7 +49,7 @@ func (m *Model) considerNote(msg store.Message, title string) tea.Cmd {
 	if channel && !(mention && slices.Contains(n.events, "mention")) || !channel && !slices.Contains(n.events, "dm") {
 		return nil
 	}
-	if cur, ok := m.selectedConvo(); ok && m.focused && m.phase == phaseMain && m.tab == 0 && cur.Convo == msg.Convo {
+	if cur, ok := m.selectedConvo(); ok && m.focused && m.phase == phaseMain && m.visible(0) && cur.Convo == msg.Convo {
 		return nil
 	}
 	head := msg.Sender

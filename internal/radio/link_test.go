@@ -425,6 +425,46 @@ func TestBatteryPoll(t *testing.T) {
 	}
 }
 
+func TestSilentRadioIsRedialled(t *testing.T) {
+	savedEvery, savedTimeout := batteryEvery, pollTimeout
+	batteryEvery, pollTimeout = 10*time.Millisecond, 20*time.Millisecond
+	t.Cleanup(func() { batteryEvery, pollTimeout = savedEvery, savedTimeout })
+	f := newFakeDevice()
+	f.queue = nil
+	l := startLink(t, f)
+	next[Ready](t, l, nil)
+	f.mu.Lock()
+	f.mute[companion.CmdGetBattAndStorage] = true
+	f.mu.Unlock()
+	for lg := next[Log](t, l, nil); !strings.Contains(lg.Text, "NO ANSWER"); lg = next[Log](t, l, nil) {
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.resets == 0 {
+		t.Error("the link should be reset")
+	}
+}
+
+func TestEventsQueueWhileTheUIIsBusy(t *testing.T) {
+	l := newLink("x", "TCP", newFakeDevice())
+	defer l.Close()
+	for i := range maxPending + 500 {
+		l.emit(Frame{Code: byte(i)})
+		l.emit(Log{Text: "kept"})
+	}
+	logs := 0
+	for logs < maxPending+500 {
+		select {
+		case e := <-l.Events():
+			if _, ok := e.(Log); ok {
+				logs++
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("only %d of the log events arrived", logs)
+		}
+	}
+}
+
 func TestAdmin(t *testing.T) {
 	f := newFakeDevice()
 	f.queue = nil

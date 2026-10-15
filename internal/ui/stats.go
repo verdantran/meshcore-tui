@@ -58,13 +58,13 @@ func (m *Model) statsMsg(msg tea.Msg) tea.Cmd {
 				rs.hist = rs.hist[len(rs.hist)-statsKeep:]
 			}
 		}
-		if m.tab != 6 {
+		if !m.visible(6) {
 			rs.polling = false
 			return nil
 		}
 		return tea.Tick(statsEvery, func(time.Time) tea.Msg { return statsTickMsg{} })
 	case statsTickMsg:
-		if m.tab != 6 {
+		if !m.visible(6) {
 			rs.polling = false
 			return nil
 		}

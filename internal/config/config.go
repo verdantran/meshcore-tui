@@ -24,6 +24,7 @@ type Config struct {
 		Theme        string `toml:"theme"`
 		Motion       string `toml:"motion"` // empty means the default: full, or reduced over SSH
 		PacketTicker bool   `toml:"packet_ticker"`
+		Layout       string `toml:"layout"` // split panes, e.g. "right 50 (*chats, packets)"; empty is one screen
 	} `toml:"ui"`
 	Connection struct {
 		AutoConnect   string `toml:"auto_connect"` // a saved device's name
