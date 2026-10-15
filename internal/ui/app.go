@@ -42,6 +42,8 @@ type Options struct {
 	Env       func(string) string // environment lookups for notification detection; nil uses the process's
 	ExportDir string              // where :export writes; empty uses the data directory
 	Keychain  admin.Keychain      // node passwords; nil keeps them only while the program runs
+	MapDir    string              // street detail and its download; empty uses the data directory
+	MapIndex  string              // where the street detail's tile list is; empty uses OpenFreeMap
 }
 
 type phase int
@@ -95,6 +97,7 @@ type Model struct {
 	rstats    radioStatsModel
 	contacts  contactsModel
 	inspector inspectorModel
+	mapv      mapModel
 
 	queued tea.Cmd // a radio call started by a palette command
 
@@ -156,6 +159,7 @@ func New(opt Options) *Model {
 	m.chats = newChats()
 	m.contacts = newContacts()
 	m.inspector = newInspector()
+	m.mapv = newMapModel()
 	m.admin = admin.New(m.adminNames)
 	if m.opt.Keychain == nil {
 		m.opt.Keychain = &admin.MemoryKeychain{}
@@ -166,7 +170,7 @@ func New(opt Options) *Model {
 	m.device = newDevice()
 	m.notes = newNotifier(opt)
 	m.focused = true
-	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand(), notifyCommand(), traceCommand(), channelCommand())
+	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand(), notifyCommand(), traceCommand(), channelCommand(), mapCommand())
 	m.connect = newConnect(opt.Ports, m.savedTargets)
 	m.ticker = newTicker()
 	return m
@@ -248,6 +252,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.statsMsg(msg))
 	case channelsMsg:
 		cmds = append(cmds, m.channelsMsg(msg))
+	case mapLoadedMsg, detailFetchedMsg:
+		cmds = append(cmds, m.mapMsg(msg))
 	case sendResultMsg:
 		cmds = append(cmds, m.chatResult(msg))
 	case ackTimeoutMsg:
@@ -295,7 +301,7 @@ func (m *Model) animating() bool {
 		motion.Running(m.stats.rxLamp, headerLampDur, now) || motion.Running(m.stats.txLamp, headerLampDur, now) ||
 		motion.Running(m.stats.snrAt, countDur, now) || motion.Running(m.stats.battAt, countDur, now) ||
 		motion.Running(m.glitch, glitchDur, now) ||
-		m.latestTyping() || m.linked == linkLost || m.chatsAnimating() || m.contactsAnimating() || m.inspectorAnimating() || m.adminAnimating() || m.deviceAnimating() ||
+		m.latestTyping() || m.linked == linkLost || m.chatsAnimating() || m.contactsAnimating() || m.inspectorAnimating() || m.adminAnimating() || m.deviceAnimating() || m.mapAnimating() ||
 		m.ticker.moving(m.level, now, m.w)
 }
 
@@ -358,6 +364,7 @@ func (m *Model) apply(e radio.Event) tea.Cmd {
 			m.frames = m.frames[len(m.frames)-400:]
 		}
 	}
+	m.mapEvent(e)
 	return tea.Batch(m.chatEvent(e), m.contactsEvent(e), m.adminEvent(e))
 }
 
@@ -461,6 +468,15 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 			return cmd, false
 		}
 	}
+	if m.phase == phaseMain && m.tab == 2 && !m.repeaterMode() {
+		if cmd, handled := m.mapKey(s); handled {
+			return cmd, false
+		}
+	}
+	if s == "M" && m.phase == phaseMain && !m.repeaterMode() {
+		m.setTab(2)
+		return nil, false
+	}
 	if s == "T" && !(m.phase == phaseConnect && m.connect.editing) {
 		m.cycleTheme()
 		return nil, false
@@ -553,6 +569,9 @@ func (m *Model) screenData() tea.Cmd {
 	}
 	if m.visible(4) && !m.adm.keysChecked {
 		return m.checkKeys()
+	}
+	if m.visible(2) && m.mapv.world == nil && !m.mapv.loading && !m.repeaterMode() {
+		return m.loadMap()
 	}
 	if m.dev() == nil {
 		return nil
@@ -698,6 +717,15 @@ func (m *Model) screenKeys() []string {
 			key("w", fmt.Sprintf("watch a node: its status is polled every %s and kept, for the Health screen", every(m.watchEvery()))),
 			key("H", "open a node's kept history without logging in"),
 			key("console", "type commands as on the node's serial console; tab completes, ↑↓ recall"), ""}
+	}
+	if m.tab == 2 {
+		return []string{key("←↑↓→ h j k l", "move the map"), key("+ -", "zoom in and out"), key("m", "back to your whole mesh"),
+			key("[ ]", "pick out a route, newest first; esc shows them all again"),
+			key("d", "download street detail (roads, rivers, towns) for your mesh's area from OpenFreeMap, or more of it; esc stops"),
+			key("L r", "town and node names · main roads"), key("M", "from any screen, open the map; on Packets, on that packet's route"),
+			key(":map update", "download the street detail again · :map remove deletes it"),
+			key("", "only adverts and messages on open channels travel the map, as on the Packets screen"),
+			key("", "a hop's colour is its signal where known: measured for the last hop, from traces and neighbour lists for the rest"), ""}
 	}
 	if m.tab == 3 {
 		return []string{key("↑↓ j k", "choose a packet; g jumps back to the newest"), key("[ ]", "step through decoded fields, highlighting their bytes"),

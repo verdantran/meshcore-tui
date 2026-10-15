@@ -68,7 +68,9 @@ func commands() []command {
 		{name: "quit", help: "leave meshcore-tui", run: func(m *Model, _ []string) error { m.quitting = true; return nil }},
 	}
 	for i := range tabNames {
-		cs = append(cs, screenCommand(i))
+		if i != 2 { // :map has its own command, which also manages the street detail
+			cs = append(cs, screenCommand(i))
+		}
 	}
 	cs = append(cs, splitCommand())
 	return cs

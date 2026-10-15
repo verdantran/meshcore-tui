@@ -115,6 +115,7 @@ func (m *Model) heardPacket(p radio.Packet) {
 		return
 	}
 	m.ticker.add(hexBytes(p.Raw, dec.Hidden), m.now, m.w)
+	m.mapHeard(dec, p.SNR)
 	copy := heardCopy{at: m.now, snr: p.SNR, rssi: p.RSSI, path: dec.Path}
 	if dec.Err == nil {
 		if row, ok := in.byHash[dec.Hash]; ok {
@@ -242,6 +243,10 @@ func (m *Model) inspectorKey(s string) (tea.Cmd, bool) {
 		in.snrIdx, in.sel = (in.snrIdx+1)%len(snrChoices), 0
 	case "/":
 		in.filtering, in.filter = true, ""
+	case "M":
+		if r, ok := m.selectedPacket(); ok && !m.showRoute(r.dec) {
+			m.addLog(m.now, "MAP  that packet's route has scrolled off the map's list", radio.ToneWarn)
+		}
 	case "esc":
 		if in.filter == "" {
 			return nil, false

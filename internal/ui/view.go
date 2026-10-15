@@ -261,7 +261,6 @@ func (m *Model) repeaterTabs() string {
 var pending = map[int]string{
 	0: "Message history isn't available: the store couldn't be opened.",
 	1: "The contact table, path editor, traces and sharing arrive in milestone 3.",
-	2: "The map arrives in milestone 7; the design work so far is in prototypes/map.",
 	3: "The live packet inspector arrives in milestone 4. Raw packets already scroll along the footer.",
 }
 
@@ -309,6 +308,8 @@ func (m *Model) screenBox(tab, w, h int, focused bool) []string {
 		content = m.renderChats(iw, ih)
 	case tab == 3:
 		title, content = m.inspectorTitle(), m.renderInspector(iw, ih)
+	case tab == 2 && m.phase == phaseMain:
+		title, content = m.mapTitle(), m.renderMap(iw, ih)
 	case tab == 5 && m.phase == phaseMain:
 		title, content = m.deviceTitle(), m.renderDevice(iw, ih)
 	case tab == 6 && m.phase == phaseMain:
