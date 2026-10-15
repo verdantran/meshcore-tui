@@ -286,3 +286,43 @@ func TestStatusHistory(t *testing.T) {
 		t.Error("closed store")
 	}
 }
+
+func TestMessagePaths(t *testing.T) {
+	s, _ := Open(":memory:")
+	defer s.Close()
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	ch := ChannelConvo(0)
+	add := func(sender, text string, at time.Time, out bool) Message {
+		m := Message{Convo: ch, Sender: sender, Text: text, RecvAt: at, SentAt: at, Out: out}
+		if err := s.AddMessage(dev, &m); err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	old := add("Bob", "hi", now.Add(-time.Hour), false)
+	bob := add("Bob", "hi", now, false)
+	add("me", "hi", now, true)
+	add("Carol", "other", now, false)
+	got, ok, err := s.Unrouted(dev, ch, "Bob", "hi", now.Add(-time.Minute))
+	if err != nil || !ok || got.ID != bob.ID {
+		t.Fatalf("unrouted = %+v %v %v", got, ok, err)
+	}
+	if err := s.SetPath(bob.ID, []byte{0x5F, 0x77}, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := s.Unrouted(dev, ch, "Bob", "hi", now.Add(-time.Minute)); ok {
+		t.Error("routed now, and the older one is outside the window")
+	}
+	if got, ok, _ := s.Unrouted(dev, ch, "", "", now.Add(-2*time.Hour)); !ok || got.Sender != "Carol" {
+		t.Errorf("any sender and text: %+v", got)
+	}
+	msgs, _ := s.Messages(dev, ch, 10)
+	for _, m := range msgs {
+		if m.ID == bob.ID && (m.PathHash != 1 || len(m.Path) != 2 || m.Path[1] != 0x77) {
+			t.Errorf("path read back = %+v", m)
+		}
+		if m.ID == old.ID && m.Path != nil {
+			t.Error("no path")
+		}
+	}
+}

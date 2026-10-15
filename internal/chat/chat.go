@@ -162,6 +162,17 @@ func (s *Service) channel(idx int) (radio.Channel, bool) {
 	return radio.Channel{}, false
 }
 
+// AttachPath records the repeaters a received message came through, taken from its packet, on the newest
+// message in the conversation since a time that matches and has no path yet. An empty sender or text matches
+// any: a direct message's packet is encrypted, so only its sender is known. It reports the message's ID.
+func (s *Service) AttachPath(c store.Convo, sender, text string, since time.Time, path []byte, hashSize int) (int64, bool, error) {
+	m, ok, err := s.store.Unrouted(s.device, c, sender, text, since)
+	if err != nil || !ok {
+		return 0, false, err
+	}
+	return m.ID, true, s.store.SetPath(m.ID, path, hashSize)
+}
+
 // Incoming files a received message under its conversation.
 func (s *Service) Incoming(in radio.Incoming) (store.Message, error) {
 	m := store.Message{Text: in.Text, SentAt: in.SentAt, RecvAt: in.At, Hops: in.Hops, SNR: in.SNR, HasSNR: in.HasSNR, Signed: in.Signed, State: store.Received}

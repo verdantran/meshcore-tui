@@ -50,7 +50,9 @@ type Message struct {
 	Attempts int
 	RTT      time.Duration
 	Flood    bool
-	Repeats  int // copies of an outgoing channel message heard coming back from repeaters
+	Repeats  int    // copies of an outgoing channel message heard coming back from repeaters
+	Path     []byte // the repeaters a received message came through, from its packet; empty if not known
+	PathHash int    // bytes per repeater in Path
 }
 
 type Summary struct {
@@ -74,7 +76,7 @@ CREATE TABLE IF NOT EXISTS messages (
 	sender TEXT NOT NULL, text TEXT NOT NULL, sent_at INTEGER NOT NULL, recv_at INTEGER NOT NULL,
 	hops INTEGER NOT NULL, snr REAL NOT NULL, has_snr INTEGER NOT NULL, signed INTEGER NOT NULL,
 	state INTEGER NOT NULL, ack INTEGER NOT NULL, attempts INTEGER NOT NULL, rtt_ms INTEGER NOT NULL, flood INTEGER NOT NULL,
-	repeats INTEGER NOT NULL DEFAULT 0);
+	repeats INTEGER NOT NULL DEFAULT 0, path BLOB, path_hash INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS messages_convo ON messages (device, convo, id);
 CREATE TABLE IF NOT EXISTS reads (
 	device TEXT NOT NULL, convo TEXT NOT NULL, last_read INTEGER NOT NULL,
@@ -111,13 +113,20 @@ func (s *Store) Close() error { return s.db.Close() }
 
 // migrate adds columns that databases made by earlier versions don't have.
 func migrate(db *sql.DB) error {
-	var n int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name = 'repeats'`).Scan(&n); err != nil {
-		return err
-	}
-	if n == 0 {
-		_, err := db.Exec(`ALTER TABLE messages ADD COLUMN repeats INTEGER NOT NULL DEFAULT 0`)
-		return err
+	for _, col := range []struct{ name, def string }{
+		{"repeats", "INTEGER NOT NULL DEFAULT 0"},
+		{"path", "BLOB"},
+		{"path_hash", "INTEGER NOT NULL DEFAULT 0"},
+	} {
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name = ?`, col.name).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			if _, err := db.Exec(`ALTER TABLE messages ADD COLUMN ` + col.name + ` ` + col.def); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -220,10 +229,10 @@ func (s *Store) Channels(device string) ([]radio.Channel, error) {
 }
 
 func (s *Store) AddMessage(device string, m *Message) error {
-	r, err := s.db.Exec(`INSERT INTO messages (device, convo, out, sender, text, sent_at, recv_at, hops, snr, has_snr, signed, state, ack, attempts, rtt_ms, flood)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	r, err := s.db.Exec(`INSERT INTO messages (device, convo, out, sender, text, sent_at, recv_at, hops, snr, has_snr, signed, state, ack, attempts, rtt_ms, flood, path, path_hash)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		device, string(m.Convo), b2i(m.Out), m.Sender, m.Text, m.SentAt.UnixMilli(), m.RecvAt.UnixMilli(), m.Hops, m.SNR,
-		b2i(m.HasSNR), b2i(m.Signed), int(m.State), m.Ack, m.Attempts, m.RTT.Milliseconds(), b2i(m.Flood))
+		b2i(m.HasSNR), b2i(m.Signed), int(m.State), m.Ack, m.Attempts, m.RTT.Milliseconds(), b2i(m.Flood), m.Path, m.PathHash)
 	if err != nil {
 		return err
 	}
@@ -238,6 +247,30 @@ func (s *Store) UpdateDelivery(m Message) error {
 	return err
 }
 
+// SetPath records the repeaters a received message came through.
+func (s *Store) SetPath(id int64, path []byte, hashSize int) error {
+	_, err := s.db.Exec(`UPDATE messages SET path = ?, path_hash = ? WHERE id = ?`, path, hashSize, id)
+	return err
+}
+
+// Unrouted finds the newest received message in a conversation since a time whose path isn't known yet,
+// from a sender and with a text when those are given.
+func (s *Store) Unrouted(device string, c Convo, sender, text string, since time.Time) (Message, bool, error) {
+	q := `SELECT ` + messageCols + ` FROM messages WHERE device = ? AND convo = ? AND out = 0 AND path_hash = 0 AND recv_at >= ?`
+	args := []any{device, string(c), since.UnixMilli()}
+	if sender != "" {
+		q, args = q+` AND sender = ?`, append(args, sender)
+	}
+	if text != "" {
+		q, args = q+` AND text = ?`, append(args, text)
+	}
+	msgs, err := s.queryMessages(q+` ORDER BY id DESC LIMIT 1`, args...)
+	if err != nil || len(msgs) == 0 {
+		return Message{}, false, err
+	}
+	return msgs[0], true, nil
+}
+
 // AddRepeat counts one more copy of an outgoing message heard from a repeater, and returns the total.
 func (s *Store) AddRepeat(id int64) (int, error) {
 	var n int
@@ -245,7 +278,7 @@ func (s *Store) AddRepeat(id int64) (int, error) {
 	return n, err
 }
 
-const messageCols = `id, convo, out, sender, text, sent_at, recv_at, hops, snr, has_snr, signed, state, ack, attempts, rtt_ms, flood, repeats`
+const messageCols = `id, convo, out, sender, text, sent_at, recv_at, hops, snr, has_snr, signed, state, ack, attempts, rtt_ms, flood, repeats, path, path_hash`
 
 // scanMessage reads messageCols, plus any extra columns that follow them.
 func scanMessage(sc interface{ Scan(...any) error }, extra ...any) (Message, error) {
@@ -253,7 +286,7 @@ func scanMessage(sc interface{ Scan(...any) error }, extra ...any) (Message, err
 	var convo string
 	var out, hasSNR, signed, state, flood int
 	var sent, recv, rtt int64
-	dest := []any{&m.ID, &convo, &out, &m.Sender, &m.Text, &sent, &recv, &m.Hops, &m.SNR, &hasSNR, &signed, &state, &m.Ack, &m.Attempts, &rtt, &flood, &m.Repeats}
+	dest := []any{&m.ID, &convo, &out, &m.Sender, &m.Text, &sent, &recv, &m.Hops, &m.SNR, &hasSNR, &signed, &state, &m.Ack, &m.Attempts, &rtt, &flood, &m.Repeats, &m.Path, &m.PathHash}
 	err := sc.Scan(append(dest, extra...)...)
 	m.Convo, m.Out, m.HasSNR, m.Signed, m.State, m.Flood = Convo(convo), out == 1, hasSNR == 1, signed == 1, State(state), flood == 1
 	m.SentAt, m.RecvAt, m.RTT = time.UnixMilli(sent), time.UnixMilli(recv), time.Duration(rtt)*time.Millisecond

@@ -18,6 +18,7 @@ import (
 	"meshcore-tui/internal/mapview"
 	"meshcore-tui/internal/motion"
 	"meshcore-tui/internal/radio"
+	"meshcore-tui/internal/store"
 	"meshcore-tui/internal/theme"
 )
 
@@ -138,7 +139,7 @@ func TestMapScreen(t *testing.T) {
 	h.keys("?")
 
 	// Leaving and coming back keeps the view, and M opens the map from anywhere.
-	h.keys("1M")
+	h.keys("6M")
 	if h.m.tab != 2 {
 		t.Error("M opens the map")
 	}
@@ -158,17 +159,259 @@ func TestMapIgnoresPrivateTraffic(t *testing.T) {
 	}
 }
 
-func TestMapFromPackets(t *testing.T) {
+func TestPathFromPackets(t *testing.T) {
 	h := newHarness(t)
+	h.hear(channelPacket(t, h, "Public", "Carol", "busy", []byte{0x4D, 0x1E}), 4)
 	h.hear(channelPacket(t, h, "Public", "Bob", "hello all", []byte{0x5F, 0x77}), 6)
+	h.hear(channelPacket(t, h, "Public", "Bob", "hello all", []byte{0xA3}), -2) // the same message again, another way
 	h.keys("4M")
-	if h.m.tab != 2 || h.m.mapv.layers.Selected != 0 {
-		t.Errorf("M on a packet opens its route: tab %d, route %d", h.m.tab, h.m.mapv.layers.Selected)
+	h.until("the map", func() bool { return h.m.mapv.world != nil })
+	h.m.View() // the very first frame, before any glide
+	if h.m.mapv.view.Zoom < 9 || h.m.mapCurrent() != h.m.mapv.view {
+		t.Errorf("opens on the path rather than gliding in from the world: zoom %v", h.m.mapv.view.Zoom)
 	}
-	h.m.mapv.routes = nil
-	h.keys("4M")
-	if !strings.Contains(h.lastLog(), "scrolled off") {
-		t.Error("a route no longer kept")
+	scr := h.screen()
+	p := h.m.mapv.path
+	if h.m.tab != 2 || p == nil || len(p.routes) != 2 || p.back != 3 {
+		t.Fatalf("M on a packet opens its path: tab %d, %+v", h.m.tab, p)
+	}
+	for _, want := range []string{"PATH · GRP_TXT PUBLIC FROM BOB · 1 OF 2", "Bob", "Dundry", "-2.0", "─-2.0→ me", "esc back to packets"} {
+		if !strings.Contains(scr, want) {
+			t.Errorf("path lacks %q:\n%s", want, scr)
+		}
+	}
+	for _, other := range []string{"Carol", "Twmbarlwm", "Purdown"} {
+		if strings.Contains(scr, other) {
+			t.Errorf("only the path's nodes are shown, not %s:\n%s", other, scr)
+		}
+	}
+	h.keys("]")
+	if scr := h.screen(); !strings.Contains(scr, "2 OF 2") || !strings.Contains(scr, "Purdown") || !strings.Contains(scr, "5F (") {
+		t.Errorf("the other copy:\n%s", scr)
+	}
+	h.keys("]")
+	if p.sel != 1 {
+		t.Error("stays on the last copy")
+	}
+	h.keys("[")
+	if p.sel != 0 {
+		t.Error("back to the first")
+	}
+	h.keys("+td") // move it, and the full map's keys don't apply
+	if h.m.mapv.fetching || !h.m.mapv.layers.Traffic {
+		t.Error("t and d belong to the full map")
+	}
+	h.keys("m")
+	if !p.fit {
+		t.Error("m fits the path again")
+	}
+	saved := p.saved
+	h.key(tea.KeyEscape)
+	if h.m.tab != 3 || h.m.mapv.path != nil || h.m.mapv.view != saved {
+		t.Errorf("esc goes back to Packets and leaves the full map as it was: tab %d", h.m.tab)
+	}
+
+	// M from another screen while a path is showing opens the full map instead.
+	h.keys("M")
+	h.keys("6M")
+	if h.m.mapv.path != nil || h.m.tab != 2 {
+		t.Error("M from elsewhere is the full map")
+	}
+}
+
+func (h *harness) openConvo(title string) {
+	h.t.Helper()
+	h.keys("1")
+	h.m.chats.reading, h.m.chats.writing = false, false
+	for h.m.chats.sel > 0 {
+		h.key(tea.KeyUp)
+	}
+	for cur, _ := h.m.selectedConvo(); cur.Title != title; cur, _ = h.m.selectedConvo() {
+		if h.m.chats.sel >= len(h.m.chats.infos)-1 {
+			h.t.Fatalf("no conversation %s", title)
+		}
+		h.key(tea.KeyDown)
+	}
+}
+
+func (h *harness) incoming(in radio.Incoming) {
+	in.At, in.SentAt = h.clk.t, h.clk.t
+	h.m.Update(eventMsg{in})
+	h.settle()
+}
+
+func TestMessagePaths(t *testing.T) {
+	h := newHarness(t)
+	// The packet first, then the message: the message is given the packet's path.
+	h.hear(channelPacket(t, h, "Public", "Bob", "where are you", []byte{0x5F, 0x77}), 6)
+	h.hear(channelPacket(t, h, "Public", "Bob", "where are you", []byte{0xA3}), 2) // a repeat by another way
+	h.incoming(radio.Incoming{Channel: true, ChannelIdx: 0, Hops: 2, Text: "Bob: where are you", SNR: 6, HasSNR: true})
+	// The message first, then its packet.
+	h.incoming(radio.Incoming{Channel: true, ChannelIdx: 0, Hops: 1, Text: "Carol: hello"})
+	h.hear(channelPacket(t, h, "Public", "Carol", "hello", []byte{0x1E}), 4)
+	// One whose packet was never heard.
+	h.incoming(radio.Incoming{Channel: true, ChannelIdx: 0, Hops: 3, Text: "Dan: unheard"})
+
+	h.openConvo("Public")
+	scr := h.screen()
+	for _, want := range []string{"2 hops via 5F·77", "1 hop via 1E", "3 hops", "→ pick a message to reply to or see its route"} {
+		if !strings.Contains(scr, want) {
+			t.Errorf("chats lack %q:\n%s", want, scr)
+		}
+	}
+
+	// → picks the newest message; ↑↓ move; the keys for it are on screen.
+	h.key(tea.KeyRight)
+	c := &h.m.chats
+	if !c.reading || c.msgs[h.m.picked()].Text != "unheard" {
+		t.Fatal("reading from the newest")
+	}
+	h.keys("M")
+	if h.m.mapv.path != nil || !strings.Contains(h.lastLog(), "only that it took 3 hops") {
+		t.Errorf("no path known: %s", h.lastLog())
+	}
+	h.key(tea.KeyUp)
+	h.key(tea.KeyUp)
+	scr = h.screen()
+	if c.msgs[h.m.picked()].Text != "where are you" || !strings.Contains(scr, "↑↓ messages · r reply · M route on the map") ||
+		!strings.Contains(scr, "r reply · M route") {
+		t.Fatalf("picked Bob's message:\n%s", scr)
+	}
+	h.keys("M")
+	p := h.m.mapv.path
+	if p == nil || p.title != "message from Bob" || len(p.routes) != 2 || p.back != 0 || len(p.routes[0].hops) != 2 {
+		t.Fatalf("Bob's path, then the repeat heard another way: %+v", p)
+	}
+	if r, nodes := h.m.resolve(p.routes[0], h.m.mapNodes()); len(r.Stops) != 4 || nodes[r.Stops[2].Nodes[0]].Name != "Purdown" || !r.Links[2].Known {
+		t.Errorf("Bob, 5F, Purdown, me: %+v", r.Stops)
+	}
+	h.key(tea.KeyEscape)
+	if h.m.tab != 0 || !c.reading {
+		t.Error("esc comes back to the picked message")
+	}
+
+	// r replies, mentioning them.
+	h.keys("r")
+	if !c.writing || c.input != "@[Bob] " || c.reading {
+		t.Errorf("reply: %q", c.input)
+	}
+	h.key(tea.KeyEscape)
+	h.key(tea.KeyRight)
+	h.key(tea.KeyLeft)
+	if c.reading {
+		t.Error("← goes back to the conversations")
+	}
+	h.key(tea.KeyRight)
+	h.key(tea.KeyDown) // can't go past the newest
+	h.keys("g")
+	h.key(tea.KeyDown)
+	if c.msgs[h.m.picked()].Text != "unheard" {
+		t.Error("stays on the newest")
+	}
+
+	// A direct message to us from Alice: its packet names her key byte and us, and gives its path.
+	alice := h.contact("Alice")
+	dm := rawPacket(t, meshcore.RouteTypeFlood, meshcore.PayloadTypeTxtMsg, []byte{0xA3}, append([]byte{h.m.ready.Self.PubKey[0], alice.Key[0]}, make([]byte, 20)...))
+	h.hear(dm, 5)
+	h.incoming(radio.Incoming{From: alice.Prefix(), Hops: 1, Text: "psst"})
+	h.openConvo("Alice")
+	if !strings.Contains(h.screen(), "1 hop via A3") {
+		t.Errorf("the direct message's path:\n%s", h.screen())
+	}
+	h.keys("M")
+	if p := h.m.mapv.path; p == nil || p.title != "message from Alice" || len(p.routes[0].hops) != 1 {
+		t.Fatalf("direct message path: %+v", p)
+	}
+	h.key(tea.KeyEscape)
+	h.key(tea.KeyRight)
+	h.keys("r")
+	if c.input != "" || !c.writing {
+		t.Error("a direct reply needs no mention")
+	}
+	h.key(tea.KeyEscape)
+	for _, row := range h.m.inspector.rows {
+		if row.dec.Type == "TXT_MSG" {
+			t.Error("direct messages never reach the Packets screen")
+		}
+	}
+
+	// A message we sent shows the route to the contact.
+	h.m.chats.msgs = append(h.m.chats.msgs, store.Message{ID: 9999, Out: true, Convo: store.ContactConvo(alice.Key), Sender: "me", Text: "hi"})
+	h.m.showMessagePath(h.m.chats.msgs[len(h.m.chats.msgs)-1])
+	if p := h.m.mapv.path; p == nil || p.title != "your route to Alice" {
+		t.Errorf("own message: %+v", p)
+	}
+	h.m.closePath()
+	h.m.showMessagePath(store.Message{Out: true, Convo: store.ChannelConvo(0)})
+	if !strings.Contains(h.lastLog(), "flood out from you") {
+		t.Error("own channel message")
+	}
+}
+
+func TestPathFromContacts(t *testing.T) {
+	h := newHarness(t)
+	h.openMap()
+	dundry := h.contact("Dundry")
+	h.m.showContactPath(dundry)
+	if h.m.mapv.path != nil || !strings.Contains(h.lastLog(), "no route to Dundry is known") {
+		t.Errorf("a repeater with no route: %s", h.lastLog())
+	}
+	carol := h.contact("Carol") // stored route Dundry, Cabot Tower
+	h.m.showContactPath(carol)
+	p := h.m.mapv.path
+	if p == nil || p.title != "your route to Carol" {
+		t.Fatalf("stored route: %+v", p)
+	}
+	if r, nodes := h.m.resolve(p.routes[0], h.m.mapNodes()); len(r.Stops) != 4 || nodes[r.Stops[0].Nodes[0]].Name != "me" || nodes[r.Stops[3].Nodes[0]].Name != "Carol" {
+		t.Errorf("me, Dundry, Cabot Tower, Carol: %+v", r.Stops)
+	}
+	h.m.closePath()
+
+	// A trace out through Cabot Tower to Dundry and back: the map shows the way out, every hop measured.
+	tag := uint32(77)
+	h.m.contacts.traces[tag] = &traceRun{key: dundry.Key, result: &radio.TraceResult{Hashes: []byte{0x1E, 0xA3, 0x1E}, SNRs: []float32{8, -3, 5}, LastSNR: 6}, at: h.m.now}
+	h.m.contacts.lastTrace[dundry.Key] = tag
+	h.keys("2")
+	h.m.showContactPath(dundry)
+	p = h.m.mapv.path
+	if p.back != 1 {
+		t.Errorf("esc goes back to Contacts: %d", p.back)
+	}
+	if p == nil || !strings.HasPrefix(p.title, "trace to Dundry") {
+		t.Fatalf("trace: %+v", p)
+	}
+	r, nodes := h.m.resolve(p.routes[0], h.m.mapNodes())
+	if len(r.Stops) != 3 || nodes[r.Stops[1].Nodes[0]].Name != "Cabot Tower" || !r.Links[0].Known || r.Links[1].SNR != -3 {
+		t.Errorf("trace route %+v", r)
+	}
+	if scr := h.screen(); !strings.Contains(scr, "+8.0") || !strings.Contains(scr, "-3.0") {
+		t.Errorf("hop signal labels:\n%s", scr)
+	}
+	h.m.closePath()
+
+	// A companion with no route, trace or advert path floods.
+	bob := h.contact("Bob")
+	bob.PathLen = -1
+	delete(h.m.contacts.advert, bob.Key)
+	h.m.showContactPath(bob)
+	if h.m.mapv.path != nil || !strings.Contains(h.lastLog(), "no route to Bob is known") {
+		t.Errorf("no route: %s", h.lastLog())
+	}
+	h.m.contacts.advert[bob.Key] = radio.AdvertPath{At: h.m.now, Path: []byte{0x5F}}
+	h.m.showContactPath(bob)
+	if p := h.m.mapv.path; p == nil || p.title != "Bob's advert" {
+		t.Errorf("advert path: %+v", p)
+	}
+	h.m.closePath()
+
+	// A path with no placed nodes says so rather than drawing nothing.
+	h.m.showPath("nowhere", "far", []mapRoute{{what: "test", from: mapEnd{name: "ghost"}, to: mapEnd{name: "far"}, hops: [][]byte{{0x99}}}})
+	if scr := h.screen(); !strings.Contains(scr, "None of this path's nodes has a location") || !strings.Contains(scr, "99 (no location)") {
+		t.Errorf("unplaced:\n%s", scr)
+	}
+	h.m.showPath("empty", "", nil)
+	if h.m.mapv.path.title != "nowhere" {
+		t.Error("nothing to show")
 	}
 }
 
@@ -460,5 +703,32 @@ func TestMapRedrawsOnlyOnChange(t *testing.T) {
 		if h.m.mapv.cacheKey != key {
 			t.Fatalf("redrawn with nothing changed:\n%s\n%s", key, h.m.mapv.cacheKey)
 		}
+	}
+}
+
+func TestReadingScrollsOnlyAsNeeded(t *testing.T) {
+	h := newHarness(t)
+	for i := range 30 {
+		h.incoming(radio.Incoming{Channel: true, ChannelIdx: 0, Hops: 1, Text: fmt.Sprintf("Bob: message %d", i)})
+	}
+	h.openConvo("Public")
+	h.key(tea.KeyRight)
+	h.key(tea.KeyUp)
+	if scr := h.screen(); h.m.chats.scroll != 0 || !strings.Contains(scr, "message 29") {
+		t.Errorf("one up keeps the newest in view:\n%s", scr)
+	}
+	for range 25 {
+		h.key(tea.KeyUp)
+	}
+	scr := h.screen()
+	picked := h.m.chats.msgs[h.m.picked()].Text
+	if h.m.chats.scroll == 0 || !strings.Contains(scr, picked) {
+		t.Errorf("scrolled to keep %q in view (scroll %d):\n%s", picked, h.m.chats.scroll, scr)
+	}
+	for range 30 {
+		h.key(tea.KeyDown)
+	}
+	if h.m.chats.scroll != 0 {
+		t.Errorf("back down at the newest: scroll %d", h.m.chats.scroll)
 	}
 }

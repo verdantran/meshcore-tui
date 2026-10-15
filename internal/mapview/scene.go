@@ -96,7 +96,8 @@ func (r Route) Km(nodes []Node) float64 {
 // Layers are what the map shows.
 type Layers struct {
 	Labels, Roads, Traffic bool
-	Selected               int // a route to pick out, or -1
+	Selected               int  // a route to pick out, or -1
+	PathOnly               bool // show only the picked route: its nodes, named, and each hop's signal
 }
 
 // Flow is recent traffic over a link, for the traffic layer. Level runs from 0 to 1, the busiest link.
@@ -152,6 +153,7 @@ type scene struct {
 	lines      []sLine
 	marks      []sMark
 	towns      []sMark
+	notes      []sMark // signal labels on a path's hops
 }
 
 const (
@@ -266,7 +268,8 @@ func buildScene(in Input, v View, pal Palette) scene {
 		}
 	}
 
-	if l.Traffic {
+	only := l.PathOnly && focus
+	if l.Traffic && !only {
 		// Saturation is the whole story here, in one hue, so it never reads as the signal colours routes use.
 		for _, f := range in.Flows {
 			col := pal.Land.Lerp(pal.Violet, 0.2+0.8*f.Level)
@@ -277,6 +280,9 @@ func buildScene(in Input, v View, pal Palette) scene {
 	onRoute := map[int]bool{}
 	for i, r := range in.Routes {
 		sel := i == l.Selected
+		if only && !sel {
+			continue
+		}
 		age := RouteFade(r.At, in.Now)
 		if !sel && (i >= RoutesShown || age >= 1) {
 			continue
@@ -323,7 +329,20 @@ func buildScene(in Input, v View, pal Palette) scene {
 		}
 	}
 
+	if only {
+		// Each hop's signal, where known, labelled half way along it.
+		pts, links, _ := in.Routes[l.Selected].Placed(in.Nodes)
+		for j := 0; j+1 < len(pts); j++ {
+			if links[j].Known {
+				mid := LatLon{(pts[j].Lat + pts[j+1].Lat) / 2, (pts[j].Lon + near(pts[j+1].Lon, pts[j].Lon)) / 2}
+				s.notes = append(s.notes, sMark{pos: mid, label: fmt.Sprintf("%+.1f", links[j].SNR), col: pal.SNR(links[j].SNR), bold: true})
+			}
+		}
+	}
 	for i, n := range in.Nodes {
+		if only && !onRoute[i] {
+			continue
+		}
 		if n.Pos.Unplaced() {
 			continue
 		}

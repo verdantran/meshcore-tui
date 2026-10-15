@@ -36,6 +36,12 @@ type chatsModel struct {
 	filtering bool   // typing the filter
 	focus     int64  // a message jumped to from search, marked until the next move
 
+	reading bool  // moving through the open conversation's messages, to reply to one or see its route
+	cur     int64 // the message picked while reading
+
+	heard  []heardMessage      // message packets heard lately, for giving messages their paths
+	routed map[int64]time.Time // when a message was given its path
+
 	arrived map[int64]time.Time // incoming messages, for the decode and the bar flash
 	acked   map[int64]time.Time // for the ✓ pop
 	echoed  map[int64]time.Time // a channel message's latest repeat, for its flash
@@ -53,7 +59,8 @@ type chatsModel struct {
 }
 
 func newChats() chatsModel {
-	return chatsModel{arrived: map[int64]time.Time{}, acked: map[int64]time.Time{}, failed: map[int64]time.Time{}, echoed: map[int64]time.Time{}}
+	return chatsModel{arrived: map[int64]time.Time{}, acked: map[int64]time.Time{}, failed: map[int64]time.Time{}, echoed: map[int64]time.Time{},
+		routed: map[int64]time.Time{}}
 }
 
 type sendResultMsg struct {
@@ -161,6 +168,7 @@ func (m *Model) chatEvent(e radio.Event) tea.Cmd {
 			return nil
 		}
 		m.chats.arrived[msg.ID] = m.now
+		m.routeArrived(msg)
 		title := m.chat.Title(msg.Convo)
 		tone := radio.ToneInfo
 		if m.chat.Mentions(msg.Text) {
@@ -262,6 +270,11 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		m.refreshChats()
 		return nil, true
 	}
+	if c.reading {
+		if cmd, handled := m.readingKey(s); handled {
+			return cmd, true
+		}
+	}
 	if c.writing {
 		switch s {
 		case "esc":
@@ -295,13 +308,13 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 	case "up", "k":
 		if c.sel > 0 {
 			c.sel--
-			c.scroll, c.focus, c.filter = 0, 0, ""
+			c.scroll, c.focus, c.filter, c.reading = 0, 0, "", false
 			m.refreshChats()
 		}
 	case "down", "j":
 		if c.sel < len(c.infos)-1 {
 			c.sel++
-			c.scroll, c.focus, c.filter = 0, 0, ""
+			c.scroll, c.focus, c.filter, c.reading = 0, 0, "", false
 			m.refreshChats()
 		}
 	case "enter", "i":
@@ -316,12 +329,79 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 			return nil, true
 		}
 		return nil, false
+	case "right":
+		if len(c.msgs) > 0 {
+			c.reading, c.cur = true, c.msgs[max(len(c.msgs)-1-c.scroll, 0)].ID
+		}
+	case "M":
+		if i := m.newestReceived(); i >= 0 {
+			m.showMessagePath(c.msgs[i])
+		}
 	case "pgup", "K":
 		c.scroll = min(c.scroll+5, max(len(c.msgs)-1, 0))
 	case "pgdown", "J":
 		c.scroll = max(c.scroll-5, 0)
 	default:
 		return nil, false
+	}
+	return nil, true
+}
+
+// newestReceived is the newest received message in view, or -1.
+func (m *Model) newestReceived() int {
+	c := &m.chats
+	for i := len(c.msgs) - 1 - c.scroll; i >= 0 && i < len(c.msgs); i-- {
+		if !c.msgs[i].Out {
+			return i
+		}
+	}
+	return -1
+}
+
+// picked is the index of the message picked while reading, or -1 if it's gone (filtered out, say).
+func (m *Model) picked() int {
+	for i, msg := range m.chats.msgs {
+		if msg.ID == m.chats.cur {
+			return i
+		}
+	}
+	return -1
+}
+
+// readingKey moves through the open conversation's messages: ↑↓ pick one, r replies to it, M shows its route.
+func (m *Model) readingKey(s string) (tea.Cmd, bool) {
+	c := &m.chats
+	i := m.picked()
+	if i < 0 {
+		c.reading = false
+		return nil, false
+	}
+	switch s {
+	case "up", "k":
+		i = max(i-1, 0)
+	case "down", "j":
+		i = min(i+1, len(c.msgs)-1)
+	case "g", "end":
+		i = len(c.msgs) - 1
+	case "left", "esc":
+		c.reading = false
+		return nil, true
+	case "r", "enter":
+		msg := c.msgs[i]
+		c.reading, c.writing, c.input = false, true, ""
+		if cur, ok := m.selectedConvo(); ok && cur.Kind == chat.KindChannel && !msg.Out {
+			c.input = "@[" + msg.Sender + "] " // in a channel, a reply names who it's to
+		}
+		return nil, true
+	case "M":
+		m.showMessagePath(c.msgs[i])
+		return nil, true
+	default:
+		return nil, false
+	}
+	c.cur = c.msgs[i].ID
+	if below := len(c.msgs) - 1 - i; below < c.scroll {
+		c.scroll = below // it was hidden under the bottom of the pane
 	}
 	return nil, true
 }
@@ -502,7 +582,13 @@ func (m *Model) convoPane(w, rows int) []string {
 		}
 		compose = th.Fg(th.Magenta, true).Render("▸ ") + th.Fg(th.Text, false).Render(text) + th.Fg(th.Text, true).Render("█")
 	} else {
-		compose = th.Fg(th.Dim, false).Render("▸ enter to write · ↑↓ conversations · / filter · ctrl+f search all · K/J scroll")
+		compose = th.Fg(th.Dim, false).Render("▸ enter to write · ↑↓ conversations · → pick a message to reply to or see its route · / filter · ctrl+f search all")
+		if c.reading {
+			compose = th.Fg(th.Magenta, true).Render("▸ ") + th.Fg(th.Text, false).Render("↑↓ messages · ") +
+				th.Fg(th.Cyan, true).Render("r") + th.Fg(th.Text, false).Render(" reply · ") +
+				th.Fg(th.Cyan, true).Render("M") + th.Fg(th.Text, false).Render(" route on the map · ") +
+				th.Fg(th.Dim, false).Render("← back to conversations")
+		}
 	}
 	compose = fit(compose, w-visibleWidth(counter)-1) + " " + counter
 
@@ -512,6 +598,21 @@ func (m *Model) convoPane(w, rows int) []string {
 		lines = append(lines, m.messageLines(msg, w)...)
 	}
 	avail := rows - 3
+	if p := m.picked(); c.reading && p >= 0 {
+		// Scroll up just far enough to show the picked message when it's above the top of the pane.
+		height := func(i int) int { return len(m.messageLines(c.msgs[i], w)) }
+		need, hidden := 0, 0
+		for i := p; i < len(c.msgs); i++ {
+			need += height(i)
+		}
+		for i := len(c.msgs) - c.scroll; i < len(c.msgs); i++ {
+			hidden += height(i)
+		}
+		for c.scroll < len(c.msgs)-1-p && need-hidden > avail {
+			c.scroll++
+			hidden += height(len(c.msgs) - c.scroll)
+		}
+	}
 	end := len(lines)
 	if c.scroll > 0 {
 		// Scroll counts messages; skip the last c.scroll messages' lines.
@@ -541,7 +642,10 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 	th, now := m.th, m.now
 	bar := " "
 	mention := !msg.Out && m.chat != nil && m.chat.Mentions(msg.Text)
+	picked := m.chats.reading && msg.ID == m.chats.cur
 	switch {
+	case picked:
+		bar = th.Fg(th.Magenta, true).Render("▶")
 	case msg.ID == m.chats.focus:
 		bar = th.Fg(th.Cyan, true).Render("▌")
 	case mention:
@@ -557,6 +661,11 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 	}
 	name := th.Fg(nameCol, true).Render(msg.Sender)
 	meta := m.messageMeta(msg)
+	if picked {
+		name = m.raised(" " + msg.Sender + " ")
+		meta = th.Fg(th.Cyan, true).Render("r") + th.Fg(th.Dim, false).Render(" reply · ") +
+			th.Fg(th.Cyan, true).Render("M") + th.Fg(th.Dim, false).Render(" route   ") + meta
+	}
 
 	text := msg.Text
 	if at, ok := m.chats.arrived[msg.ID]; ok && m.level.Allows(motion.Decode) && motion.Running(at, decodeDur, now) {
@@ -579,10 +688,13 @@ func (m *Model) messageMeta(msg store.Message) string {
 	th, now := m.th, m.now
 	if !msg.Out {
 		parts := []string{}
-		if msg.Hops < 0 {
+		switch {
+		case msg.Hops < 0:
 			parts = append(parts, "direct")
-		} else {
-			parts = append(parts, fmt.Sprintf("%d hops", msg.Hops))
+		case len(msg.Path) > 0:
+			parts = append(parts, plural(msg.Hops, "hop")+" via "+pathText(msg.Path, msg.PathHash))
+		default:
+			parts = append(parts, plural(msg.Hops, "hop"))
 		}
 		meta := th.Fg(th.Dim, false).Render(strings.Join(parts, " "))
 		if msg.HasSNR {

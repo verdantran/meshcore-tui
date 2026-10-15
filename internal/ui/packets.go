@@ -105,6 +105,7 @@ func (m *Model) heardPacket(p radio.Packet) {
 		}
 	}
 	in.mesh.add(dec, p.SNR, first, m.now)
+	m.messagePacket(dec, p.Raw, p.SNR)
 	if dec.Decrypted && dec.Type == "GRP_TXT" {
 		m.heardEcho(dec.Channel, dec.Sender, dec.Text) // every copy is another repeater passing it on
 	}
@@ -244,8 +245,8 @@ func (m *Model) inspectorKey(s string) (tea.Cmd, bool) {
 	case "/":
 		in.filtering, in.filter = true, ""
 	case "M":
-		if r, ok := m.selectedPacket(); ok && !m.showRoute(r.dec) {
-			m.addLog(m.now, "MAP  that packet's route has scrolled off the map's list", radio.ToneWarn)
+		if r, ok := m.selectedPacket(); ok {
+			m.showPacketPath(r)
 		}
 	case "esc":
 		if in.filter == "" {

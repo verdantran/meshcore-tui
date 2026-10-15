@@ -481,6 +481,9 @@ func (m *Model) contactsKey(s string) (tea.Cmd, bool) {
 func (m *Model) contactAction(s string, ct radio.Contact) (tea.Cmd, bool) {
 	c := &m.contacts
 	switch s {
+	case "M":
+		m.showContactPath(ct)
+		return nil, true
 	case "m":
 		if ct.Type != radio.TypeChat && ct.Type != radio.TypeRoom {
 			m.fail("MESSAGE  " + ct.Name + " is a " + strings.ToLower(ct.Type.String()) + "; only chat nodes and rooms take messages")

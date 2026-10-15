@@ -38,13 +38,60 @@ const (
 type mapRoute struct {
 	id       string
 	what     string
-	from     string
-	fromPos  mapview.LatLon
-	fromKind mapview.Kind
+	from, to mapEnd // a heard packet ends at us; a stored route or a trace starts from us
 	hops     [][]byte
+	hopSNR   []float64 // each hop's signal, when a trace measured them; NaN where it didn't
 	lastSNR  float64
+	measured bool // lastSNR is the last hop's signal at our radio
 	at       time.Time
 	flood    bool
+}
+
+// mapEnd is one end of a route: us, a node by key, or a sender known only by name and perhaps a location.
+type mapEnd struct {
+	me   bool
+	name string
+	key  [32]byte
+	pos  mapview.LatLon
+	kind mapview.Kind
+}
+
+func (e mapEnd) label() string {
+	if e.me {
+		return "me"
+	}
+	return e.name
+}
+
+// packetRoute is a heard packet's journey to us along one copy's path.
+func (m *Model) packetRoute(dec packets.Decoded, path []byte, snr float32, at time.Time) mapRoute {
+	r := mapRoute{id: fmt.Sprintf("%X/%X", dec.Hash, path), what: dec.Type, to: mapEnd{me: true}, lastSNR: float64(snr),
+		measured: true, at: at, flood: dec.Flood}
+	switch dec.Type {
+	case "ADVERT":
+		r.from = mapEnd{name: dec.Name, pos: mapview.LatLon{Lat: dec.Lat, Lon: dec.Lon}, kind: mapview.KindOther}
+		for _, n := range m.mapNodes() {
+			if n.Name == dec.Name {
+				r.from.kind = n.Kind
+			}
+		}
+	default:
+		r.what, r.from = strings.TrimSpace(dec.Type+" "+dec.Channel), mapEnd{name: dec.Sender}
+	}
+	r.hops = splitPath(path, dec.HashSize, dec.Flood)
+	return r
+}
+
+// splitPath cuts a flood packet's path into hop hashes. A direct packet's path is the route ahead of it, not
+// the one it came by, so it isn't used.
+func splitPath(path []byte, size int, flood bool) [][]byte {
+	var hops [][]byte
+	if flood && size > 0 {
+		for i := 0; i+size <= len(path); i += size {
+			hops = append(hops, path[i:i+size])
+		}
+	}
+	return hops
 }
 
 type linkReading struct {
@@ -80,6 +127,7 @@ type mapModel struct {
 	anims   []mapview.Anim
 	links   map[[2]byte]linkReading // signal between two nodes, by their first key bytes
 	flows   map[string]*flow        // recent traffic over each link, by the two nodes
+	path    *pathView               // one path on its own, opened with M from elsewhere
 	event   string                  // the latest packet, typed out under the map
 	eventAt time.Time
 
@@ -281,70 +329,81 @@ func (m *Model) noteLink(a, b byte, snr float64) {
 	m.mapv.links[[2]byte{min(a, b), max(a, b)}] = linkReading{snr, m.now}
 }
 
-// resolve places a route against the nodes as they are now, adding its sender if that isn't a contact.
+// resolve places a route against the nodes as they are now, adding an end that isn't a contact but has a location.
 func (m *Model) resolve(r mapRoute, nodes []mapview.Node) (mapview.Route, []mapview.Node) {
-	from := -1
-	for i, n := range nodes {
-		if n.Name == r.from && !n.Pos.Unplaced() && (r.fromPos.Unplaced() || n.Pos == r.fromPos) {
-			from = i
-			break
+	place := func(e mapEnd) int {
+		switch {
+		case e.me:
+			if nodes[0].Pos.Unplaced() {
+				return -1
+			}
+			return 0
+		case e.key != [32]byte{}:
+			for i, n := range nodes {
+				if n.Key == e.key && !n.Pos.Unplaced() {
+					return i
+				}
+			}
 		}
+		for i, n := range nodes {
+			if e.name != "" && n.Name == e.name && !n.Pos.Unplaced() && (e.pos.Unplaced() || n.Pos == e.pos) {
+				return i
+			}
+		}
+		if !e.pos.Unplaced() {
+			nodes = append(nodes, mapview.Node{Name: e.name, Kind: e.kind, Pos: e.pos, Key: e.key})
+			return len(nodes) - 1
+		}
+		return -1
 	}
-	if from < 0 && !r.fromPos.Unplaced() {
-		nodes = append(nodes, mapview.Node{Name: r.from, Kind: r.fromKind, Pos: r.fromPos})
-		from = len(nodes) - 1
-	}
-	self := 0
-	if nodes[0].Pos.Unplaced() {
-		self = -1
-	}
-	stops := mapview.Stops(from, r.hops, nodes, self)
-	// Each hop's link, by the first key byte at either end: the sender's key, each hash, then ours.
+	from, to := place(r.from), place(r.to)
+	stops := mapview.Stops(from, r.hops, nodes, to)
+	// Each hop's link, by the first key byte at either end.
 	firsts := make([]byte, len(stops))
 	ok := make([]bool, len(stops))
-	if from >= 0 && nodes[from].Key != [32]byte{} {
-		firsts[0], ok[0] = nodes[from].Key[0], true
+	endKey := func(e mapEnd, idx int) ([32]byte, bool) {
+		switch {
+		case e.me:
+			return m.ready.Self.PubKey, true
+		case e.key != [32]byte{}:
+			return e.key, true
+		case idx >= 0 && nodes[idx].Key != [32]byte{}:
+			return nodes[idx].Key, true
+		}
+		return [32]byte{}, false
+	}
+	if k, has := endKey(r.from, from); has {
+		firsts[0], ok[0] = k[0], true
 	}
 	for i, h := range r.hops {
 		firsts[i+1], ok[i+1] = h[0], true
 	}
-	firsts[len(stops)-1], ok[len(stops)-1] = m.ready.Self.PubKey[0], true
+	if k, has := endKey(r.to, to); has {
+		firsts[len(stops)-1], ok[len(stops)-1] = k[0], true
+	}
 	links := make([]mapview.Link, len(stops)-1)
 	for i := range links {
-		if i == len(links)-1 {
+		switch {
+		case r.hopSNR != nil:
+			if i < len(r.hopSNR) && !math.IsNaN(r.hopSNR[i]) {
+				links[i] = mapview.Link{SNR: r.hopSNR[i], Known: true}
+			}
+		case i == len(links)-1 && r.measured:
 			links[i] = mapview.Link{SNR: r.lastSNR, Known: true} // measured by our radio
-			continue
-		}
-		if ok[i] && ok[i+1] {
+		case ok[i] && ok[i+1]:
 			if snr, known := m.linkSNR(firsts[i], firsts[i+1]); known {
 				links[i] = mapview.Link{SNR: snr, Known: true}
 			}
 		}
 	}
-	return mapview.Route{ID: r.id, What: r.what, From: r.from, At: r.at, Flood: r.flood, Stops: stops, Links: links}, nodes
+	return mapview.Route{ID: r.id, What: r.what, From: r.from.label(), At: r.at, Flood: r.flood, Stops: stops, Links: links}, nodes
 }
 
 // mapHeard adds a packet the Packets screen shows to the map: its route, a comet along it, a ripple where a
 // flood started, and a pulse at a node that advertised. Nothing else that's heard reaches the map.
 func (m *Model) mapHeard(dec packets.Decoded, snr float32) {
 	mv := &m.mapv
-	r := mapRoute{id: fmt.Sprintf("%X/%X", dec.Hash, dec.Path), what: dec.Type, lastSNR: float64(snr), at: m.now, flood: dec.Flood}
-	switch dec.Type {
-	case "ADVERT":
-		r.from, r.fromPos, r.fromKind = dec.Name, mapview.LatLon{Lat: dec.Lat, Lon: dec.Lon}, mapview.KindOther
-		for _, n := range m.mapNodes() {
-			if n.Name == dec.Name {
-				r.fromKind = n.Kind
-			}
-		}
-	default:
-		r.what, r.from = dec.Type+" "+dec.Channel, dec.Sender
-	}
-	if dec.Flood && dec.HashSize > 0 {
-		for i := 0; i+dec.HashSize <= len(dec.Path); i += dec.HashSize {
-			r.hops = append(r.hops, dec.Path[i:i+dec.HashSize])
-		}
-	}
+	r := m.packetRoute(dec, dec.Path, snr, m.now)
 	if len(r.hops) > 0 {
 		m.noteLink(r.hops[len(r.hops)-1][0], m.ready.Self.PubKey[0], float64(snr))
 	}
@@ -363,7 +422,7 @@ func (m *Model) mapHeard(dec packets.Decoded, snr float32) {
 	if len(hops) > 0 {
 		via = "via " + strings.Join(hops, "·")
 	}
-	from := r.from
+	from := r.from.label()
 	if from == "" {
 		from = "someone"
 	}
@@ -513,6 +572,11 @@ func (m *Model) fitMesh() {
 
 func (m *Model) mapKey(s string) (tea.Cmd, bool) {
 	mv := &m.mapv
+	if mv.path != nil {
+		if cmd, handled := m.pathKey(s); handled {
+			return cmd, true
+		}
+	}
 	if mv.world == nil {
 		return nil, false
 	}
@@ -565,19 +629,6 @@ func (m *Model) mapKey(s string) (tea.Cmd, bool) {
 	return nil, true
 }
 
-// showRoute picks the route a packet took and opens the map on it, from the Packets screen.
-func (m *Model) showRoute(dec packets.Decoded) bool {
-	prefix := fmt.Sprintf("%X/", dec.Hash)
-	for i, r := range m.mapv.routes {
-		if strings.HasPrefix(r.id, prefix) {
-			m.mapv.layers.Selected = i
-			m.setTab(2)
-			return true
-		}
-	}
-	return false
-}
-
 func (m *Model) mapAnimating() bool {
 	mv := &m.mapv
 	if !m.visible(2) || mv.world == nil {
@@ -599,12 +650,15 @@ func (m *Model) mapAnimating() bool {
 
 // mapSweeping reports the radar sweep turning, which runs whenever the map shows at full motion.
 func (m *Model) mapSweeping() bool {
-	return m.visible(2) && m.mapv.world != nil && m.level == motion.Full && m.phase == phaseMain &&
+	return m.visible(2) && m.mapv.world != nil && m.mapv.path == nil && m.level == motion.Full && m.phase == phaseMain &&
 		!(mapview.LatLon{Lat: m.ready.Self.Lat, Lon: m.ready.Self.Lon}).Unplaced()
 }
 
 func (m *Model) mapTitle() string {
 	mv := &m.mapv
+	if mv.path != nil {
+		return m.pathTitle()
+	}
 	placed := len(m.placedPoints())
 	t := fmt.Sprintf("MAP · %s PLACED · %s", strings.ToUpper(plural(placed, "node")), strings.ToUpper(plural(len(mv.routes), "route")))
 	if mv.layers.Selected >= 0 && mv.layers.Selected < len(mv.routes) {
@@ -625,6 +679,9 @@ func (m *Model) renderMap(w, h int) []string {
 		return []string{m.waiting("loading the world map…")}
 	}
 	mapH := max(h-2, 3)
+	if mv.path != nil {
+		return m.renderPath(w, mapH)
+	}
 	if !mv.fitted {
 		mv.view.W, mv.view.H = w*2, mapH*4
 		mv.fitted = true
@@ -697,41 +754,49 @@ func routeKey(routes []mapview.Route, now time.Time) string {
 	return b.String()
 }
 
+// routeLine names each stop of a route and the signal on each hop, where it's known. to names the last stop
+// when it isn't placed.
+func (m *Model) routeLine(r mapview.Route, nodes []mapview.Node, to string) string {
+	th := m.th
+	var parts []string
+	for i, st := range r.Stops {
+		name := "?"
+		switch {
+		case len(st.Nodes) == 1:
+			name = nodes[st.Nodes[0]].Name
+		case len(st.Nodes) > 1:
+			var alts []string
+			for k, n := range st.Nodes {
+				alts = append(alts, fmt.Sprintf("%s %.0f%%", nodes[n].Name, st.Weights[k]*100))
+			}
+			name = st.Hash + " (" + strings.Join(alts, " or ") + ")"
+		case st.Hash != "":
+			name = st.Hash + " (no location)"
+		case i == 0 && r.From != "":
+			name = r.From
+		case i == len(r.Stops)-1:
+			name = to
+		}
+		parts = append(parts, name)
+		if i < len(r.Links) {
+			if l := r.Links[i]; l.Known {
+				parts = append(parts, th.Fg(th.SNR(l.SNR), true).Render(fmt.Sprintf("─%+.1f→", l.SNR)))
+			} else {
+				parts = append(parts, th.Fg(th.Dim, false).Render("──→"))
+			}
+		}
+	}
+	head := th.Fg(th.Magenta, true).Render("▌") + th.Fg(th.Text, true).Render(fmt.Sprintf("%s ", strings.ToUpper(strings.TrimSpace(r.What)))) +
+		th.Fg(th.Dim, false).Render(fmt.Sprintf("%s · %.1f km · %s  ", plural(len(r.Stops)-2, "hop"), r.Km(nodes), ago(m.now.Sub(r.At))))
+	return head + th.Fg(th.Text, false).Render(strings.Join(parts, " "))
+}
+
 // mapInfo is the line under the map: the picked route, the download, an offer of street detail, or the
 // latest packet.
 func (m *Model) mapInfo(routes []mapview.Route, nodes []mapview.Node) string {
 	th, mv := m.th, &m.mapv
 	if sel := mv.layers.Selected; sel >= 0 && sel < len(routes) {
-		r := routes[sel]
-		var parts []string
-		for i, st := range r.Stops {
-			name := "?"
-			switch {
-			case len(st.Nodes) == 1:
-				name = nodes[st.Nodes[0]].Name
-			case len(st.Nodes) > 1:
-				var alts []string
-				for k, n := range st.Nodes {
-					alts = append(alts, fmt.Sprintf("%s %.0f%%", nodes[n].Name, st.Weights[k]*100))
-				}
-				name = st.Hash + " (" + strings.Join(alts, " or ") + ")"
-			case st.Hash != "":
-				name = st.Hash
-			case i == 0 && r.From != "":
-				name = r.From
-			}
-			parts = append(parts, name)
-			if i < len(r.Links) {
-				if l := r.Links[i]; l.Known {
-					parts = append(parts, th.Fg(th.SNR(l.SNR), true).Render(fmt.Sprintf("─%+.1f→", l.SNR)))
-				} else {
-					parts = append(parts, th.Fg(th.Dim, false).Render("──→"))
-				}
-			}
-		}
-		head := th.Fg(th.Magenta, true).Render("▌") + th.Fg(th.Text, true).Render(fmt.Sprintf("%s ", strings.ToUpper(strings.TrimSpace(r.What)))) +
-			th.Fg(th.Dim, false).Render(fmt.Sprintf("%d hops · %.1f km · %s  ", len(r.Stops)-2, r.Km(nodes), ago(m.now.Sub(r.At))))
-		return head + th.Fg(th.Text, false).Render(strings.Join(parts, " "))
+		return m.routeLine(routes[sel], nodes, "me")
 	}
 	switch {
 	case mv.fetching:

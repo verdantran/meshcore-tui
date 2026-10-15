@@ -484,6 +484,7 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 		}
 	}
 	if s == "M" && m.phase == phaseMain && !m.repeaterMode() {
+		m.closePath()
 		m.setTab(2)
 		return nil, false
 	}
@@ -731,6 +732,7 @@ func (m *Model) screenKeys() []string {
 	if m.tab == 2 {
 		return []string{key("←↑↓→ h j k l", "move the map"), key("+ -", "zoom in and out"), key("m", "back to your whole mesh"),
 			key("[ ]", "pick out a route, newest first; esc shows them all again"),
+			key("path", "M on a packet, message or contact shows just its path: [ ] other copies, m fits it, esc goes back"),
 			key("d", "download street detail (roads, rivers, towns) for your mesh's area from OpenFreeMap, or more of it; esc stops"),
 			key("L r", "town and node names · main roads"),
 			key("t", "the traffic layer: links get more saturated the more packets crossed them lately (halving every hour)"),
@@ -742,12 +744,14 @@ func (m *Model) screenKeys() []string {
 	if m.tab == 3 {
 		return []string{key("↑↓ j k", "choose a packet; g jumps back to the newest"), key("[ ]", "step through decoded fields, highlighting their bytes"),
 			key("space", "pause, so the list holds still"), key("R n", "filter by route · minimum signal"), key("/", "filter by text"),
-			key("C", "clear"), key(":export packets", "save the visible packets as JSON lines"), ""}
+			key("C", "clear"), key(":export packets", "save the visible packets as JSON lines"),
+			key("M", "show the packet's path on the map, with each copy heard"), ""}
 	}
 	if m.tab == 1 {
 		return []string{key("↑↓ j k", "choose a contact"), key("m", "message them"), key("t", "trace the route, showing signal at each hop"),
 			key("d", "discover a fresh route"), key("p", "set the route by hand"), key("r", "reset the route, so messages flood"),
 			key("f", "favourite"), key("e", "share as a QR code and meshcore:// link"), key("x", "remove from the radio"),
+			key("M", "show the way to them on the map: the newest trace, else the stored route, else their advert's path"),
 			key("I", "import a meshcore:// link"), key("a", "nodes heard but not added"), key("A", "auto-add settings"),
 			key("P", "suggest contacts to prune"), key("F s /", "filter by type or favourites · sort · filter by name"), ""}
 	}
@@ -755,6 +759,8 @@ func (m *Model) screenKeys() []string {
 		return []string{key("↑↓ j k", "choose a conversation"), key("enter i", "write a message; enter sends"), key("tab", "while writing, complete an @name; again for the next match"),
 			key("esc", "stop writing, or clear the filter"), key("/", "filter this conversation"),
 			key("ctrl+f", "search every conversation"), key("K J", "scroll history"),
+			key("→", "pick a message: ↑↓ move, r replies to it (naming them in a channel), M shows its route, ← goes back"),
+			key("M", "show on the map the route of the newest message received in view"),
 			key("L", "log in to the room server whose conversation is open"),
 			key("n", "add a channel: #name, a private one with its secret, or a shared link"),
 			key("s r x", "share, rename or leave the channel that's open"), ""}

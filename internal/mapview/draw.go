@@ -97,6 +97,17 @@ func Draw(in Input, v View, w, h int, pal Palette) *Canvas {
 			}
 		}
 	}
+	for _, n := range s.notes {
+		x, y := v.Project(n.pos)
+		w := textWidth(n.label)
+		for _, dy := range []int{0, -1, 1} {
+			cx, cy := int(x)/2-w/2, int(y)/4+dy
+			if c.Free(cx, cy, w, prioRouteSel+1) {
+				c.Text(cx, cy, n.label, n.col, n.bold)
+				break
+			}
+		}
+	}
 	for _, t := range s.towns {
 		x, y := v.Project(t.pos)
 		n := textWidth(t.label)
