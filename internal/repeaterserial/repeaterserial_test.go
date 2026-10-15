@@ -54,8 +54,8 @@ func TestConsoleRun(t *testing.T) {
 		t.Errorf("acl = %q", lines)
 	}
 	lines, _ = c.Run(ctx, "log", func(l string) bool { return strings.HasSuffix(l, "EOF") })
-	if len(lines) != 3 {
-		t.Errorf("log = %q", lines)
+	if len(lines) < 100 || !strings.HasSuffix(lines[len(lines)-1], "EOF") || !strings.Contains(lines[0], " U: RX, len=") {
+		t.Errorf("log = %d lines, starting %q", len(lines), lines[0])
 	}
 	if out, _ := c.Run(ctx, "", nil); len(out) != 0 {
 		t.Errorf("a blank line prints nothing: %q", out)
@@ -202,7 +202,7 @@ func TestRepeater(t *testing.T) {
 	if got := cli("get tx"); got != "> 22" {
 		t.Errorf("get tx = %q", got)
 	}
-	if got := cli("log"); !strings.Contains(got, "RX len=42") || !strings.HasSuffix(got, "EOF") {
+	if got := cli("log"); !strings.Contains(got, " U: RX, len=") || !strings.HasSuffix(got, "EOF") {
 		t.Errorf("log = %q", got)
 	}
 	if got := cli(""); got != "(no output)" {
@@ -242,8 +242,28 @@ func TestRepeaterThatNeverAnswers(t *testing.T) {
 	r := NewRepeater("/dev/cu.test", NewConsole(newSilent()), nil)
 	r.Start(context.Background())
 	defer r.Close()
-	if f := next[radio.Fatal](t, r.Events()); !errors.Is(f.Err, ErrNoAnswer) {
+	if f := next[radio.Fatal](t, r.Events()); !errors.Is(f.Err, ErrNoAnswer) || !strings.Contains(f.Err.Error(), "companion mode") {
 		t.Errorf("fatal = %v", f.Err)
+	}
+}
+
+func TestDialOpensThePort(t *testing.T) {
+	s := sim.New(4).Fast()
+	r := NewRepeater("/dev/cu.test", nil, func() (io.ReadWriteCloser, error) { return s.Console("Dundry"), nil })
+	defer r.Close()
+	r.Start(context.Background())
+	if step := next[radio.BootStep](t, r.Events()); step.Key != "port" || step.State != radio.StepWait {
+		t.Errorf("first step = %+v", step)
+	}
+	if ready := next[radio.Ready](t, r.Events()); ready.Self.Name != "Dundry" {
+		t.Errorf("ready = %+v", ready)
+	}
+
+	missing := Dial("/dev/cu.nothing-here")
+	defer missing.Close()
+	missing.Start(context.Background())
+	if f := next[radio.Fatal](t, missing.Events()); f.Err == nil {
+		t.Error("a port that isn't there fails")
 	}
 }
 

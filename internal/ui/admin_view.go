@@ -15,6 +15,9 @@ import (
 func (m *Model) adminTitle() string {
 	if ct, sess, ok := m.openNode(); ok {
 		title := "ADMIN › " + ct.Name
+		if m.adm.local {
+			title = strings.ToUpper(paneNames[m.adm.pane]) + " › " + ct.Name
+		}
 		if sess.State == admin.LoggedIn {
 			title += " (" + admin.LevelName(sess.Level) + ")"
 		}
@@ -58,10 +61,15 @@ func (m *Model) renderAdmin(w, rows int) []string {
 		return m.nodeList(w, rows)
 	}
 	out := []string{m.paneBar(w), th.Fg(th.Line, false).Render(strings.Repeat("─", w))}
+	if m.adm.local {
+		out = nil // the tab bar lists the panes
+	}
 	var body []string
 	switch {
 	case m.adm.prompt != noPrompt:
 		body = m.promptLines(ct, sess, w, rows-3)
+	case m.adm.pane == paneHealth:
+		body = m.healthLines(ct, sess, w, rows-len(out)-1)
 	case sess.State != admin.LoggedIn:
 		body = m.loginLines(ct, sess)
 	case !sess.Admin && m.adm.pane != paneStatus && m.adm.pane != paneNeighbours && m.adm.pane != paneTelemetry:
@@ -100,11 +108,28 @@ func (m *Model) paneHint(sess *admin.Session) string {
 	if m.adm.prompt != noPrompt {
 		return ""
 	}
+	if m.adm.local {
+		hints := map[adminPane]string{
+			paneStatus:     "u refresh · a auto-refresh · A send advert · c sync clock · R reboot · 1-9 or ← → screens",
+			paneHealth:     "r 24 hours or 7 days · C clear history · u poll now · polled every " + every(m.watchEvery()) + " while connected",
+			paneSettings:   "↑↓ choose · enter edit · u undo · g read group · G read all · s review and apply",
+			paneNeighbours: "u refresh · d discover again · x remove the selected neighbour",
+			paneACL:        "u refresh · a add a contact · + - change level · x remove",
+			paneRegions:    "u refresh · n new region under this one · h home · f flood on or off · x remove · S save",
+			paneTelemetry:  "u refresh",
+			paneLog:        "r read and sum up the log · s start logging · t stop · e erase",
+			paneConsole:    "enter sends · ↑↓ history · tab completes · esc clears, then leaves the console",
+		}
+		return hints[m.adm.pane]
+	}
+	if m.adm.pane == paneHealth {
+		return "w watch or stop · r 24 hours or 7 days · C clear history · u poll now · esc back"
+	}
 	if sess.State != admin.LoggedIn {
 		return "enter logs in · esc back to the node list"
 	}
 	hints := map[adminPane]string{
-		paneStatus:     "u refresh · a auto-refresh · A send advert · c sync clock · R reboot · L log out · esc back",
+		paneStatus:     "u refresh · a auto-refresh · w watch · A send advert · c sync clock · R reboot · L log out · esc back",
 		paneSettings:   "↑↓ choose · enter edit · u undo · g read group · G read all · s review and apply · esc back",
 		paneNeighbours: "u refresh · d discover again · x remove the selected neighbour · esc back",
 		paneACL:        "u refresh · a add a contact · + - change level · x remove · esc back",
@@ -151,7 +176,8 @@ func (m *Model) nodeList(w, rows int) []string {
 		return []string{th.Fg(th.Dim, false).Render("No repeaters or room servers in your contacts yet. They're added when their adverts are heard.")}
 	}
 	nameW := min(max(w/6, 12), 24)
-	out := []string{th.Fg(th.Muted, true).Render(fmt.Sprintf("  %-*s %-9s %-15s %-2s %-18s %-9s %-6s %-9s %-9s %s", nameW, "NAME", "TYPE", "SESSION", "PW", "BATTERY", "UPTIME", "NOISE", "FIRMWARE", "POLLED", "ALERTS"))}
+	const trendW = 12
+	out := []string{th.Fg(th.Muted, true).Render(fmt.Sprintf("   %-*s %-9s %-15s %-2s %-18s %-9s %-6s %-9s %-9s %-*s %s", nameW, "NAME", "TYPE", "SESSION", "PW", "BATTERY", "UPTIME", "NOISE", "FIRMWARE", "POLLED", trendW, "RX 24H", "ALERTS"))}
 	room := rows - 2
 	start := min(max(m.adm.sel-room/2, 0), max(len(nodes)-room, 0))
 	for i := start; i < len(nodes) && len(out) < rows-1; i++ {
@@ -183,14 +209,24 @@ func (m *Model) nodeList(w, rows int) []string {
 		if favourite(c) {
 			star = th.Fg(th.Yellow, true).Render("★")
 		}
-		line := marker + star + th.Fg(th.Text, i == m.adm.sel).Render(col(c.Name, nameW)) + " " +
+		watch := " "
+		if m.watched(c.Key) {
+			watch = th.Fg(th.Green, true).Render("◉")
+		}
+		if hist := m.historyOf(c.Key); len(hist) > 0 && (!has || hist[len(hist)-1].At.After(lastStatus(sess))) {
+			p := hist[len(hist)-1]
+			st := statsOf(p)
+			batt = m.batteryText(radio.Battery{MilliVolts: st.BattMilliVolts}, false)
+			up, noise, polled = uptime(st.UpTimeSecs), fmt.Sprint(st.NoiseFloor), ago(now.Sub(p.At))
+		}
+		line := marker + star + watch + th.Fg(th.Text, i == m.adm.sel).Render(col(c.Name, nameW)) + " " +
 			th.Fg(typeColour(th, c.Type), false).Render(fmt.Sprintf("%-9s", c.Type)) + " " + badge + pad + " " +
 			th.Fg(th.Green, false).Render(fmt.Sprintf("%-2s ", saved)) +
 			batt + " " + th.Fg(th.Text, false).Render(fmt.Sprintf("%-9s %-6s %-9s ", up, noise, clip(fw, 9))) + th.Fg(th.Dim, false).Render(fmt.Sprintf("%-9s ", polled)) +
-			th.Fg(th.Red, true).Render(m.alerts(c).String())
+			m.trend(c.Key, trendW) + " " + th.Fg(th.Red, true).Render(m.alerts(c).String())
 		out = append(out, clip(line, w))
 	}
-	return append(out, "", th.Fg(th.Dim, false).Render(clip("↑↓ choose · enter open · f favourite · F favourites only · P poll the list · L log out · X forget password · ● saved", w)))
+	return append(out, "", th.Fg(th.Dim, false).Render(clip("↑↓ choose · enter open · w watch · H history · f favourite · F favourites only · P poll the list · L log out · X forget password · ● saved · ◉ watched", w)))
 }
 
 func uptime(secs uint32) string {
@@ -314,7 +350,7 @@ func (m *Model) paneLines(ct radio.Contact, sess *admin.Session, w, rows int) []
 	case paneTelemetry:
 		return m.telemetryLines(sess, w)
 	case paneLog:
-		return m.logLines(sess, w)
+		return m.logLines(sess, w, rows)
 	}
 	return m.consoleLines(sess, w, rows)
 }
@@ -672,14 +708,24 @@ func (m *Model) telemetryLines(sess *admin.Session, w int) []string {
 	return append(out, "", th.Fg(th.Dim, false).Render("fetched "+ago(m.now.Sub(sess.TelemetryAt))))
 }
 
-func (m *Model) logLines(sess *admin.Session, w int) []string {
+func (m *Model) logLines(sess *admin.Session, w, rows int) []string {
 	th := m.th
-	read := "Reading the log needs a USB cable to the node (local mode). Over the air you can start, stop and erase it."
+	if m.adm.local && sess.PacketLog != nil {
+		out := m.packetLogLines(sess, w, rows-1)
+		if sess.Busy() {
+			out = append([]string{m.waiting("reading the log again…")}, out...)
+		}
+		return out
+	}
+	read := "Reading the log needs a USB cable to the node (repeater mode on the connect screen). Over the air you can start, stop and erase it."
 	if m.adm.local {
-		read = "Connected by USB: r reads the whole log into the console."
+		read = "Connected by USB: r reads the log and sums it up here, by packet type, route, signal and hour."
 	}
 	out := []string{th.Fg(th.Text, false).Render("The node can keep a log of packets it hears, in its own storage."), "",
 		th.Fg(th.Dim, false).Render(clip(read, w)), ""}
+	if sess.Busy() && m.adm.local {
+		out = append(out, m.waiting("reading the log…"), "")
+	}
 	for _, l := range sess.Console {
 		if strings.HasPrefix(l.Text, "log ") || strings.Contains(l.Text, "logging") || strings.Contains(l.Text, "log erased") {
 			out = append(out, m.consoleRow(l, w))

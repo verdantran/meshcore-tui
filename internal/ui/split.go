@@ -325,6 +325,9 @@ func (m *Model) focusPane(p *pane) {
 var splitOrder = []int{3, 0, 1, 6, 4, 5, 2}
 
 func (m *Model) splitPane(dir splitDir, tab int) error {
+	if m.repeaterMode() {
+		return fmt.Errorf("split panes are for companion mode")
+	}
 	if tab < 0 {
 		for _, t := range splitOrder {
 			if m.lay.showing(t) == nil {

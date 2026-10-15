@@ -65,13 +65,23 @@ func ports() []ui.Target {
 }
 
 func dial(t ui.Target) radio.Radio {
-	switch t.Kind {
-	case "USB":
+	switch {
+	case t.Kind == "USB" && t.Mode == ui.ModeRepeater:
+		return repeaterserial.Dial(t.Addr)
+	case t.Kind == "USB":
 		return repeaterserial.NewUSB(t.Addr)
-	case "TCP":
+	case t.Kind == "TCP":
 		return radio.NewTCP(t.Addr)
+	case t.Mode == ui.ModeRepeater:
+		return simRepeater()
 	}
 	return sim.New(time.Now().UnixNano())
+}
+
+// simRepeater is a simulated repeater on its USB console.
+func simRepeater() radio.Radio {
+	s := sim.New(time.Now().UnixNano())
+	return repeaterserial.NewRepeater("demo", nil, func() (io.ReadWriteCloser, error) { return s.Console("Dundry"), nil })
 }
 
 var errUsage = errors.New("usage")
@@ -84,6 +94,7 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 	serialPort := fs.String("serial", "", "connect to a USB serial port, e.g. /dev/cu.usbmodem1101")
 	tcp := fs.String("tcp", "", "connect to a WiFi companion at host[:port] (default port 5000)")
 	demo := fs.Bool("demo", false, "run against a simulated radio")
+	repeater := fs.Bool("repeater", false, "with -serial or -demo, open a repeater's own console instead of a companion radio")
 	motionFlag := fs.String("motion", "", "full | reduced | off (default full, or reduced over SSH)")
 	themeFlag := fs.String("theme", "", strings.Join(theme.Names(), " | "))
 	configPath := fs.String("config", filepath.Join(config.Dir(), "config.toml"), "config file")
@@ -125,15 +136,19 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 
 	opt := ui.Options{Theme: th, Motion: level, Dial: dial, Ports: ports, Config: cfg, Keychain: admin.OSKeychain{}}
 	if d, ok := cfg.Device(cfg.Connection.AutoConnect); ok {
-		opt.Start = &ui.Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name}
+		opt.Start = &ui.Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name, Mode: d.Mode}
+	}
+	mode := ""
+	if *repeater {
+		mode = ui.ModeRepeater
 	}
 	switch {
 	case *serialPort != "":
-		opt.Start = &ui.Target{Kind: "USB", Addr: *serialPort}
+		opt.Start = &ui.Target{Kind: "USB", Addr: *serialPort, Mode: mode}
 	case *tcp != "":
 		opt.Start = &ui.Target{Kind: "TCP", Addr: *tcp}
 	case *demo:
-		opt.Start = &ui.Target{Kind: "SIM", Addr: "demo"}
+		opt.Start = &ui.Target{Kind: "SIM", Addr: "demo", Mode: mode}
 	}
 	return opt, nil
 }

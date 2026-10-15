@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"meshcore-tui/internal/motion"
 )
 
 type connectModel struct {
@@ -11,38 +13,60 @@ type connectModel struct {
 	saved    func() []Target
 	items    []Target
 	sel      int
+	mode     string // "" for a companion radio, or ModeRepeater
+	modeAt   time.Time
 	editing  bool
 	input    string
 	openedAt time.Time
 }
 
+// newConnect starts in the mode of the device used last.
 func newConnect(ports, saved func() []Target) connectModel {
 	c := connectModel{ports: ports, saved: saved}
+	if saved != nil {
+		if s := saved(); len(s) > 0 {
+			c.mode = s[0].Mode
+		}
+	}
 	c.rescan()
 	return c
 }
 
-// rescan lists saved devices first, then any other detected ports.
+func (c *connectModel) setMode(mode string) {
+	if mode != c.mode {
+		c.mode, c.sel = mode, 0
+		c.rescan()
+	}
+}
+
+// rescan lists the mode's saved devices first, then any other detected ports.
 func (c *connectModel) rescan() {
 	c.items = nil
 	known := map[string]bool{}
 	if c.saved != nil {
 		for _, t := range c.saved() {
-			c.items = append(c.items, t)
-			known[t.Kind+t.Addr] = true
+			if t.Mode == c.mode && (c.mode == "" || t.Kind == "USB") {
+				c.items = append(c.items, t)
+				known[t.Kind+t.Addr] = true
+			}
 		}
 	}
 	if c.ports != nil {
 		for _, t := range c.ports() {
 			if !known[t.Kind+t.Addr] {
+				t.Mode = c.mode
 				c.items = append(c.items, t)
 			}
 		}
 	}
-	c.items = append(c.items,
-		Target{Kind: "TCP", Detail: "WiFi companion · enter host[:port]"},
-		Target{Kind: "SIM", Addr: "demo", Detail: "simulated radio on a Bristol mesh"},
-	)
+	if c.mode == ModeRepeater {
+		c.items = append(c.items, Target{Kind: "SIM", Addr: "demo", Detail: "simulated repeater on its USB console", Mode: ModeRepeater})
+	} else {
+		c.items = append(c.items,
+			Target{Kind: "TCP", Detail: "WiFi companion · enter host[:port]"},
+			Target{Kind: "SIM", Addr: "demo", Detail: "simulated radio on a Bristol mesh"},
+		)
+	}
 	c.sel = min(c.sel, len(c.items)-1)
 }
 
@@ -77,6 +101,13 @@ func (c *connectModel) key(s string, now time.Time, forget func(Target)) (Target
 		c.sel = (c.sel + 1) % len(c.items)
 	case "r":
 		c.rescan()
+	case "m", "left", "right", "h", "l":
+		c.modeAt = now
+		if c.mode == ModeRepeater {
+			c.setMode("")
+		} else {
+			c.setMode(ModeRepeater)
+		}
 	case "d":
 		if t := c.items[c.sel]; t.Saved != "" {
 			forget(t)
@@ -97,7 +128,7 @@ func (m *Model) renderConnect() []string {
 	th, c := m.th, &m.connect
 	width := min(max(m.w-8, 44), 84)
 	inner := width - 4
-	var body []string
+	body := append([]string{""}, m.modeSwitch(inner)...)
 	body = append(body, "")
 	for i, t := range c.items {
 		kind := fmt.Sprintf("%-3s", t.Kind)
@@ -121,7 +152,7 @@ func (m *Model) renderConnect() []string {
 		body = append(body, " "+th.Fg(th.Muted, false).Render(line))
 	}
 	body = append(body, "")
-	hint := "↑↓ choose · enter connect · d forget saved · r rescan · T theme · q quit"
+	hint := "↑↓ choose · enter connect · m mode · d forget · r rescan · T theme · q quit"
 	if c.editing {
 		hint = "type a host, then enter · esc cancel"
 	}
@@ -130,4 +161,25 @@ func (m *Model) renderConnect() []string {
 	block := append(m.logo(c.openedAt), "")
 	block = append(block, box...)
 	return centre(block, m.w, m.h)
+}
+
+var modeHelp = map[string]string{
+	"":           "message, map and watch the mesh through your own radio",
+	ModeRepeater: "manage a repeater or room server plugged in by USB, through its own console",
+}
+
+// modeSwitch shows the two modes with the chosen one lit; a new choice decodes into place.
+func (m *Model) modeSwitch(w int) []string {
+	th, c := m.th, &m.connect
+	part := func(label, mode string) string {
+		if c.mode != mode {
+			return th.Fg(th.Muted, false).Render(" " + label + " ")
+		}
+		if m.level.Allows(motion.Decode) && motion.Running(c.modeAt, wipeDur*2, m.now) {
+			label = motion.DecodeText(label, 0x30de, motion.Progress(c.modeAt, wipeDur*2, m.now))
+		}
+		return th.Fg(th.Magenta, true).Render("▌") + m.raised(label) + th.Fg(th.Magenta, true).Render("▐")
+	}
+	line := th.Fg(th.Dim, true).Render(" MODE  ") + part("COMPANION", "") + "  " + part("REPEATER ADMIN", ModeRepeater)
+	return []string{line, th.Fg(th.Dim, false).Render("       " + truncate(modeHelp[c.mode], w-8))}
 }

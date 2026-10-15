@@ -43,7 +43,15 @@ type Repeater struct {
 	once   sync.Once
 }
 
-// NewRepeater takes over a console already found by Probe. reopen is used after the node reboots.
+var errNotRepeater = fmt.Errorf("%w; for a companion radio, choose companion mode on the connect screen", ErrNoAnswer)
+
+// Dial opens a repeater's console directly, for when it was chosen on the connect screen.
+func Dial(port string) *Repeater {
+	return NewRepeater(port, nil, func() (io.ReadWriteCloser, error) { return openPort(port) })
+}
+
+// NewRepeater takes over a console already found by Probe, or opens one with reopen when con is nil.
+// reopen is also used after the node reboots.
 func NewRepeater(port string, con *Console, reopen func() (io.ReadWriteCloser, error)) *Repeater {
 	return &Repeater{port: port, con: con, reopen: reopen, events: make(chan radio.Event, 256)}
 }
@@ -117,9 +125,25 @@ func (r *Repeater) Start(ctx context.Context) {
 		step := func(key, label, detail string, s radio.StepState) {
 			r.emit(radio.BootStep{Key: key, Label: label, Detail: detail, State: s})
 		}
+		if r.console() == nil {
+			step("port", "PORT", r.port, radio.StepWait)
+			rw, err := r.reopen()
+			if err != nil {
+				step("port", "PORT", err.Error(), radio.StepFail)
+				r.emit(radio.Fatal{Err: err})
+				return
+			}
+			r.mu.Lock()
+			r.con = NewConsole(rw)
+			r.mu.Unlock()
+			step("port", "PORT", r.port+" · 115200 baud", radio.StepOK)
+		}
 		step("console", "CONSOLE", "", radio.StepWait)
 		ver, err := r.run(ctx, "ver")
 		if err != nil {
+			if err == ErrNoAnswer {
+				err = errNotRepeater
+			}
 			step("console", "CONSOLE", err.Error(), radio.StepFail)
 			r.emit(radio.Fatal{Err: err})
 			return

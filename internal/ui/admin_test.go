@@ -153,6 +153,7 @@ func TestAdminSettings(t *testing.T) {
 	_, sess := h.login("Dundry", "password")
 	h.idle(sess)
 	h.key(tea.KeyRight)
+	h.key(tea.KeyRight)
 	h.idle(sess)
 	if sess.Settings["name"].Value != "Dundry" || !strings.Contains(h.screen(), "IDENTITY") {
 		t.Fatalf("the first group is read on arrival: %+v\n%s", sess.Settings["name"], h.screen())
@@ -449,6 +450,7 @@ func TestAdminGuestAndRoom(t *testing.T) {
 		t.Fatalf("guest:\n%s", h.screen())
 	}
 	h.key(tea.KeyRight)
+	h.key(tea.KeyRight)
 	if !strings.Contains(h.screen(), "Settings needs an admin login") {
 		t.Fatalf("guests can't change settings:\n%s", h.screen())
 	}
@@ -700,48 +702,86 @@ func TestLocalConsole(t *testing.T) {
 	h.until("signed in", func() bool { return sess.State == admin.LoggedIn })
 	h.idle(sess)
 	scr := h.screen()
-	for _, want := range []string{"ADMIN › Dundry (admin) · fw v1.17.1 · local console", "Battery 4.11 V", "Noise floor -113", "Errors   rx 14"} {
+	for _, want := range []string{"STATUS › Dundry (admin) · fw v1.17.1 · local console", "1 STATUS ╱ 2 HEALTH", "9 CONSOLE", "Battery 4.11 V",
+		"Noise floor -113", "Errors   rx 14", "1-9 screens", "polled 1s ago, every 1m"} {
 		if !strings.Contains(scr, want) {
 			t.Errorf("local status lacks %q:\n%s", want, scr)
 		}
 	}
-	for h.m.adm.pane != paneNeighbours {
-		h.key(tea.KeyRight)
+	if strings.Contains(scr, "contacts ·") || strings.Contains(scr, "CHATS") {
+		t.Errorf("no companion screens on a repeater:\n%s", scr)
 	}
+	h.keys("4")
 	h.idle(sess)
-	if len(sess.Neighbours) != 3 {
+	if h.m.adm.pane != paneNeighbours || len(sess.Neighbours) != 3 {
 		t.Fatalf("neighbours: %+v", sess.Neighbours)
 	}
 	h.keys("jd")
 	h.idle(sess)
 	h.keys("x")
 	h.idle(sess)
-	h.key(tea.KeyRight)
+	h.key(tea.KeyTab)
 	h.idle(sess)
-	if len(sess.ACL) != 2 {
+	if h.m.adm.pane != paneACL || len(sess.ACL) != 2 {
 		t.Errorf("acl from get acl: %+v", sess.ACL)
 	}
-	for h.m.adm.pane != paneLog {
-		h.key(tea.KeyRight)
-	}
-	if !strings.Contains(h.screen(), "r reads the whole log") {
+	h.keys("8")
+	if h.m.adm.pane != paneLog || !strings.Contains(h.screen(), "r reads the log and sums it up") {
 		t.Fatalf("log pane:\n%s", h.screen())
 	}
 	h.keys("r")
 	h.idle(sess)
-	if h.m.adm.pane != paneConsole || !strings.Contains(h.screen(), "RX len=42") {
-		t.Errorf("log read into the console:\n%s", h.screen())
+	scr = h.screen()
+	for _, want := range []string{"LOG", "entries", "RECEIVED", "BY TYPE", "GRP_TXT", "SIGNAL", "SENDERS"} {
+		if !strings.Contains(scr, want) {
+			t.Errorf("log summary lacks %q:\n%s", want, scr)
+		}
+	}
+	if !strings.Contains(plainConsole(sess), "log entries; the Log screen sums them up") {
+		t.Error("the console notes the read instead of printing the whole log")
+	}
+
+	// The node on USB is watched: each poll is kept, and two make a rate.
+	h.keys("2")
+	if scr := h.screen(); !strings.Contains(scr, "HEALTH › Dundry") || !strings.Contains(scr, "◉ WATCHED") || !strings.Contains(scr, "BATTERY") {
+		t.Fatalf("health after one poll:\n%s", scr)
+	}
+	h.clk.t = h.clk.t.Add(2 * time.Minute)
+	_, cmd := h.m.Update(watchTickMsg{h.m.adm.watchGen})
+	h.start(cmd)
+	h.until("a second poll", func() bool { return len(h.m.historyOf(ct.Key)) == 2 })
+	scr = h.screen()
+	if !strings.Contains(scr, "RECEIVED") || !strings.Contains(scr, "TRANSMITTING") || strings.Contains(scr, "DUPLICATES") {
+		t.Errorf("rates after two polls, but no duplicate count over USB:\n%s", scr)
+	}
+	if rows, _ := h.m.opt.Store.Status(ct.Key, time.Time{}); len(rows) != 2 {
+		t.Errorf("stored polls = %d", len(rows))
+	}
+	h.keys("r")
+	if !h.m.adm.week || !strings.Contains(h.screen(), "-7d") {
+		t.Error("a week")
+	}
+
+	h.m.Update(tea.KeyPressMsg{Code: 'w', Mod: tea.ModCtrl})
+	if !strings.Contains(h.lastLog(), "split panes are for companion mode") || h.m.paneKey {
+		t.Error("no split panes on a repeater")
+	}
+	h.keys("9")
+	h.key(tea.KeyEscape)
+	if h.m.adm.pane != paneStatus || !h.m.adm.opened {
+		t.Error("esc on an empty console line goes to Status")
+	}
+	h.key(tea.KeyLeft)
+	if h.m.adm.pane != paneConsole {
+		t.Error("left from the first screen wraps to the last")
 	}
 
 	// A repeater's console has no companion settings or counters of its own.
-	h.key(tea.KeyEscape)
-	h.keys("6")
-	if !strings.Contains(h.screen(), "has no companion settings") || h.m.loadDevice() != nil || h.m.runOp("x", "x", nil, false) != nil {
-		t.Errorf("device on a console:\n%s", h.screen())
+	if box := plain(h.m.screenBox(5, 100, 12, true)); !strings.Contains(box, "has no companion settings") || h.m.loadDevice() != nil || h.m.runOp("x", "x", nil, false) != nil {
+		t.Errorf("device on a console:\n%s", box)
 	}
-	h.keys("7")
-	if !strings.Contains(h.screen(), "Admin screen's Status pane") || h.m.pollStats() != nil {
-		t.Errorf("stats on a console:\n%s", h.screen())
+	if box := plain(h.m.screenBox(6, 100, 12, true)); !strings.Contains(box, "Status pane") || h.m.pollStats() != nil {
+		t.Errorf("stats on a console:\n%s", box)
 	}
 	h.m.radio = nil
 	if h.m.dev() != nil {
@@ -889,7 +929,7 @@ func TestFavouriteFilters(t *testing.T) {
 	h.choose("Kelston")
 	h.keys("f")
 	h.until("favourite saved", func() bool { return favourite(h.contact("Kelston")) })
-	if h.m.adminNodes()[0].Name != "Kelston" || !strings.Contains(h.screen(), "★Kelston") {
+	if h.m.adminNodes()[0].Name != "Kelston" || !strings.Contains(h.screen(), "★ Kelston") {
 		t.Errorf("favourites come first:\n%s", h.screen())
 	}
 	h.keys("F")

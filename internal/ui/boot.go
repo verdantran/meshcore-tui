@@ -5,12 +5,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"meshcore-tui/internal/motion"
 	"meshcore-tui/internal/radio"
 )
 
 // expectedSteps sizes the boot progress bar; real links send the same sequence.
-const expectedSteps = 8
+const (
+	expectedSteps   = 8
+	expectedConsole = 3
+)
 
 const bootCPS = 90.0
 
@@ -154,7 +159,11 @@ func (m *Model) renderBoot() []string {
 	}
 
 	body = append(body, "")
-	filled := inner * b.completed() / expectedSteps
+	expected := expectedSteps
+	if b.target.Mode == ModeRepeater {
+		expected = expectedConsole
+	}
+	filled := min(inner*b.completed()/expected, inner)
 	if !b.finished.IsZero() && !b.failed {
 		filled = inner
 	}
@@ -166,7 +175,14 @@ func (m *Model) renderBoot() []string {
 		if b.err != nil {
 			msg = b.err.Error()
 		}
-		body = append(body, "", th.Fg(th.Red, true).Render("✕ "+truncate(msg, inner-2)))
+		body = append(body, "")
+		for i, l := range strings.Split(ansi.Wrap(msg, inner-2, " "), "\n") {
+			lead := "  "
+			if i == 0 {
+				lead = "✕ "
+			}
+			body = append(body, th.Fg(th.Red, true).Render(lead+l))
+		}
 		hint := "r retry · q quit"
 		if m.opt.Ports != nil {
 			hint = "r retry · c choose another link · q quit"

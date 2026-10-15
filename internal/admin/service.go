@@ -120,6 +120,8 @@ type Session struct {
 	Settings     map[string]Value
 	Console      []Line
 	Pending      map[string]string // staged edits, key → new value
+	PacketLog    *PacketLog        // the last log read over USB
+	PacketLogAt  time.Time
 
 	inflight *Command
 	queue    []*Command
@@ -322,15 +324,7 @@ func (s *Service) OnStatus(r radio.StatusReport, now time.Time) (*Session, *Job)
 	if !ok {
 		return nil, nil
 	}
-	point := StatusPoint{At: now}
-	if sess.Type == radio.TypeRoom {
-		if room, err := meshcore.ParseRoomStats(r.Data); err == nil {
-			point.Stats.CommonStats, point.Room = room.CommonStats, &room
-		}
-	} else if st, err := meshcore.ParseRepeaterStats(r.Data); err == nil {
-		point.Stats = st
-	}
-	sess.Status = keep(append(sess.Status, point), historyKeep)
+	sess.Status = keep(append(sess.Status, pointFor(sess.Type, now, r.Data)), historyKeep)
 	return sess, s.finishFor(JobStatus, sess.Key, now)
 }
 
@@ -481,6 +475,11 @@ func (s *Service) settle(sess *Session, text string, failed bool, now time.Time)
 	c := sess.inflight
 	sess.inflight = nil
 	errLine := failed || strings.HasPrefix(text, "Error") || strings.HasPrefix(text, "Unknown")
+	if c.Purpose == "log" && !failed {
+		pl := ParseLog(text)
+		sess.PacketLog, sess.PacketLogAt = &pl, now
+		text = fmt.Sprintf("read %d log entries; the Log screen sums them up", len(pl.Entries))
+	}
 	sess.Console = appendLine(sess.Console, Line{At: now, Text: text, Error: errLine})
 	switch {
 	case c.Purpose == "region" && !failed:

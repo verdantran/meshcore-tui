@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -135,6 +136,21 @@ func (s *Sim) Logout(ctx context.Context, k [32]byte) error {
 
 func (s *Sim) uptime() uint32 { return uint32(time.Since(s.born).Seconds()) + 1051200 }
 
+// counters grow like a busy repeater's, at a rate that drifts over the hour, so polls show changing rates.
+// They start at the same values for every node, shifted by a few percent.
+func (s *Sim) counters(shift int) meshcore.RepeaterStats {
+	e := time.Since(s.born).Seconds()
+	grow := func(base, rate float64) uint32 {
+		return uint32(base*(1+float64(shift)/100) + e*rate + rate*600*(1-math.Cos(e/600)))
+	}
+	recv := grow(48210, 0.12)
+	return meshcore.RepeaterStats{CommonStats: meshcore.CommonStats{BattMilliVolts: 4105 - uint16(min(e/3600, 200)), LastRSSI: -88,
+		NoiseFloor: int16(-113 + math.Round(2*math.Sin(e/1800))), PacketsRecv: recv, PacketsSent: grow(12004, 0.03),
+		AirTimeSecs: grow(3200, 0.012), UpTimeSecs: s.uptime(), SentFlood: grow(9881, 0.024), SentDirect: grow(2123, 0.006),
+		RecvFlood: recv * 3 / 4, RecvDirect: recv / 4, FloodDups: uint16(grow(31440, 0.03)), DirectDups: 120},
+		RxAirTimeSecs: grow(11000, 0.05), RecvErrors: grow(14, 0.002)}
+}
+
 // RequestStatus answers anyone logged in; others get no reply, as a real server ignores them.
 func (s *Sim) RequestStatus(ctx context.Context, k [32]byte) error {
 	srv, ok := s.serverFor(k)
@@ -146,17 +162,15 @@ func (s *Sim) RequestStatus(ctx context.Context, k [32]byte) error {
 		return nil
 	}
 	s.mu.Lock()
-	recv := uint32(48210 + s.rng.Intn(500))
 	noise := int16(-115 + s.rng.Intn(6))
 	s.mu.Unlock()
-	common := meshcore.CommonStats{BattMilliVolts: uint16(4050 + int(k[1])%60), TxQueueLen: 0, NoiseFloor: noise, LastRSSI: -88,
-		PacketsRecv: recv, PacketsSent: recv / 4, AirTimeSecs: 3200, UpTimeSecs: s.uptime(), SentFlood: 9881, SentDirect: 2123,
-		RecvFlood: recv * 3 / 4, RecvDirect: recv / 4, ErrEvents: 0, LastSNR: 38, DirectDups: 120, FloodDups: 31440}
+	st := s.counters(int(k[1]) % 40)
+	st.BattMilliVolts, st.NoiseFloor, st.LastSNR = uint16(4050+int(k[1])%60), noise, 38
 	var data []byte
 	if srv.typ == radio.TypeRoom {
-		data = meshcore.BuildRoomStats(meshcore.RoomStats{CommonStats: common, Posted: uint16(len(s.posts)), PostPushes: 12})
+		data = meshcore.BuildRoomStats(meshcore.RoomStats{CommonStats: st.CommonStats, Posted: uint16(len(s.posts)), PostPushes: 12})
 	} else {
-		data = meshcore.BuildRepeaterStats(meshcore.RepeaterStats{CommonStats: common, RxAirTimeSecs: 11000, RecvErrors: 14})
+		data = meshcore.BuildRepeaterStats(st)
 	}
 	s.after(1100, radio.StatusReport{Prefix: prefix(k), Data: data})
 	return nil

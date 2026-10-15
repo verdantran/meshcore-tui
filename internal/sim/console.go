@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"math/rand"
 	"sort"
 	"strings"
+	"time"
 
 	"meshcore-tui/internal/radio"
 )
@@ -37,7 +39,7 @@ func (s *Sim) Console(name string) *Console {
 	inR, inW := io.Pipe()
 	outR, outW := io.Pipe()
 	c := &Console{s: s, srv: srv, key: k, toDev: inW, fromDev: outR, devOut: outW,
-		logged: []string{"12:01:07 RX len=42 SNR=9.5 RSSI=-88", "12:01:09 TX len=42 flood"}}
+		logged: packetLog(time.Now(), int64(k[0]))}
 	go c.serve(inR)
 	return c
 }
@@ -73,16 +75,53 @@ func (c *Console) serve(in io.Reader) {
 	}
 }
 
+// packetLog is a few hours of a repeater's packet log, in the firmware's format.
+func packetLog(now time.Time, seed int64) []string {
+	rng := rand.New(rand.NewSource(seed))
+	types := []int{4, 4, 4, 5, 5, 5, 5, 2, 2, 3, 3, 1, 0, 8, 9}
+	var out []string
+	at := now.Add(-6 * time.Hour).UTC()
+	for at.Before(now) {
+		at = at.Add(time.Duration(20+rng.Intn(100)) * time.Second)
+		t := types[rng.Intn(len(types))]
+		route := "F"
+		if t == 1 || t == 2 || t == 3 || t == 8 {
+			if rng.Intn(3) > 0 {
+				route = "D"
+			}
+		}
+		plen := 10 + rng.Intn(100)
+		pair := ""
+		if t <= 2 || t == 8 {
+			pair = fmt.Sprintf(" [%02X -> %02X]", []byte{0x3A, 0x7C, 0xB4, 0x1E, 0x52}[rng.Intn(5)], rng.Intn(256))
+		}
+		stamp := fmt.Sprintf("%02d:%02d:%02d - %d/%d/%d U: ", at.Hour(), at.Minute(), at.Second(), at.Day(), int(at.Month()), at.Year())
+		snr := 12 - rng.Intn(26)
+		out = append(out, stamp+fmt.Sprintf("RX, len=%d (type=%d, route=%s, payload_len=%d) SNR=%d RSSI=%d score=%d%s",
+			plen+2+rng.Intn(8), t, route, plen, snr, -70-rng.Intn(50), min(1000, 600+snr*40), pair))
+		if rng.Intn(10) < 6 {
+			out = append(out, stamp+fmt.Sprintf("TX, len=%d (type=%d, route=%s, payload_len=%d)%s", plen+3+rng.Intn(8), t, route, plen, pair))
+		} else if rng.Intn(40) == 0 {
+			out = append(out, stamp+fmt.Sprintf("TX FAIL!, len=%d (type=%d, route=%s, payload_len=%d)", plen+3, t, route, plen))
+		}
+	}
+	return out
+}
+
 // answer runs a command; raw output is printed straight to the port, without the reply marker.
 func (c *Console) answer(cmd string) (string, bool) {
 	s := c.s
 	switch cmd {
 	case "stats-core":
-		return fmt.Sprintf(`{"battery_mv":4105,"uptime_secs":%d,"errors":0,"queue_len":0}`, s.uptime()), false
+		st := s.counters(0)
+		return fmt.Sprintf(`{"battery_mv":%d,"uptime_secs":%d,"errors":0,"queue_len":0}`, st.BattMilliVolts, st.UpTimeSecs), false
 	case "stats-radio":
-		return `{"noise_floor":-113,"last_rssi":-91,"last_snr":7.25,"tx_air_secs":3200,"rx_air_secs":11000}`, false
+		st := s.counters(0)
+		return fmt.Sprintf(`{"noise_floor":%d,"last_rssi":-91,"last_snr":7.25,"tx_air_secs":%d,"rx_air_secs":%d}`, st.NoiseFloor, st.AirTimeSecs, st.RxAirTimeSecs), false
 	case "stats-packets":
-		return `{"recv":48210,"sent":12004,"flood_tx":9881,"direct_tx":2123,"flood_rx":36000,"direct_rx":12000,"recv_errors":14}`, false
+		st := s.counters(0)
+		return fmt.Sprintf(`{"recv":%d,"sent":%d,"flood_tx":%d,"direct_tx":%d,"flood_rx":%d,"direct_rx":%d,"recv_errors":%d}`,
+			st.PacketsRecv, st.PacketsSent, st.SentFlood, st.SentDirect, st.RecvFlood, st.RecvDirect, st.RecvErrors), false
 	case "neighbors":
 		var lines []string
 		for i, r := range repeaters[:4] {

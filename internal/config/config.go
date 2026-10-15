@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -16,6 +17,7 @@ type Device struct {
 	Name     string    `toml:"name"`
 	Kind     string    `toml:"kind"` // USB, TCP
 	Addr     string    `toml:"addr"`
+	Mode     string    `toml:"mode,omitempty"` // "repeater" for a repeater's own console; empty is a companion
 	LastUsed time.Time `toml:"last_used"`
 }
 
@@ -40,10 +42,13 @@ type Config struct {
 		Desktop string   `toml:"desktop"` // auto, terminal, os, bell or off
 	} `toml:"notifications"`
 	Admin struct {
-		StatusPoll   int     `toml:"status_poll_s"` // the auto-refresh interval on a node's status
-		FleetSpacing int     `toml:"fleet_poll_spacing_s"`
-		BatteryAlert float64 `toml:"battery_alert_v"`
-		StaleAfter   int     `toml:"stale_after_h"` // flag a node not heard from in this long
+		StatusPoll   int      `toml:"status_poll_s"` // the auto-refresh interval on a node's status
+		FleetSpacing int      `toml:"fleet_poll_spacing_s"`
+		BatteryAlert float64  `toml:"battery_alert_v"`
+		StaleAfter   int      `toml:"stale_after_h"` // flag a node not heard from in this long
+		Watch        []string `toml:"watch"`         // public keys (hex) of nodes whose status is polled and kept
+		WatchEvery   int      `toml:"watch_poll_m"`  // minutes between polls of a watched node over the air
+		LocalEvery   int      `toml:"watch_local_s"` // seconds between polls of a node on USB
 	} `toml:"admin"`
 	Devices []Device `toml:"devices"`
 
@@ -64,6 +69,8 @@ func Default() *Config {
 	c.Admin.FleetSpacing = 20
 	c.Admin.BatteryAlert = 3.5
 	c.Admin.StaleAfter = 24
+	c.Admin.WatchEvery = 10
+	c.Admin.LocalEvery = 60
 	return c
 }
 
@@ -131,6 +138,17 @@ func (c *Config) Remember(d Device) {
 		}
 	}
 	c.Devices = append([]Device{d}, c.Devices...)
+}
+
+// Watching reports whether a node's status is polled and kept.
+func (c *Config) Watching(key string) bool { return slices.Contains(c.Admin.Watch, key) }
+
+// SetWatch adds or removes a node from the watch list.
+func (c *Config) SetWatch(key string, on bool) {
+	c.Admin.Watch = slices.DeleteFunc(c.Admin.Watch, func(k string) bool { return k == key })
+	if on {
+		c.Admin.Watch = append(c.Admin.Watch, key)
+	}
 }
 
 func (c *Config) Forget(kind, addr string) {

@@ -242,3 +242,47 @@ func TestRepeatsAndMigration(t *testing.T) {
 		s2.Close()
 	}
 }
+
+func TestStatusHistory(t *testing.T) {
+	s, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	a, b := [32]byte{1}, [32]byte{2}
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	old := StatusRow{At: now.Add(-100 * 24 * time.Hour), Data: []byte{9}}
+	if err := s.AddStatus(a, old); err != nil {
+		t.Fatal(err)
+	}
+	for i, at := range []time.Time{now.Add(-2 * time.Hour), now.Add(-time.Hour), now} {
+		if err := s.AddStatus(a, StatusRow{At: at, Room: i == 1, Data: []byte{byte(i)}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.AddStatus(b, StatusRow{At: now, Data: []byte{7}})
+
+	all, _ := s.Status(a, time.Time{})
+	if len(all) != 3 || !all[1].Room || all[2].Data[0] != 2 || !all[0].At.Equal(now.Add(-2*time.Hour)) {
+		t.Fatalf("history = %+v (the 100-day-old row should be gone)", all)
+	}
+	if recent, _ := s.Status(a, now.Add(-90*time.Minute)); len(recent) != 2 {
+		t.Errorf("since = %d rows", len(recent))
+	}
+	if err := s.ClearStatus(a); err != nil {
+		t.Fatal(err)
+	}
+	if rows, _ := s.Status(a, time.Time{}); len(rows) != 0 {
+		t.Error("cleared")
+	}
+	if rows, _ := s.Status(b, time.Time{}); len(rows) != 1 {
+		t.Error("another node's history stays")
+	}
+	s.Close()
+	if err := s.AddStatus(a, old); err == nil {
+		t.Error("closed store")
+	}
+	if _, err := s.Status(a, now); err == nil {
+		t.Error("closed store")
+	}
+}

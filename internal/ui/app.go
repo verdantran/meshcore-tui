@@ -23,7 +23,11 @@ type Target struct {
 	Addr   string
 	Detail string
 	Saved  string // the saved device's name, if this came from config
+	Mode   string // ModeRepeater for a repeater's own console; empty for a companion radio
 }
+
+// ModeRepeater opens a repeater or room server's serial console instead of a companion radio.
+const ModeRepeater = "repeater"
 
 type Options struct {
 	Theme  theme.Theme
@@ -94,6 +98,8 @@ type Model struct {
 
 	queued tea.Cmd // a radio call started by a palette command
 
+	cfgFallback *config.Config // settings for this run when there's no config file, as in tests
+
 	notes   notifier
 	focused bool // the terminal window has focus, as far as we know
 	search  searchModel
@@ -137,13 +143,11 @@ func New(opt Options) *Model {
 	if opt.Clock == nil {
 		opt.Clock = time.Now
 	}
-	m := &Model{opt: opt, th: opt.Theme, themeTo: opt.Theme, level: opt.Motion, now: opt.Clock(), tickerOn: true, lay: newLayout(0)}
+	m := &Model{opt: opt, th: opt.Theme, themeTo: opt.Theme, level: opt.Motion, now: opt.Clock(), tickerOn: true}
+	m.lay, m.tab = m.savedLayout()
 	retries, flood := 3, true
 	if opt.Config != nil {
 		m.tickerOn = opt.Config.UI.PacketTicker
-		if l, ok := parseLayout(opt.Config.UI.Layout); ok {
-			m.lay, m.tab = l, l.focus.tab
-		}
 		retries, flood = opt.Config.Messages.DMRetries, opt.Config.Messages.FloodFallback
 	}
 	if opt.Store != nil {
@@ -181,6 +185,10 @@ func (m *Model) dial(t Target) tea.Cmd {
 		m.radio.Close()
 	}
 	m.target = t
+	if m.adm.local {
+		m.adm.local, m.adm.opened = false, false
+		m.lay, m.tab = m.savedLayout()
+	}
 	m.radio = m.opt.Dial(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
@@ -232,7 +240,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case contactsSyncedMsg, advertPathMsg, traceStartedMsg, traceTimeoutMsg, exportedMsg, autoAddMsg, opDoneMsg:
 		cmd, _ := m.contactsMsg(msg)
 		cmds = append(cmds, cmd)
-	case jobSentMsg, jobTimeoutMsg, cmdSentMsg, cmdTimeoutMsg, autoStatusMsg, fleetPollMsg, keysCheckedMsg:
+	case jobSentMsg, jobTimeoutMsg, cmdSentMsg, cmdTimeoutMsg, autoStatusMsg, fleetPollMsg, keysCheckedMsg, watchTickMsg:
 		cmds = append(cmds, m.adminMsg(msg))
 	case devLoadedMsg, devOpMsg, keyExportedMsg:
 		cmds = append(cmds, m.deviceMsg(msg))
@@ -278,7 +286,7 @@ func (m *Model) animating() bool {
 	}
 	switch m.phase {
 	case phaseConnect:
-		return motion.Running(m.connect.openedAt, logoDecodeDur, now)
+		return motion.Running(m.connect.openedAt, logoDecodeDur, now) || motion.Running(m.connect.modeAt, wipeDur*2, now)
 	case phaseBoot:
 		return !m.boot.failed || motion.Running(m.glitch, glitchDur*3, now) || m.boot.typing(m.level, now)
 	}
@@ -309,7 +317,11 @@ func (m *Model) apply(e radio.Event) tea.Cmd {
 			m.enterMain()
 		}
 		if c := m.opt.Config; c != nil && m.target.Kind != "SIM" {
-			c.Remember(config.Device{Name: e.Self.Name, Kind: m.target.Kind, Addr: m.target.Addr, LastUsed: now})
+			mode := ""
+			if e.Console {
+				mode = ModeRepeater
+			}
+			c.Remember(config.Device{Name: e.Self.Name, Kind: m.target.Kind, Addr: m.target.Addr, Mode: mode, LastUsed: now})
 			m.saveConfig()
 		}
 	case radio.Fatal:
@@ -413,6 +425,10 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 		return m.paneKeyPressed(s), false
 	}
 	if s == "ctrl+w" && m.phase == phaseMain {
+		if m.repeaterMode() {
+			m.addLog(m.now, "PANES  split panes are for companion mode; a repeater's screens show one at a time", radio.ToneInfo)
+			return nil, false
+		}
 		m.paneKey = true
 		return nil, false
 	}
@@ -473,6 +489,7 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 				m.radio = nil
 				m.phase = phaseConnect
 				m.connect = newConnect(m.opt.Ports, m.savedTargets)
+				m.connect.setMode(m.target.Mode)
 				m.connect.openedAt = m.now
 			}
 		case "enter", "space", "esc":
@@ -494,7 +511,18 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 		m.debug = !m.debug
 	case "v":
 		m.setMotion((m.level + 1) % 3)
-	case "tab", "shift+tab":
+	case "tab", "shift+tab", "left", "right":
+		if m.repeaterMode() {
+			n := adminPane(len(paneNames))
+			step := adminPane(1)
+			if s == "shift+tab" || s == "left" {
+				step = n - 1
+			}
+			return m.setPane((m.adm.pane + step) % n), false
+		}
+		if s == "left" || s == "right" {
+			break
+		}
 		step := 1
 		if s == "shift+tab" {
 			step = len(tabNames) - 1
@@ -505,6 +533,9 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 		}
 		m.setTab(next)
 	default:
+		if m.repeaterMode() && len(s) == 1 && s[0] >= '1' && int(s[0]-'1') < len(paneNames) {
+			return m.setPane(adminPane(s[0] - '1')), false
+		}
 		if len(s) == 1 && s[0] >= '1' && s[0] <= '7' {
 			m.setTab(int(s[0] - '1'))
 		}
@@ -553,6 +584,16 @@ func (m *Model) setTab(i int) {
 	if i == 0 {
 		m.refreshChats() // marks the open conversation read
 	}
+}
+
+// savedLayout is the companion screens' split panes from the config, or one pane of Chats.
+func (m *Model) savedLayout() (layout, int) {
+	if m.opt.Config != nil {
+		if l, ok := parseLayout(m.opt.Config.UI.Layout); ok {
+			return l, l.focus.tab
+		}
+	}
+	return newLayout(0), 0
 }
 
 func (m *Model) enterMain() {
@@ -614,7 +655,7 @@ func (m *Model) savedTargets() []Target {
 	}
 	var out []Target
 	for _, d := range m.opt.Config.Devices {
-		out = append(out, Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name, Detail: d.Name + " · used " + ago(m.now.Sub(d.LastUsed))})
+		out = append(out, Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name, Mode: d.Mode, Detail: d.Name + " · used " + ago(m.now.Sub(d.LastUsed))})
 	}
 	return out
 }
@@ -641,11 +682,21 @@ func (m *Model) screenKeys() []string {
 		return []string{key("", fmt.Sprintf("the radio's counters are read every %s while this screen is open", statsEvery)),
 			key("", "the mesh overview counts the packets heard since connecting"), ""}
 	}
+	if m.tab == 4 && m.repeaterMode() {
+		return []string{key("1-9 ← →", "switch screens: status, health, settings, neighbours, access, regions, telemetry, log, console"),
+			key("tab", "the next screen; in the console it completes a command"),
+			key("u", "refresh what's shown"), key("a", "refresh the status every so often while it's open"),
+			key("health", fmt.Sprintf("the node is polled every %s while connected and each poll is kept", every(m.watchEvery()))),
+			key("r", "on Health, 24 hours or 7 days · on Log, read the log and sum it up"),
+			key("console", "type commands as on the serial console; esc on an empty line leaves it"), ""}
+	}
 	if m.tab == 4 {
 		return []string{key("↑↓ j k", "choose a repeater or room server"), key("enter", "open it, logging in first; an empty password is a guest login"),
 			key("← →", "switch between status, settings, neighbours, access, regions, telemetry, log and console"),
 			key("u", "refresh what's shown"), key("L", "log out"), key("esc", "back to the node list"),
 			key("f F", "mark a favourite · show favourites only, which P then polls"), key("X", "forget a saved password"),
+			key("w", fmt.Sprintf("watch a node: its status is polled every %s and kept, for the Health screen", every(m.watchEvery()))),
+			key("H", "open a node's kept history without logging in"),
 			key("console", "type commands as on the node's serial console; tab completes, ↑↓ recall"), ""}
 	}
 	if m.tab == 3 {

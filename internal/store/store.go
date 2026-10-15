@@ -79,6 +79,9 @@ CREATE INDEX IF NOT EXISTS messages_convo ON messages (device, convo, id);
 CREATE TABLE IF NOT EXISTS reads (
 	device TEXT NOT NULL, convo TEXT NOT NULL, last_read INTEGER NOT NULL,
 	PRIMARY KEY (device, convo));
+CREATE TABLE IF NOT EXISTS node_status (
+	node TEXT NOT NULL, at INTEGER NOT NULL, room INTEGER NOT NULL, data BLOB NOT NULL);
+CREATE INDEX IF NOT EXISTS node_status_at ON node_status (node, at);
 `
 
 // Open opens (or creates) the database file; ":memory:" gives a throwaway store for tests.
@@ -360,4 +363,50 @@ func (s *Store) Unread(device string, c Convo) ([]Message, error) {
 	return s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? AND convo = ? AND out = 0
 		AND id > COALESCE((SELECT last_read FROM reads WHERE device = ? AND convo = ?), 0) ORDER BY id`,
 		device, string(c), device, string(c))
+}
+
+// StatusRow is one status reply from a watched repeater or room server, as the node sent it.
+type StatusRow struct {
+	At   time.Time
+	Room bool
+	Data []byte
+}
+
+// statusKeep is how long watched nodes' status history is kept.
+const statusKeep = 90 * 24 * time.Hour
+
+// AddStatus keeps a status reply. Status history belongs to the node, not to the radio that asked.
+func (s *Store) AddStatus(node [32]byte, r StatusRow) error {
+	if _, err := s.db.Exec(`INSERT INTO node_status VALUES (?,?,?,?)`, radio.KeyHex(node[:]), r.At.UnixMilli(), b2i(r.Room), r.Data); err != nil {
+		return err
+	}
+	_, err := s.db.Exec(`DELETE FROM node_status WHERE at < ?`, r.At.Add(-statusKeep).UnixMilli())
+	return err
+}
+
+// Status returns a node's status history since a time, oldest first.
+func (s *Store) Status(node [32]byte, since time.Time) ([]StatusRow, error) {
+	rows, err := s.db.Query(`SELECT at, room, data FROM node_status WHERE node = ? AND at >= ? ORDER BY at`, radio.KeyHex(node[:]), since.UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []StatusRow
+	for rows.Next() {
+		var r StatusRow
+		var at int64
+		var room int
+		if err := rows.Scan(&at, &room, &r.Data); err != nil {
+			return nil, err
+		}
+		r.At, r.Room = time.UnixMilli(at), room == 1
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// ClearStatus deletes a node's status history.
+func (s *Store) ClearStatus(node [32]byte) error {
+	_, err := s.db.Exec(`DELETE FROM node_status WHERE node = ?`, radio.KeyHex(node[:]))
+	return err
 }

@@ -21,6 +21,7 @@ type adminPane int
 
 const (
 	paneStatus adminPane = iota
+	paneHealth
 	paneSettings
 	paneNeighbours
 	paneACL
@@ -30,7 +31,7 @@ const (
 	paneConsole
 )
 
-var paneNames = []string{"Status", "Settings", "Neighbours", "ACL", "Regions", "Telemetry", "Log", "Console"}
+var paneNames = []string{"Status", "Health", "Settings", "Neighbours", "Access", "Regions", "Telemetry", "Log", "Console"}
 
 type adminPrompt int
 
@@ -45,8 +46,9 @@ const (
 )
 
 const (
-	authFlash = 1200 * time.Millisecond
-	applyCPS  = 40.0
+	authFlash  = 1200 * time.Millisecond
+	applyCPS   = 40.0
+	logTimeout = 65 * time.Second
 )
 
 // confirmAction is a dangerous change waiting for the node's name to be typed.
@@ -54,6 +56,7 @@ type confirmAction struct {
 	title, warning string
 	commands       []string
 	apply          bool // send the staged settings first
+	clear          bool // delete the node's kept status history instead
 }
 
 type adminModel struct {
@@ -87,11 +90,20 @@ type adminModel struct {
 	auto     map[[32]byte]bool
 	resultAt map[[32]byte]time.Time
 	visited  map[[32]byte]map[adminPane]bool
+
+	kept       map[[32]byte][]admin.StatusPoint // watched nodes' status, from the store
+	week       bool                             // the health charts show seven days instead of one
+	lastTry    map[[32]byte]time.Time           // the last time the watch polled each node
+	noPassword map[[32]byte]bool                // watched, but there's no way to log in to poll it
+	background map[int]bool                     // jobs the watch started, which fail quietly
+	watchGen   int
+	storeErr   bool
 }
 
 func newAdmin() adminModel {
 	return adminModel{auto: map[[32]byte]bool{}, resultAt: map[[32]byte]time.Time{}, visited: map[[32]byte]map[adminPane]bool{},
-		saving: map[[32]byte]string{}}
+		saving: map[[32]byte]string{}, kept: map[[32]byte][]admin.StatusPoint{}, lastTry: map[[32]byte]time.Time{},
+		noPassword: map[[32]byte]bool{}, background: map[int]bool{}}
 }
 
 type jobSentMsg struct {
@@ -109,6 +121,7 @@ type cmdTimeoutMsg struct {
 	id  int
 }
 type autoStatusMsg struct{ key [32]byte }
+type watchTickMsg struct{ gen int }
 type fleetPollMsg struct{ key [32]byte }
 type keysCheckedMsg struct{}
 
@@ -128,7 +141,10 @@ func (m *Model) adminConfig() *config.Config {
 	if m.opt.Config != nil {
 		return m.opt.Config
 	}
-	return config.Default()
+	if m.cfgFallback == nil {
+		m.cfgFallback = config.Default()
+	}
+	return m.cfgFallback
 }
 
 func (m *Model) autoEvery() time.Duration {
@@ -162,12 +178,9 @@ func (m *Model) adminNames(p []byte) string {
 // adminNodes are the repeaters and room servers in the contact table: favourites first, then by name,
 // and only favourites while that filter is on.
 func (m *Model) adminNodes() []radio.Contact {
-	if m.chat == nil {
-		return nil
-	}
 	var out []radio.Contact
-	for _, c := range m.chat.Contacts() {
-		if (c.Type == radio.TypeRepeater || c.Type == radio.TypeRoom) && (!m.adm.favOnly || favourite(c)) {
+	for _, c := range m.allNodes() {
+		if !m.adm.favOnly || favourite(c) {
 			out = append(out, c)
 		}
 	}
@@ -177,6 +190,20 @@ func (m *Model) adminNodes() []radio.Contact {
 		}
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
 	})
+	return out
+}
+
+// allNodes are every repeater and room server in the contact table.
+func (m *Model) allNodes() []radio.Contact {
+	if m.chat == nil {
+		return nil
+	}
+	var out []radio.Contact
+	for _, c := range m.chat.Contacts() {
+		if c.Type == radio.TypeRepeater || c.Type == radio.TypeRoom {
+			out = append(out, c)
+		}
+	}
 	return out
 }
 
@@ -234,7 +261,11 @@ func (m *Model) sendCommand(c *admin.Command) tea.Cmd {
 	r := m.radio
 	call := m.radioCall(func(ctx context.Context) tea.Msg { return cmdSentMsg{c, r.SendCLI(ctx, c.Key, c.Text)} })
 	key, id := c.Key, c.ID
-	return tea.Batch(call, tea.Tick(admin.CommandTimeout, func(time.Time) tea.Msg { return cmdTimeoutMsg{key, id} }))
+	wait := admin.CommandTimeout
+	if c.Purpose == "log" {
+		wait = logTimeout // the whole log comes over USB, which takes a while when it's long
+	}
+	return tea.Batch(call, tea.Tick(wait, func(time.Time) tea.Msg { return cmdTimeoutMsg{key, id} }))
 }
 
 // adminEvent handles radio events for admin sessions.
@@ -243,13 +274,14 @@ func (m *Model) adminEvent(e radio.Event) tea.Cmd {
 	switch e := e.(type) {
 	case radio.Ready:
 		m.adm.local = e.Console
+		watch := m.startWatch()
 		if !e.Console || len(e.ContactList) == 0 {
-			return nil
+			return watch
 		}
 		self := e.ContactList[0]
-		m.setTab(4)
+		m.lay, m.tab, m.tabAt = newLayout(4), 4, now
 		m.adm.open, m.adm.opened, m.adm.pane = self.Key, true, paneStatus
-		return m.startJob(m.admin.Login(self, "", now))
+		return tea.Batch(watch, m.startJob(m.admin.Login(self, "", now)))
 	case radio.LoginResult:
 		sess, next := m.admin.OnLogin(e, now)
 		if sess == nil {
@@ -279,7 +311,10 @@ func (m *Model) adminEvent(e radio.Event) tea.Cmd {
 		cmds = append(cmds, m.startJob(m.admin.RequestStatus(c, now)), m.startJob(m.admin.RequestOwner(c, now)))
 		return tea.Batch(cmds...)
 	case radio.StatusReport:
-		_, next := m.admin.OnStatus(e, now)
+		sess, next := m.admin.OnStatus(e, now)
+		if sess != nil && m.watched(sess.Key) {
+			m.keepStatus(sess, e.Data)
+		}
 		return m.startJob(next)
 	case radio.Telemetry:
 		_, next := m.admin.OnTelemetry(e, now)
@@ -309,6 +344,10 @@ func (m *Model) adminMsg(msg tea.Msg) tea.Cmd {
 	now := m.now
 	switch msg := msg.(type) {
 	case jobSentMsg:
+		if msg.err != nil && m.adm.background[msg.id] {
+			m.watchMissed(msg.id, radio.Explain(msg.err))
+			return m.startJob(m.admin.Failed(msg.id, msg.err, now))
+		}
 		if msg.err != nil {
 			j, _ := m.admin.Running()
 			what := "REQUEST"
@@ -323,7 +362,9 @@ func (m *Model) adminMsg(msg tea.Msg) tea.Cmd {
 	case jobTimeoutMsg:
 		j, _ := m.admin.Running()
 		next, waiting := m.admin.TimedOut(msg.id, now)
-		if waiting {
+		if waiting && m.adm.background[msg.id] {
+			m.watchMissed(msg.id, "no answer")
+		} else if waiting {
 			m.fail(fmt.Sprintf("NO REPLY  %s from %s after %s; try again, or reset the route on the Contacts screen so it floods",
 				j.Kind, m.contactName(j.Key), admin.JobTimeout))
 		}
@@ -334,6 +375,11 @@ func (m *Model) adminMsg(msg tea.Msg) tea.Cmd {
 		return m.sendCommand(m.admin.CommandTimedOut(msg.key, msg.id, now))
 	case keysCheckedMsg:
 		// nothing to do: the redraw that follows shows which nodes have a saved password
+	case watchTickMsg:
+		if msg.gen != m.adm.watchGen {
+			return nil
+		}
+		return tea.Batch(m.pollWatched(), m.watchTick())
 	case autoStatusMsg:
 		sess, ok := m.admin.Find(msg.key)
 		if !ok || !m.adm.auto[msg.key] || sess.State != admin.LoggedIn {
@@ -409,10 +455,23 @@ func (m *Model) adminKey(s string) (tea.Cmd, bool) {
 	}
 	switch s {
 	case "esc":
-		a.opened = false
+		m.closeNode()
 		return nil, true
 	case "L":
+		if a.local {
+			return nil, true
+		}
 		return m.logout(ct), true
+	case "w":
+		if !a.local {
+			m.toggleWatch(ct)
+		}
+		return nil, true
+	}
+	if a.pane == paneHealth {
+		if cmd, ok := m.healthKey(s, ct, sess); ok {
+			return cmd, true
+		}
 	}
 	if sess.State != admin.LoggedIn {
 		if s == "enter" {
@@ -479,6 +538,15 @@ func (m *Model) nodeListKey(s string) (tea.Cmd, bool) {
 		}
 	case "P":
 		return m.pollFleet(), true
+	case "w":
+		if ct, ok := m.selectedNode(); ok {
+			m.toggleWatch(ct)
+		}
+	case "H":
+		if ct, ok := m.selectedNode(); ok {
+			m.admin.Session(ct)
+			a.open, a.opened, a.pane, a.paneAt = ct.Key, true, paneHealth, m.now
+		}
 	case "F":
 		a.favOnly, a.sel = !a.favOnly, 0
 	case "f":
@@ -524,7 +592,7 @@ func (m *Model) setPane(p adminPane) tea.Cmd {
 		return nil
 	}
 	a.visited[ct.Key][p] = true
-	if p == paneStatus && len(sess.Status) > 0 {
+	if (p == paneStatus || p == paneHealth) && len(sess.Status) > 0 {
 		return nil
 	}
 	return m.refreshPane(ct, sess)
@@ -533,7 +601,7 @@ func (m *Model) setPane(p adminPane) tea.Cmd {
 func (m *Model) refreshPane(ct radio.Contact, sess *admin.Session) tea.Cmd {
 	now := m.now
 	switch m.adm.pane {
-	case paneStatus:
+	case paneStatus, paneHealth:
 		return m.startJob(m.admin.RequestStatus(ct, now))
 	case paneSettings:
 		if sess.Admin {
@@ -814,8 +882,7 @@ func (m *Model) logKey(s string, ct radio.Contact, sess *admin.Session) (tea.Cmd
 			m.fail("LOG  reading the log needs a USB cable to the node")
 			return nil, true
 		}
-		m.adm.pane, m.adm.paneAt = paneConsole, m.now
-		return m.cli(ct.Key, "log", ""), true
+		return m.cli(ct.Key, "log", "log"), true
 	case "e":
 		m.askConfirm(confirmAction{title: "ERASE THE LOG ON " + strings.ToUpper(ct.Name), warning: "The packet log on the node is deleted.", commands: []string{"log erase"}})
 		return nil, true
@@ -849,6 +916,9 @@ func (m *Model) consoleKey(s string, ct radio.Contact, sess *admin.Session) (tea
 	a := &m.adm
 	switch s {
 	case "esc":
+		if a.console == "" && a.local {
+			return m.setPane(paneStatus), true
+		}
 		if a.console == "" {
 			a.opened = false
 		}
@@ -958,7 +1028,7 @@ func (m *Model) adminPromptKey(s string) tea.Cmd {
 	if s == "esc" {
 		a.prompt = noPrompt
 		if sess.State != admin.LoggedIn && sess.State != admin.LoggingIn {
-			a.opened = false
+			m.closeNode()
 		}
 		return nil
 	}
@@ -1046,6 +1116,10 @@ func (m *Model) adminPromptKey(s string) tea.Cmd {
 		}
 		a.prompt = noPrompt
 		c := a.confirm
+		if c.clear {
+			m.clearHistory(ct)
+			return nil
+		}
 		if c.apply {
 			return m.applySettings(ct, slices.Contains(c.commands, "reboot"))
 		}
@@ -1110,7 +1184,7 @@ func (m *Model) adminAnimating() bool {
 			}
 		}
 	}
-	return m.adm.opened && motion.Running(m.adm.paneAt, wipeDur*2, now)
+	return m.adm.opened && motion.Running(m.adm.paneAt, healthReveal, now)
 }
 
 func lastStatus(sess *admin.Session) time.Time {

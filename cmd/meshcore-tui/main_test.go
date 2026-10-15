@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"go.bug.st/serial/enumerator"
 
 	"meshcore-tui/internal/motion"
+	"meshcore-tui/internal/radio"
 	"meshcore-tui/internal/repeaterserial"
 	"meshcore-tui/internal/sim"
 	"meshcore-tui/internal/ui"
@@ -47,9 +49,11 @@ func TestSetupDefaultsAndFlags(t *testing.T) {
 		{[]string{"--serial", "/dev/cu.usbmodem1101"}, "USB", "/dev/cu.usbmodem1101"},
 		{[]string{"--tcp", "10.0.0.4"}, "TCP", "10.0.0.4"},
 		{[]string{"--demo"}, "SIM", "demo"},
+		{[]string{"--demo", "--repeater"}, "SIM", "demo"},
 	} {
 		opt, err := setup(append(c.args, "--config", cfgPath), noEnv, &errs)
-		if err != nil || opt.Start == nil || opt.Start.Kind != c.kind || opt.Start.Addr != c.addr {
+		repeater := strings.Contains(strings.Join(c.args, " "), "--repeater")
+		if err != nil || opt.Start == nil || opt.Start.Kind != c.kind || opt.Start.Addr != c.addr || (opt.Start.Mode == ui.ModeRepeater) != repeater {
 			t.Errorf("%v → %+v, %v", c.args, opt.Start, err)
 		}
 	}
@@ -150,6 +154,20 @@ func TestDial(t *testing.T) {
 	}
 	if _, ok := dial(uiTarget("SIM", "demo")).(*sim.Sim); !ok {
 		t.Error("SIM should dial the simulator")
+	}
+	if r, ok := dial(ui.Target{Kind: "USB", Addr: "/dev/cu.x", Mode: ui.ModeRepeater}).(*repeaterserial.Repeater); !ok || r.Describe() != "/dev/cu.x · repeater console" {
+		t.Error("USB in repeater mode opens the console directly")
+	}
+	r := dial(ui.Target{Kind: "SIM", Addr: "demo", Mode: ui.ModeRepeater})
+	defer r.Close()
+	r.Start(context.Background())
+	for e := range r.Events() {
+		if ready, ok := e.(radio.Ready); ok {
+			if !ready.Console || ready.Self.Name != "Dundry" {
+				t.Errorf("simulated repeater = %+v", ready)
+			}
+			break
+		}
 	}
 }
 

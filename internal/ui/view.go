@@ -223,6 +223,9 @@ func (m *Model) header() string {
 
 func (m *Model) tabs() string {
 	th := m.th
+	if m.repeaterMode() {
+		return m.repeaterTabs()
+	}
 	var parts []string
 	for i, n := range tabNames {
 		label := fmt.Sprintf("%d %s", i+1, n)
@@ -233,6 +236,24 @@ func (m *Model) tabs() string {
 		} else {
 			parts = append(parts, th.Fg(th.Dim, false).Render(label))
 		}
+	}
+	return " " + strings.Join(parts, th.Fg(th.Line, false).Render(" ╱ "))
+}
+
+// repeaterTabs lists a repeater's screens, which are its admin panes.
+func (m *Model) repeaterTabs() string {
+	th, a := m.th, &m.adm
+	var parts []string
+	for i, n := range paneNames {
+		label := strings.ToUpper(n)
+		if adminPane(i) == a.pane {
+			if m.level.Allows(motion.Decode) && motion.Running(a.paneAt, wipeDur*2, m.now) {
+				label = motion.DecodeText(label, int64(i), motion.Progress(a.paneAt, wipeDur*2, m.now))
+			}
+			parts = append(parts, th.Fg(th.Magenta, true).Underline(true).Render(fmt.Sprintf("%d %s", i+1, label)))
+			continue
+		}
+		parts = append(parts, th.Fg(th.Dim, false).Render(fmt.Sprintf("%d %s", i+1, label)))
 	}
 	return " " + strings.Join(parts, th.Fg(th.Line, false).Render(" ╱ "))
 }
@@ -364,7 +385,9 @@ func (m *Model) footer() []string {
 		status += th.Fg(th.Magenta, true).Render(fmt.Sprintf("● %d unread", m.chats.unread)) + dot
 	}
 	status += th.Fg(th.Muted, false).Render(fmt.Sprintf("%d %s heard", s.packets, noun))
-	if !s.lastRx.IsZero() {
+	if m.repeaterMode() {
+		status = " " + m.repeaterStatus()
+	} else if !s.lastRx.IsZero() {
 		snr := s.currentSNR(now)
 		status += dot + th.Fg(th.Muted, false).Render("last rx "+ago(now.Sub(s.lastRx))+" ") +
 			th.Fg(th.SNR(s.snrTo), true).Render(fmt.Sprintf("SNR %+.2f", snr)) +
@@ -374,7 +397,9 @@ func (m *Model) footer() []string {
 	if m.chat != nil && m.chat.Device() != "" {
 		contacts, channels = len(m.chat.Contacts()), len(m.chat.Channels()) // they change after connecting
 	}
-	status += dot + th.Fg(th.Muted, false).Render(fmt.Sprintf("%d contacts · %d channels", contacts, channels))
+	if !m.repeaterMode() {
+		status += dot + th.Fg(th.Muted, false).Render(fmt.Sprintf("%d contacts · %d channels", contacts, channels))
+	}
 	status += dot + th.Fg(th.Dim, false).Render("theme "+m.themeTo.Name+" · motion "+m.level.String())
 
 	logLine := ""
@@ -382,6 +407,9 @@ func (m *Model) footer() []string {
 		logLine = " " + m.logRow(m.log[n-1], true)
 	}
 	keys := th.Fg(th.Dim, false).Render(" 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit")
+	if m.repeaterMode() {
+		keys = th.Fg(th.Dim, false).Render(" 1-9 screens · ← → next · : command · ? help · T theme · v motion · q quit")
+	}
 	if m.pal.open {
 		keys = m.paletteLine()
 	}
@@ -467,4 +495,33 @@ func col(s string, w int) string {
 		s = ansi.Truncate(s, w, "…")
 	}
 	return s + strings.Repeat(" ", max(w-visibleWidth(s), 0))
+}
+
+// repeaterStatus is the footer's summary of a repeater on USB: its latest poll and the watch.
+func (m *Model) repeaterStatus() string {
+	th := m.th
+	dot := th.Fg(th.Dim, false).Render(" · ")
+	_, sess, ok := m.openNode()
+	if !ok {
+		return th.Fg(th.Muted, false).Render("repeater console")
+	}
+	p, ok := sess.Latest()
+	if !ok {
+		return th.Fg(th.Muted, false).Render("waiting for its first status")
+	}
+	st := statsOf(p)
+	out := th.Fg(th.Muted, false).Render("up "+uptime(st.UpTimeSecs)) + dot +
+		th.Fg(th.Muted, false).Render(fmt.Sprintf("%s received · %s sent", commas(int(st.PacketsRecv)), commas(int(st.PacketsSent)))) + dot +
+		th.Fg(th.Muted, false).Render("polled "+ago(m.now.Sub(p.At))+", every "+every(m.watchEvery()))
+	if n := len(m.historyOf(sess.Key)); n > 0 {
+		out += dot + th.Fg(th.Muted, false).Render(plural(n, "poll")+" kept")
+	}
+	return out
+}
+
+func plural(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return commas(n) + " " + noun + "s"
 }

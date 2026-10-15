@@ -25,9 +25,11 @@ type USB struct {
 func NewUSB(port string) *USB {
 	return &USB{port: port, events: make(chan radio.Event, 256),
 		newCompanion: func() radio.Radio { return radio.NewSerial(port) },
-		open: func() (io.ReadWriteCloser, error) {
-			return serial.Open(port, &serial.Mode{BaudRate: 115200})
-		}}
+		open:         func() (io.ReadWriteCloser, error) { return openPort(port) }}
+}
+
+func openPort(port string) (io.ReadWriteCloser, error) {
+	return serial.Open(port, &serial.Mode{BaudRate: 115200})
 }
 
 func (u *USB) cur() radio.Radio {
