@@ -95,16 +95,37 @@ func (r Route) Km(nodes []Node) float64 {
 
 // Layers are what the map shows.
 type Layers struct {
-	Labels, Roads bool
-	Selected      int // a route to pick out, or -1
+	Labels, Roads, Traffic bool
+	Selected               int // a route to pick out, or -1
+}
+
+// Flow is recent traffic over a link, for the traffic layer. Level runs from 0 to 1, the busiest link.
+type Flow struct {
+	A, B  LatLon
+	Level float64
 }
 
 type Input struct {
 	World  *World
 	Detail *Detail
 	Nodes  []Node
-	Routes []Route
+	Routes []Route // newest first
+	Flows  []Flow
 	Layers Layers
+	Now    time.Time
+}
+
+// Only the newest routes are drawn, each at full strength for a couple of minutes and then fading out;
+// the traffic layer keeps what they carried. A picked route is always drawn.
+const (
+	RoutesShown = 8
+	routeFull   = 2 * time.Minute
+	routeGone   = 10 * time.Minute
+)
+
+// RouteFade is how far a route heard at a time has faded: 0 is full strength, 1 is gone.
+func RouteFade(at, now time.Time) float64 {
+	return min(max(float64(now.Sub(at)-routeFull)/float64(routeGone-routeFull), 0), 1)
 }
 
 type sLine struct {
@@ -140,6 +161,7 @@ const (
 	prioPrimary
 	prioTrunk
 	prioMotorway
+	prioTraffic
 	prioSweep
 	prioRouteDim
 	prioRouteAlt
@@ -244,15 +266,30 @@ func buildScene(in Input, v View, pal Palette) scene {
 		}
 	}
 
+	if l.Traffic {
+		// Saturation is the whole story here, in one hue, so it never reads as the signal colours routes use.
+		for _, f := range in.Flows {
+			col := pal.Land.Lerp(pal.Violet, 0.2+0.8*f.Level)
+			s.lines = append(s.lines, sLine{pts: []LatLon{f.A, f.B}, col: fade(col), prio: prioTraffic, bold: f.Level >= 0.6})
+		}
+	}
+
 	onRoute := map[int]bool{}
 	for i, r := range in.Routes {
 		sel := i == l.Selected
+		age := RouteFade(r.At, in.Now)
+		if !sel && (i >= RoutesShown || age >= 1) {
+			continue
+		}
 		if focus && !sel {
 			pts, _, _ := r.Placed(in.Nodes)
 			if len(pts) > 1 {
-				s.lines = append(s.lines, sLine{pts: pts, col: pal.Unknown.Lerp(pal.Land, 0.4), prio: prioRouteDim})
+				s.lines = append(s.lines, sLine{pts: pts, col: pal.Unknown.Lerp(pal.Land, 0.4+0.5*age), prio: prioRouteDim})
 			}
 			continue
+		}
+		if sel {
+			age = 0
 		}
 		pts, links, uncertain := r.Placed(in.Nodes)
 		for j := 0; j+1 < len(pts); j++ {
@@ -260,6 +297,7 @@ func buildScene(in Input, v View, pal Palette) scene {
 			if links[j].Known {
 				col = pal.SNR(links[j].SNR)
 			}
+			col = col.Lerp(pal.Land, 0.85*age)
 			prio := prioRoute
 			if sel {
 				prio = prioRouteSel

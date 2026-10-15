@@ -3,6 +3,7 @@ package ui
 import (
 	"crypto/sha256"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -57,8 +58,13 @@ func TestMapScreen(t *testing.T) {
 			t.Errorf("map lacks %q:\n%s", want, scr)
 		}
 	}
-	if !h.m.mapAnimating() {
-		t.Error("the radar sweep runs at full motion")
+	h.advance(5 * time.Second)
+	if !h.m.mapSweeping() || !h.m.animating() || h.m.moving() {
+		t.Error("the radar sweep runs at full motion, on its own")
+	}
+	h.m.ticking = false
+	if cmd := h.m.ensureTick(); cmd == nil {
+		t.Error("the sweep keeps the clock going, at its slower rate")
 	}
 
 	// A message on Public comes in by Kelston or Lansdown, then Purdown; a stranger advertises from Bath.
@@ -363,7 +369,7 @@ func TestMapLoadingAndMotionOff(t *testing.T) {
 	h.until("loaded", func() bool { return h.m.mapv.world != nil })
 	h.m.setMotion(motion.Off)
 	h.hear(channelPacket(t, h, "Public", "Bob", "hi", []byte{0x77}), 2)
-	if len(h.m.mapv.anims) != 0 || h.m.mapAnimating() {
+	if len(h.m.mapv.anims) != 0 || h.m.mapAnimating() || h.m.mapSweeping() {
 		t.Error("no animation with motion off")
 	}
 	h.keys("l")
@@ -384,5 +390,75 @@ func TestMapFollowsThemeFade(t *testing.T) {
 	want := fmt.Sprintf("48;2;%d;%d;%d", land.R, land.G, land.B)
 	if !strings.Contains(h.m.View().Content, want) {
 		t.Error("the map ends the fade in the new theme's colours")
+	}
+}
+
+func TestMapTraffic(t *testing.T) {
+	h := newHarness(t)
+	h.openMap()
+	for range 3 {
+		h.hear(channelPacket(t, h, "Public", "Carol", "busy", []byte{0x4D, 0x1E}), 4) // Carol, Clevedon, Cabot Tower, me
+	}
+	h.hear(channelPacket(t, h, "Public", "Bob", "hi", []byte{0x5F, 0x77}), 6) // 5F is Kelston or Lansdown
+	flows, busiest := h.m.mapFlows()
+	if busiest == nil || busiest.count != 3 {
+		t.Fatalf("busiest = %+v", busiest)
+	}
+	shared := 0.0
+	for _, f := range h.m.mapv.flows {
+		if f.aName == "Bob" || f.bName == "Bob" {
+			shared += f.count
+		}
+	}
+	if math.Abs(shared-1) > 1e-9 {
+		t.Errorf("Bob's hop to 5F is shared between its candidates, totalling one: %v", shared)
+	}
+	top := 0.0
+	for _, f := range flows {
+		top = max(top, f.Level)
+	}
+	if top != 1 || len(flows) < 5 {
+		t.Errorf("levels top out at 1: %v, %d flows", top, len(flows))
+	}
+	if !strings.Contains(h.m.mapTitle(), "BUSIEST ") {
+		t.Errorf("title = %s", h.m.mapTitle())
+	}
+
+	// An hour later the counts have halved; a day later they've gone.
+	h.clk.t = h.clk.t.Add(time.Hour)
+	h.m.now = h.clk.t
+	if _, b := h.m.mapFlows(); math.Abs(b.now(h.m.now)-1.5) > 1e-9 {
+		t.Errorf("after an hour = %v", b.now(h.m.now))
+	}
+	before := h.screen()
+	h.keys("t")
+	if h.m.mapv.layers.Traffic || h.screen() == before || strings.Contains(h.m.mapTitle(), "BUSIEST") {
+		t.Error("t hides the traffic layer")
+	}
+	h.keys("t")
+	h.clk.t = h.clk.t.Add(24 * time.Hour)
+	h.m.now = h.clk.t
+	if flows, b := h.m.mapFlows(); len(flows) != 0 || b != nil || len(h.m.mapv.flows) != 0 {
+		t.Error("quiet links are forgotten")
+	}
+}
+
+// The static map is only redrawn when something on it changes; animation frames reuse it. A cache key that
+// shuffled from frame to frame once made every frame redraw the whole map.
+func TestMapRedrawsOnlyOnChange(t *testing.T) {
+	h := newHarness(t)
+	h.openMap()
+	for i, p := range [][]byte{{0x4D, 0x1E}, {0x5F, 0x77}, {0xB2, 0xA3}, {0xE1, 0xB2, 0xA3}, {0x90, 0x77}, {0x08, 0x90, 0x77}} {
+		h.hear(channelPacket(t, h, "Public", []string{"Carol", "Bob", "Alice", "Dan"}[i%4], "x", p), float32(6-i))
+	}
+	h.screen()
+	for range 60 {
+		key := h.m.mapv.cacheKey
+		h.clk.t = h.clk.t.Add(motion.FrameDur)
+		h.m.Update(frameMsg(h.clk.t))
+		h.m.View()
+		if h.m.mapv.cacheKey != key {
+			t.Fatalf("redrawn with nothing changed:\n%s\n%s", key, h.m.mapv.cacheKey)
+		}
 	}
 }

@@ -10,13 +10,13 @@ func Draw(in Input, v View, w, h int, pal Palette) *Canvas {
 	v.W, v.H = w*2, h*4
 	s := buildScene(in, v, pal)
 	c := NewCanvas(w, h, pal.Land)
+	proj := v.projector()
 	project := func(rings [][]LatLon) [][][2]float64 {
 		out := make([][][2]float64, 0, len(rings))
 		for _, r := range rings {
 			ring := make([][2]float64, len(r))
 			for j, p := range r {
-				x, y := v.Project(p)
-				ring[j] = [2]float64{x, y}
+				ring[j][0], ring[j][1] = proj(p)
 			}
 			out = append(out, ring)
 		}
@@ -51,8 +51,8 @@ func Draw(in Input, v View, w, h int, pal Palette) *Canvas {
 			dash = 4
 		}
 		for i := 0; i+1 < len(l.pts); i++ {
-			x0, y0 := v.Project(l.pts[i])
-			x1, y1 := v.Project(l.pts[i+1])
+			x0, y0 := proj(l.pts[i])
+			x1, y1 := proj(l.pts[i+1])
 			c.Line(x0, y0, x1, y1, l.col, l.prio, dash)
 			if l.bold {
 				// Braille can't vary stroke width, so routes get a second parallel line to outweigh roads.

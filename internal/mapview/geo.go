@@ -56,6 +56,20 @@ func (v View) Project(p LatLon) (float64, float64) {
 	return x - cx + float64(v.W)/2, y - cy + float64(v.H)/2
 }
 
+// projector is Project with the view's constants worked out once, for drawing many points.
+func (v View) projector() func(LatLon) (float64, float64) {
+	cx, cy := worldXY(v.Center, v.Zoom)
+	scale := 256 * math.Exp2(v.Zoom)
+	ox, oy := float64(v.W)/2-cx, float64(v.H)/2-cy
+	ref := v.Center.Lon
+	return func(p LatLon) (float64, float64) {
+		lon := near(p.Lon, ref)
+		lat := min(max(p.Lat, -85), 85)
+		s := math.Sin(lat * math.Pi / 180)
+		return (lon+180)/360*scale + ox, (0.5-math.Log((1+s)/(1-s))/(4*math.Pi))*scale + oy
+	}
+}
+
 // At is the point under a dot.
 func (v View) At(x, y float64) LatLon {
 	cx, cy := worldXY(v.Center, v.Zoom)

@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -26,6 +28,9 @@ const (
 	mapAgent   = "meshcore-tui (+https://github.com/verdantran/meshcore-tui)"
 	mapMargin  = 0.12
 	linkMaxAge = 24 * time.Hour // older trace readings no longer colour a link
+
+	trafficHalfLife = time.Hour // a link's traffic count halves every hour, so the layer shows what's busy now
+	trafficFloor    = 0.1       // below this a link has gone quiet and isn't drawn
 )
 
 // mapRoute is a packet's journey as heard. It's resolved against the nodes each time it's drawn, so a
@@ -47,6 +52,18 @@ type linkReading struct {
 	at  time.Time
 }
 
+// flow is the traffic seen crossing one link: a count that decays, as of when it was last added to.
+type flow struct {
+	a, b         mapview.LatLon
+	aName, bName string
+	count        float64
+	at           time.Time
+}
+
+func (f flow) now(t time.Time) float64 {
+	return f.count * math.Exp2(-t.Sub(f.at).Hours()/trafficHalfLife.Hours())
+}
+
 type mapModel struct {
 	world   *mapview.World
 	loading bool
@@ -62,6 +79,7 @@ type mapModel struct {
 	routes  []mapRoute // newest first
 	anims   []mapview.Anim
 	links   map[[2]byte]linkReading // signal between two nodes, by their first key bytes
+	flows   map[string]*flow        // recent traffic over each link, by the two nodes
 	event   string                  // the latest packet, typed out under the map
 	eventAt time.Time
 
@@ -74,11 +92,12 @@ type mapModel struct {
 
 	cacheKey string
 	cache    *mapview.Canvas
+	rows     []string // the cached map as terminal rows; a frame re-renders only the rows animations touch
 }
 
 func newMapModel() mapModel {
-	return mapModel{layers: mapview.Layers{Labels: true, Roads: true, Selected: -1}, links: map[[2]byte]linkReading{},
-		fetchDone: &atomic.Int32{}}
+	return mapModel{layers: mapview.Layers{Labels: true, Roads: true, Traffic: true, Selected: -1}, links: map[[2]byte]linkReading{},
+		flows: map[string]*flow{}, fetchDone: &atomic.Int32{}}
 }
 
 type mapLoadedMsg struct {
@@ -351,6 +370,7 @@ func (m *Model) mapHeard(dec packets.Decoded, snr float32) {
 	mv.event, mv.eventAt = fmt.Sprintf("[%s] ▸ %s  %s %s  SNR %+.1f", m.now.Format("15:04:05"), r.what, from, via, snr), m.now
 
 	resolved, nodes := m.resolve(r, m.mapNodes())
+	m.countTraffic(resolved, nodes)
 	pts, links, _ := resolved.Placed(nodes)
 	m.addAnim(mapview.Anim{Kind: mapview.Comet, Start: m.now, Path: pts, Links: links})
 	if len(resolved.Stops) > 0 && len(resolved.Stops[0].Nodes) > 0 {
@@ -361,6 +381,72 @@ func (m *Model) mapHeard(dec packets.Decoded, snr float32) {
 			m.addAnim(mapview.Anim{Kind: mapview.Ripple, Start: m.now, At: at})
 		}
 	}
+}
+
+func nodeID(n mapview.Node) string {
+	if n.Key != [32]byte{} {
+		return radio.KeyHex(n.Key[:])
+	}
+	return fmt.Sprintf("%s@%.5f,%.5f", n.Name, n.Pos.Lat, n.Pos.Lon)
+}
+
+// countTraffic adds a heard route's hops to the traffic layer. A hop that could be one of several repeaters
+// is shared between them by how likely each is, rather than all credited to a guess.
+func (m *Model) countTraffic(r mapview.Route, nodes []mapview.Node) {
+	mv := &m.mapv
+	for i := 0; i+1 < len(r.Stops); i++ {
+		from, to := r.Stops[i], r.Stops[i+1]
+		for ka, a := range from.Nodes {
+			for kb, b := range to.Nodes {
+				na, nb := nodes[a], nodes[b]
+				ia, ib := nodeID(na), nodeID(nb)
+				if ib < ia {
+					na, nb, ia, ib = nb, na, ib, ia
+				}
+				f, ok := mv.flows[ia+"|"+ib]
+				if !ok {
+					f = &flow{a: na.Pos, b: nb.Pos, aName: na.Name, bName: nb.Name}
+					mv.flows[ia+"|"+ib] = f
+				}
+				f.count, f.at = f.now(m.now)+from.Weights[ka]*to.Weights[kb], m.now
+			}
+		}
+	}
+}
+
+// mapFlows are the links busy enough to draw, scaled so the busiest is 1. The scale is logarithmic, so one
+// heavy backbone link doesn't wash out the rest. It also names the busiest, and forgets links long quiet.
+func (m *Model) mapFlows() ([]mapview.Flow, *flow) {
+	mv := &m.mapv
+	peak := 0.0
+	var busiest *flow
+	for k, f := range mv.flows {
+		v := f.now(m.now)
+		if v < trafficFloor/10 {
+			delete(mv.flows, k)
+			continue
+		}
+		if v > peak {
+			peak, busiest = v, f
+		}
+	}
+	var out []mapview.Flow
+	for _, f := range mv.flows {
+		if v := f.now(m.now); v >= trafficFloor {
+			level := math.Log1p(v) / math.Log1p(peak)
+			out = append(out, mapview.Flow{A: f.a, B: f.b, Level: math.Round(level*20) / 20}) // steps, so the map isn't redrawn for every tiny fade
+		}
+	}
+	// Busiest drawn last, on top. Ties are broken by position so the order, and the map's cache key with it,
+	// doesn't shuffle from frame to frame as Go's map order does.
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.Level != b.Level {
+			return a.Level < b.Level
+		}
+		return fmt.Sprint(a.A, a.B) < fmt.Sprint(b.A, b.B)
+	})
+	return out, busiest
 }
 
 func (m *Model) addAnim(a mapview.Anim) {
@@ -431,7 +517,7 @@ func (m *Model) mapKey(s string) (tea.Cmd, bool) {
 		return nil, false
 	}
 	v := mv.view
-	if s != "m" && s != "]" && s != "[" && s != "L" && s != "r" && s != "d" && s != "esc" {
+	if s != "m" && s != "]" && s != "[" && s != "L" && s != "r" && s != "t" && s != "d" && s != "esc" {
 		mv.auto = false
 	}
 	switch s {
@@ -460,6 +546,8 @@ func (m *Model) mapKey(s string) (tea.Cmd, bool) {
 		mv.layers.Labels = !mv.layers.Labels
 	case "r":
 		mv.layers.Roads = !mv.layers.Roads
+	case "t":
+		mv.layers.Traffic = !mv.layers.Traffic
 	case "d":
 		return m.fetchDetail(false), true
 	case "esc":
@@ -498,9 +586,6 @@ func (m *Model) mapAnimating() bool {
 	if mv.fetching || motion.Running(mv.movedAt, mapGlide, m.now) && m.level.Allows(motion.Wipe) {
 		return true
 	}
-	if m.level == motion.Full && !(mapview.LatLon{Lat: m.ready.Self.Lat, Lon: m.ready.Self.Lon}).Unplaced() {
-		return true // the radar sweep
-	}
 	if motion.Running(mv.eventAt, motion.TypeDur(mv.event, logCPS), m.now) && m.level.Allows(motion.Typing) {
 		return true
 	}
@@ -512,12 +597,21 @@ func (m *Model) mapAnimating() bool {
 	return false
 }
 
+// mapSweeping reports the radar sweep turning, which runs whenever the map shows at full motion.
+func (m *Model) mapSweeping() bool {
+	return m.visible(2) && m.mapv.world != nil && m.level == motion.Full && m.phase == phaseMain &&
+		!(mapview.LatLon{Lat: m.ready.Self.Lat, Lon: m.ready.Self.Lon}).Unplaced()
+}
+
 func (m *Model) mapTitle() string {
 	mv := &m.mapv
 	placed := len(m.placedPoints())
 	t := fmt.Sprintf("MAP · %s PLACED · %s", strings.ToUpper(plural(placed, "node")), strings.ToUpper(plural(len(mv.routes), "route")))
 	if mv.layers.Selected >= 0 && mv.layers.Selected < len(mv.routes) {
 		t += fmt.Sprintf(" · ROUTE %d OF %d", mv.layers.Selected+1, len(mv.routes))
+	}
+	if _, busiest := m.mapFlows(); busiest != nil && mv.layers.Traffic {
+		t += " · BUSIEST " + strings.ToUpper(busiest.aName+"–"+busiest.bName)
 	}
 	if mv.fetching {
 		t += " · DOWNLOADING"
@@ -554,26 +648,33 @@ func (m *Model) renderMap(w, h int) []string {
 		rr, nodes = m.resolve(r, nodes)
 		routes = append(routes, rr)
 	}
+	flows, _ := m.mapFlows()
 	pal := mapview.PaletteFor(th)
 	// The theme's colours, not its name: mid-crossfade the blend already carries the new theme's name.
 	key := fmt.Sprintf("%.6f|%.6f|%.4f|%d|%d|%v|%v|%p|%d|%s", v.Center.Lat, v.Center.Lon, v.Zoom, w, mapH, th, mv.layers,
-		mv.detail, len(nodes), routeKey(routes))
+		mv.detail, len(nodes), routeKey(routes, m.now)) + fmt.Sprint(flows)
 	if key != mv.cacheKey || mv.cache == nil {
-		mv.cache = mapview.Draw(mapview.Input{World: mv.world, Detail: mv.detail, Nodes: nodes, Routes: routes, Layers: mv.layers}, v, w, mapH, pal)
-		mv.cacheKey = key
+		mv.cache = mapview.Draw(mapview.Input{World: mv.world, Detail: mv.detail, Nodes: nodes, Routes: routes, Flows: flows,
+			Layers: mv.layers, Now: m.now}, v, w, mapH, pal)
+		credit := "Natural Earth"
+		if mv.detail != nil && v.Zoom >= 7 && mv.detail.Covers(v.Center) {
+			credit = mapview.DetailCredit
+		}
+		mapview.Credit(mv.cache, credit, pal)
+		mv.rows, mv.cacheKey = mv.cache.Render(!th.Mono), key
 	}
 	c := mv.cache.Clone()
 	self := mapview.LatLon{Lat: m.ready.Self.Lat, Lon: m.ready.Self.Lon}
 	mapview.DrawAnims(c, v, mv.anims, self, m.level, m.now, pal)
-	credit := "Natural Earth"
-	if mv.detail != nil && v.Zoom >= 7 && mv.detail.Covers(v.Center) {
-		credit = mapview.DetailCredit
+	out := append([]string(nil), mv.rows...)
+	for y := range out {
+		if c.Dirty(y) {
+			out[y] = c.RenderRow(y, !th.Mono)
+		}
 	}
-	mapview.Credit(c, credit, pal)
-	out := c.Render(!th.Mono)
 
 	out = append(out, clip(m.mapInfo(routes, nodes), w), clip(th.Fg(th.Dim, false).Render(
-		"←↑↓→ hjkl move · + - zoom · m whole mesh · [ ] routes · d download street detail · L labels · r roads"), w))
+		"←↑↓→ hjkl move · + - zoom · m whole mesh · [ ] routes · t traffic · d download street detail · L labels · r roads"), w))
 	return out
 }
 
@@ -583,10 +684,11 @@ func downloadSize(tiles int) string {
 	return fmt.Sprintf("%s, up to about %.1f MB", plural(tiles, "map tile"), max(float64(tiles)*0.17, 0.1))
 }
 
-func routeKey(routes []mapview.Route) string {
+// routeKey changes when the routes drawn do, including each step of their fading.
+func routeKey(routes []mapview.Route, now time.Time) string {
 	var b strings.Builder
 	for _, r := range routes {
-		b.WriteString(r.ID)
+		fmt.Fprintf(&b, "%s@%.1f", r.ID, mapview.RouteFade(r.At, now))
 		for _, l := range r.Links {
 			fmt.Fprintf(&b, ",%v%.0f", l.Known, l.SNR)
 		}

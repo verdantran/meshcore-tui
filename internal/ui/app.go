@@ -11,6 +11,7 @@ import (
 	"meshcore-tui/internal/admin"
 	"meshcore-tui/internal/chat"
 	"meshcore-tui/internal/config"
+	"meshcore-tui/internal/mapview"
 	"meshcore-tui/internal/motion"
 	"meshcore-tui/internal/radio"
 	"meshcore-tui/internal/store"
@@ -279,10 +280,19 @@ func (m *Model) ensureTick() tea.Cmd {
 		return nil
 	}
 	m.ticking = true
-	return tea.Tick(motion.FrameDur, func(t time.Time) tea.Msg { return frameMsg(t) })
+	every := motion.FrameDur
+	if !m.moving() {
+		every = sweepFrame // only the map's radar sweep is turning, and it's slow enough not to need 30 a second
+	}
+	return tea.Tick(every, func(t time.Time) tea.Msg { return frameMsg(t) })
 }
 
-func (m *Model) animating() bool {
+const sweepFrame = time.Second / 12
+
+func (m *Model) animating() bool { return m.moving() || m.mapSweeping() }
+
+// moving reports animation that needs the full frame rate.
+func (m *Model) moving() bool {
 	if m.level == motion.Off {
 		return false
 	}
@@ -722,7 +732,9 @@ func (m *Model) screenKeys() []string {
 		return []string{key("←↑↓→ h j k l", "move the map"), key("+ -", "zoom in and out"), key("m", "back to your whole mesh"),
 			key("[ ]", "pick out a route, newest first; esc shows them all again"),
 			key("d", "download street detail (roads, rivers, towns) for your mesh's area from OpenFreeMap, or more of it; esc stops"),
-			key("L r", "town and node names · main roads"), key("M", "from any screen, open the map; on Packets, on that packet's route"),
+			key("L r", "town and node names · main roads"),
+			key("t", "the traffic layer: links get more saturated the more packets crossed them lately (halving every hour)"),
+			key("", fmt.Sprintf("the newest %d routes are drawn, fading out over %s; [ ] picks any of the last %d", mapview.RoutesShown, "ten minutes", mapRoutes)), key("M", "from any screen, open the map; on Packets, on that packet's route"),
 			key(":map update", "download the street detail again · :map remove deletes it"),
 			key("", "only adverts and messages on open channels travel the map, as on the Packets screen"),
 			key("", "a hop's colour is its signal where known: measured for the last hop, from traces and neighbour lists for the rest"), ""}

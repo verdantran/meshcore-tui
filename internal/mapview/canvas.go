@@ -1,10 +1,10 @@
 package mapview
 
 import (
-	"fmt"
 	"math"
 	"sort"
-	"strings"
+	"strconv"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/x/ansi"
 
@@ -26,26 +26,33 @@ type cell struct {
 type Canvas struct {
 	W, H  int
 	cells []cell
+	dirty []bool // rows changed since the canvas was made or cloned, so a copy only re-renders those
 }
 
 func NewCanvas(w, h int, bg theme.RGB) *Canvas {
-	c := &Canvas{W: w, H: h, cells: make([]cell, w*h)}
+	c := &Canvas{W: w, H: h, cells: make([]cell, w*h), dirty: make([]bool, h)}
 	for i := range c.cells {
 		c.cells[i].bg = bg
 	}
 	return c
 }
 
+// Clone copies the canvas with every row clean, so drawing on the copy marks just the rows it touches.
 func (c *Canvas) Clone() *Canvas {
 	d := *c
 	d.cells = append([]cell(nil), c.cells...)
+	d.dirty = make([]bool, c.H)
 	return &d
 }
+
+// Dirty reports whether a row has changed since the canvas was cloned.
+func (c *Canvas) Dirty(y int) bool { return c.dirty[y] }
 
 func (c *Canvas) at(cx, cy int) *cell {
 	if cx < 0 || cy < 0 || cx >= c.W || cy >= c.H {
 		return nil
 	}
+	c.dirty[cy] = true
 	return &c.cells[cy*c.W+cx]
 }
 
@@ -134,41 +141,85 @@ func (c *Canvas) Free(cx, cy, n, limit int) bool {
 	return true
 }
 
-// evenOddMask marks the dots inside rings, scanning each dot row. The base map's land has no overlaps,
-// so even-odd filling is right for it and handles its lakes.
-func (c *Canvas) evenOddMask(rings [][][2]float64) []bool {
+// edge is one side of a ring, for scanline filling: the rows it spans, where it crosses each, and which way it runs.
+type edge struct {
+	y0, y1 int // dot rows whose centres it crosses, inclusive
+	x, dx  float64
+	dir    int
+}
+
+// edgeTable buckets ring edges by the first dot row they cross, so each row only looks at the edges that
+// reach it. Scanning every edge on every row was most of the cost of drawing the map.
+func (c *Canvas) edgeTable(rings [][][2]float64, signs []int) [][]edge {
+	rows := c.H * 4
+	table := make([][]edge, rows)
+	for r, ring := range rings {
+		for i := range ring {
+			a, b := ring[i], ring[(i+1)%len(ring)]
+			dir := signs[r]
+			if a[1] > b[1] {
+				a, b, dir = b, a, -dir
+			}
+			// Rows whose centre y+0.5 lies in [a.y, b.y).
+			y0 := max(int(math.Ceil(a[1]-0.5)), 0)
+			y1 := min(int(math.Ceil(b[1]-0.5))-1, rows-1)
+			if y0 > y1 {
+				continue
+			}
+			dx := (b[0] - a[0]) / (b[1] - a[1])
+			table[y0] = append(table[y0], edge{y0, y1, a[0] + (float64(y0)+0.5-a[1])*dx, dx, dir})
+		}
+	}
+	return table
+}
+
+type crossing struct {
+	x float64
+	d int
+}
+
+// scan walks the rows, keeping the edges that cross each, and fills between crossings where inside says so.
+func (c *Canvas) scan(table [][]edge, inside func(wind int) bool) []bool {
 	w := c.W * 2
 	mask := make([]bool, w*c.H*4)
-	for y := 0; y < c.H*4; y++ {
-		fy := float64(y) + 0.5
-		var xs []float64
-		for _, ring := range rings {
-			for i := range ring {
-				a, b := ring[i], ring[(i+1)%len(ring)]
-				if (a[1] <= fy) != (b[1] <= fy) {
-					xs = append(xs, a[0]+(fy-a[1])/(b[1]-a[1])*(b[0]-a[0]))
-				}
+	var active []edge
+	var xs []crossing
+	for y := range table {
+		active = append(active, table[y]...)
+		xs = xs[:0]
+		live := active[:0]
+		for _, e := range active {
+			if e.y1 < y {
+				continue
 			}
+			xs = append(xs, crossing{e.x + float64(y-e.y0)*e.dx, e.dir})
+			live = append(live, e)
 		}
-		sort.Float64s(xs)
-		for i := 0; i+1 < len(xs); i += 2 {
-			fill(mask[y*w:(y+1)*w], xs[i], xs[i+1])
+		active = live
+		sort.Slice(xs, func(i, j int) bool { return xs[i].x < xs[j].x })
+		wind := 0
+		for i := 0; i+1 < len(xs); i++ {
+			if wind += xs[i].d; inside(wind) {
+				fill(mask[y*w:(y+1)*w], xs[i].x, xs[i+1].x)
+			}
 		}
 	}
 	return mask
 }
 
+// evenOddMask marks the dots inside rings. The base map's land has no overlaps, so even-odd filling is
+// right for it and handles its lakes.
+func (c *Canvas) evenOddMask(rings [][][2]float64) []bool {
+	signs := make([]int, len(rings))
+	for i := range signs {
+		signs[i] = 1
+	}
+	return c.scan(c.edgeTable(rings, signs), func(wind int) bool { return wind%2 != 0 })
+}
+
 // unionMask fills by nonzero winding: adds are unioned however they overlap, and cuts are taken out.
 // Tiles' water overlaps at their edges, which even-odd filling would count as land.
 func (c *Canvas) unionMask(adds, cuts [][][2]float64) []bool {
-	type crossing struct {
-		x float64
-		d int
-	}
-	type ring struct {
-		pts  [][2]float64
-		sign int
-	}
 	orient := func(r [][2]float64) int {
 		a := 0.0
 		for i := range r {
@@ -180,39 +231,15 @@ func (c *Canvas) unionMask(adds, cuts [][][2]float64) []bool {
 		}
 		return 1
 	}
-	var rings []ring
-	for _, r := range adds {
-		rings = append(rings, ring{r, orient(r)})
-	}
-	for _, r := range cuts {
-		rings = append(rings, ring{r, -orient(r)})
-	}
-	w := c.W * 2
-	mask := make([]bool, w*c.H*4)
-	for y := 0; y < c.H*4; y++ {
-		fy := float64(y) + 0.5
-		var xs []crossing
-		for _, r := range rings {
-			for i := range r.pts {
-				a, b := r.pts[i], r.pts[(i+1)%len(r.pts)]
-				if (a[1] <= fy) != (b[1] <= fy) {
-					d := r.sign
-					if a[1] > b[1] {
-						d = -d
-					}
-					xs = append(xs, crossing{a[0] + (fy-a[1])/(b[1]-a[1])*(b[0]-a[0]), d})
-				}
-			}
-		}
-		sort.Slice(xs, func(i, j int) bool { return xs[i].x < xs[j].x })
-		wind := 0
-		for i := 0; i+1 < len(xs); i++ {
-			if wind += xs[i].d; wind != 0 {
-				fill(mask[y*w:(y+1)*w], xs[i].x, xs[i+1].x)
-			}
+	rings := append(append([][][2]float64(nil), adds...), cuts...)
+	signs := make([]int, len(rings))
+	for i, r := range rings {
+		signs[i] = orient(r)
+		if i >= len(adds) {
+			signs[i] = -signs[i]
 		}
 	}
-	return mask
+	return c.scan(c.edgeTable(rings, signs), func(wind int) bool { return wind != 0 })
 }
 
 func fill(row []bool, from, to float64) {
@@ -239,42 +266,62 @@ func (c *Canvas) setWater(water []bool, land, sea theme.RGB) {
 	}
 }
 
-func sgr(fg, bg theme.RGB, bold bool) string {
-	b := "22"
-	if bold {
-		b = "1"
-	}
-	return fmt.Sprintf("\x1b[%s;38;2;%d;%d;%d;48;2;%d;%d;%dm", b, fg.R, fg.G, fg.B, bg.R, bg.G, bg.B)
+func appendColour(b []byte, layer int, c theme.RGB) []byte {
+	b = append(b, "\x1b["...)
+	b = strconv.AppendInt(b, int64(layer), 10)
+	b = append(b, ";2;"...)
+	b = strconv.AppendInt(b, int64(c.R), 10)
+	b = append(b, ';')
+	b = strconv.AppendInt(b, int64(c.G), 10)
+	b = append(b, ';')
+	b = strconv.AppendInt(b, int64(c.B), 10)
+	return append(b, 'm')
 }
 
-// Render emits the canvas as terminal rows. Without colour (the mono theme, NO_COLOR) only glyphs are drawn.
-func (c *Canvas) Render(colour bool) []string {
-	rows := make([]string, c.H)
-	for y := 0; y < c.H; y++ {
-		var sb strings.Builder
-		last := ""
-		for x := 0; x < c.W; x++ {
-			ce := c.cells[y*c.W+x]
-			if colour {
-				if s := sgr(ce.fg, ce.bg, ce.bold); s != last {
-					sb.WriteString(s)
-					last = s
-				}
-			}
-			switch {
-			case ce.cont:
-			case ce.text != 0:
-				sb.WriteRune(ce.text)
-			case ce.mask != 0:
-				sb.WriteRune(rune(0x2800 + int(ce.mask)))
-			default:
-				sb.WriteByte(' ')
-			}
+// RenderRow emits one row for the terminal. Colours are only sent when they change, and a blank cell only
+// needs its background; this keeps a full-screen map to a fraction of the bytes, which the terminal
+// program has to read every frame. Without colour (the mono theme, NO_COLOR) only glyphs are drawn.
+func (c *Canvas) RenderRow(y int, colour bool) string {
+	b := make([]byte, 0, c.W*4)
+	var fg, bg theme.RGB
+	hasFg, hasBg, bold := false, false, false
+	for x := 0; x < c.W; x++ {
+		ce := c.cells[y*c.W+x]
+		if ce.cont {
+			continue
+		}
+		glyph := ' '
+		switch {
+		case ce.text != 0:
+			glyph = ce.text
+		case ce.mask != 0:
+			glyph = rune(0x2800 + int(ce.mask))
 		}
 		if colour {
-			sb.WriteString("\x1b[0m")
+			if !hasBg || ce.bg != bg {
+				b, bg, hasBg = appendColour(b, 48, ce.bg), ce.bg, true
+			}
+			if glyph != ' ' {
+				if !hasFg || ce.fg != fg {
+					b, fg, hasFg = appendColour(b, 38, ce.fg), ce.fg, true
+				}
+				if ce.bold != bold {
+					b, bold = append(b, map[bool]string{true: "\x1b[1m", false: "\x1b[22m"}[ce.bold]...), ce.bold
+				}
+			}
 		}
-		rows[y] = sb.String()
+		b = utf8.AppendRune(b, glyph)
+	}
+	if colour {
+		b = append(b, "\x1b[0m"...)
+	}
+	return string(b)
+}
+
+func (c *Canvas) Render(colour bool) []string {
+	rows := make([]string, c.H)
+	for y := range rows {
+		rows[y] = c.RenderRow(y, colour)
 	}
 	return rows
 }

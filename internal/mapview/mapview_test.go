@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -369,5 +370,143 @@ func TestCanvasEdges(t *testing.T) {
 	}
 	if luminance(theme.Paper.Bg) < 0.5 || PaletteFor(theme.Paper).Sea == PaletteFor(theme.Neon).Sea {
 		t.Error("light themes get their own sea")
+	}
+}
+
+func TestRoutesFadeAndTraffic(t *testing.T) {
+	nodes := bristol()
+	now := time.Now()
+	if RouteFade(now.Add(-time.Minute), now) != 0 || RouteFade(now.Add(-6*time.Minute), now) != 0.5 || RouteFade(now.Add(-time.Hour), now) != 1 {
+		t.Error("fade")
+	}
+	var routes []Route
+	for i := range RoutesShown + 2 {
+		routes = append(routes, Route{At: now.Add(-time.Duration(i) * time.Second), Stops: Stops(5, [][]byte{{0x77}}, nodes, 0), Links: []Link{{}, {Known: true}}})
+	}
+	routes = append(routes, Route{At: now.Add(-time.Hour), Stops: Stops(6, nil, nodes, 0), Links: []Link{{}}})
+	in := Input{World: LoadWorld(), Nodes: nodes, Routes: routes, Now: now, Layers: Layers{Selected: -1}}
+	v := View{W: 200, H: 120, Center: LatLon{51.44, -2.6}, Zoom: 10}
+	count := func(in Input) (n int) {
+		for _, l := range buildScene(in, v, PaletteFor(theme.Neon)).lines {
+			if l.prio == prioRoute || l.prio == prioRouteSel {
+				n++
+			}
+		}
+		return n
+	}
+	if got := count(in); got != RoutesShown*2 {
+		t.Errorf("only the newest routes are drawn: %d segments", got)
+	}
+	in.Layers.Selected = len(routes) - 1
+	if count(in) != 1 {
+		t.Error("a picked route is drawn however old")
+	}
+	in.Layers = Layers{Selected: -1, Traffic: true}
+	in.Routes = nil
+	in.Flows = []Flow{{A: nodes[0].Pos, B: nodes[1].Pos, Level: 1}, {A: nodes[1].Pos, B: nodes[2].Pos, Level: 0.2}}
+	var traffic []sLine
+	for _, l := range buildScene(in, v, PaletteFor(theme.Neon)).lines {
+		if l.prio == prioTraffic {
+			traffic = append(traffic, l)
+		}
+	}
+	if len(traffic) != 2 || !traffic[0].bold || traffic[1].bold || traffic[0].col == traffic[1].col {
+		t.Errorf("busier links are bolder and more saturated: %+v", traffic)
+	}
+	in.Layers.Traffic = false
+	for _, l := range buildScene(in, v, PaletteFor(theme.Neon)).lines {
+		if l.prio == prioTraffic {
+			t.Fatal("hidden")
+		}
+	}
+}
+
+// referenceMask is the plain way to fill: every edge checked on every row. The edge table must agree with it.
+func referenceMask(c *Canvas, rings [][][2]float64, inside func(int) bool, signs []int) []bool {
+	w := c.W * 2
+	mask := make([]bool, w*c.H*4)
+	for y := 0; y < c.H*4; y++ {
+		fy := float64(y) + 0.5
+		var xs []crossing
+		for r, ring := range rings {
+			for i := range ring {
+				a, b := ring[i], ring[(i+1)%len(ring)]
+				if (a[1] <= fy) != (b[1] <= fy) {
+					d := signs[r]
+					if a[1] > b[1] {
+						d = -d
+					}
+					xs = append(xs, crossing{a[0] + (fy-a[1])/(b[1]-a[1])*(b[0]-a[0]), d})
+				}
+			}
+		}
+		sort.Slice(xs, func(i, j int) bool { return xs[i].x < xs[j].x })
+		wind := 0
+		for i := 0; i+1 < len(xs); i++ {
+			if wind += xs[i].d; inside(wind) {
+				fill(mask[y*w:(y+1)*w], xs[i].x, xs[i+1].x)
+			}
+		}
+	}
+	return mask
+}
+
+func TestFillMatchesReference(t *testing.T) {
+	world := LoadWorld()
+	for _, v := range []View{
+		{Center: LatLon{51.44, -2.6}, Zoom: 9, W: 240, H: 160},
+		{Center: LatLon{54, -3}, Zoom: 5, W: 240, H: 160},
+		{Center: LatLon{-16.7, 179.9}, Zoom: 8, W: 240, H: 160},
+		{Center: LatLon{60.39, 5.32}, Zoom: 8, W: 240, H: 160},
+	} {
+		c := NewCanvas(v.W/2, v.H/4, theme.RGB{})
+		var rings [][][2]float64
+		view := v.Bounds().Grow(0.1)
+		for i, r := range world.Land {
+			if world.landBox[i].Overlaps(view) {
+				ring := make([][2]float64, len(r))
+				for j, p := range r {
+					ring[j][0], ring[j][1] = v.Project(LatLon{p[1], p[0]})
+				}
+				rings = append(rings, ring)
+			}
+		}
+		ones := make([]int, len(rings))
+		for i := range ones {
+			ones[i] = 1
+		}
+		got, want := c.evenOddMask(rings), referenceMask(c, rings, func(w int) bool { return w%2 != 0 }, ones)
+		diff := 0
+		for i := range got {
+			if got[i] != want[i] {
+				diff++
+			}
+		}
+		if diff > 0 {
+			t.Errorf("%+v: %d dots differ", v.Center, diff)
+		}
+	}
+}
+
+func TestProjectorMatchesProject(t *testing.T) {
+	v := View{Center: LatLon{-16.7, 179.9}, Zoom: 8.5, W: 300, H: 200}
+	p := v.projector()
+	for _, q := range []LatLon{{-16.6, -179.8}, {51, -2}, {89, 10}, {-16.7, 179.9}} {
+		x0, y0 := v.Project(q)
+		x1, y1 := p(q)
+		if math.Abs(x0-x1) > 1e-6 || math.Abs(y0-y1) > 1e-6 {
+			t.Errorf("%v: %v,%v vs %v,%v", q, x0, y0, x1, y1)
+		}
+	}
+}
+
+// BenchmarkDraw is a full redraw, as during a pan or zoom: run with go test -bench Draw ./internal/mapview.
+func BenchmarkDraw(b *testing.B) {
+	nodes := bristol()
+	in := Input{World: LoadWorld(), Nodes: nodes, Layers: Layers{Labels: true, Roads: true, Traffic: true, Selected: -1}, Now: time.Now()}
+	v := View{Center: LatLon{51.44, -2.6}, Zoom: 9, W: 392, H: 224}
+	pal := PaletteFor(theme.Neon)
+	for b.Loop() {
+		Draw(in, v, 196, 56, pal).Render(true)
 	}
 }
