@@ -65,13 +65,16 @@ func newInspector() inspectorModel {
 }
 
 // shown reports whether a packet belongs on the Packets screen: an advert, which is broadcast to
-// everyone, or a message on Public or a hashtag channel we've joined, which anyone may read.
-// Everything else stays off it; see SPEC §10.
+// everyone, or a message or a message's signature on Public or a hashtag channel we've joined, which
+// anyone may read. Everything else stays off it; see SPEC §10.
 func (m *Model) shown(d packets.Decoded) bool {
 	if d.Err == nil && d.Type == "ADVERT" {
 		return true
 	}
-	if d.Err != nil || d.Type != "GRP_TXT" || !d.Decrypted || m.chat == nil {
+	// A signature on an open channel is as public as the message it signs, so it's shown too; other
+	// datagrams aren't.
+	signature := d.Type == "GRP_DATA" && d.Signature != nil
+	if d.Err != nil || d.Type != "GRP_TXT" && !signature || !d.Decrypted || m.chat == nil {
 		return false
 	}
 	for _, ch := range m.chat.Channels() {
@@ -371,6 +374,9 @@ func (m *Model) packetTable(list []*packetRow, w, rows int) []string {
 			path = "—"
 		}
 		summary := r.dec.Summary
+		if r.dec.Signature != nil {
+			summary = m.signatureSummary(r.dec)
+		}
 		if compact {
 			at, typ, snr, n := r.first.Local().Format("15:04")+" ", fmt.Sprintf("%-8s ", truncate(r.dec.Type, 8)), fmt.Sprintf("%+6.2f ", c.snr), fmt.Sprintf("%2s  ", times)
 			if i == in.sel {

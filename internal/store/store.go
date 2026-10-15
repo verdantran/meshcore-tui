@@ -19,7 +19,9 @@ import (
 // or "dm?:<prefix hex>" for a sender we don't have as a contact.
 type Convo string
 
-func ChannelConvo(idx int) Convo      { return Convo(fmt.Sprintf("ch:%d", idx)) }
+func ChannelConvo(idx int) Convo { return Convo(fmt.Sprintf("ch:%d", idx)) }
+
+func (c Convo) IsChannel() bool       { return strings.HasPrefix(string(c), "ch:") }
 func ContactConvo(key [32]byte) Convo { return Convo("dm:" + radio.KeyHex(key[:])) }
 func UnknownConvo(p [6]byte) Convo    { return Convo("dm?:" + radio.KeyHex(p[:])) }
 
@@ -53,7 +55,20 @@ type Message struct {
 	Repeats  int    // copies of an outgoing channel message heard coming back from repeaters
 	Path     []byte // the repeaters a received message came through, from its packet; empty if not known
 	PathHash int    // bytes per repeater in Path
+	Sig      Sig    // a channel message's signature, when one came with it
+	SigKey   []byte // the signer's public key; for a key we don't know, just the 8 bytes the signature named
 }
+
+// Sig is what a channel message's signature showed. Whether a valid one is the sender's pinned key is
+// worked out when it's shown, so pinning a key later changes how earlier messages read.
+type Sig int
+
+const (
+	Unsigned   Sig = iota
+	SigValid       // verified with the key in SigKey
+	SigBad         // a signature came, but it doesn't match the message
+	SigUnknown     // signed by a key we've never heard an advert from, so it can't be checked
+)
 
 type Summary struct {
 	Convo  Convo
@@ -76,11 +91,14 @@ CREATE TABLE IF NOT EXISTS messages (
 	sender TEXT NOT NULL, text TEXT NOT NULL, sent_at INTEGER NOT NULL, recv_at INTEGER NOT NULL,
 	hops INTEGER NOT NULL, snr REAL NOT NULL, has_snr INTEGER NOT NULL, signed INTEGER NOT NULL,
 	state INTEGER NOT NULL, ack INTEGER NOT NULL, attempts INTEGER NOT NULL, rtt_ms INTEGER NOT NULL, flood INTEGER NOT NULL,
-	repeats INTEGER NOT NULL DEFAULT 0, path BLOB, path_hash INTEGER NOT NULL DEFAULT 0);
+	repeats INTEGER NOT NULL DEFAULT 0, path BLOB, path_hash INTEGER NOT NULL DEFAULT 0,
+	sig INTEGER NOT NULL DEFAULT 0, sig_key BLOB);
 CREATE INDEX IF NOT EXISTS messages_convo ON messages (device, convo, id);
 CREATE TABLE IF NOT EXISTS reads (
 	device TEXT NOT NULL, convo TEXT NOT NULL, last_read INTEGER NOT NULL,
 	PRIMARY KEY (device, convo));
+CREATE TABLE IF NOT EXISTS pins (
+	name TEXT PRIMARY KEY, key BLOB NOT NULL, at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS node_status (
 	node TEXT NOT NULL, at INTEGER NOT NULL, room INTEGER NOT NULL, data BLOB NOT NULL);
 CREATE INDEX IF NOT EXISTS node_status_at ON node_status (node, at);
@@ -117,6 +135,8 @@ func migrate(db *sql.DB) error {
 		{"repeats", "INTEGER NOT NULL DEFAULT 0"},
 		{"path", "BLOB"},
 		{"path_hash", "INTEGER NOT NULL DEFAULT 0"},
+		{"sig", "INTEGER NOT NULL DEFAULT 0"},
+		{"sig_key", "BLOB"},
 	} {
 		var n int
 		if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name = ?`, col.name).Scan(&n); err != nil {
@@ -247,6 +267,57 @@ func (s *Store) UpdateDelivery(m Message) error {
 	return err
 }
 
+// SetSig records what a message's signature showed.
+func (s *Store) SetSig(id int64, sig Sig, key []byte) error {
+	_, err := s.db.Exec(`UPDATE messages SET sig = ?, sig_key = ? WHERE id = ?`, int(sig), key, id)
+	return err
+}
+
+// AwaitingSig lists a channel conversation's received messages sent at a time that have no signature yet,
+// for pairing with a signature that's arrived: the two carry the same timestamp.
+func (s *Store) AwaitingSig(device string, c Convo, sentAt time.Time) ([]Message, error) {
+	return s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? AND convo = ? AND out = 0 AND sig = 0 AND sent_at = ? ORDER BY id`,
+		device, string(c), sentAt.UnixMilli())
+}
+
+// Pin is the key a display name is trusted to sign with.
+type Pin struct {
+	Key [32]byte
+	At  time.Time
+}
+
+func (s *Store) Pins() (map[string]Pin, error) {
+	rows, err := s.db.Query(`SELECT name, key, at FROM pins`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]Pin{}
+	for rows.Next() {
+		var name string
+		var key []byte
+		var at int64
+		if err := rows.Scan(&name, &key, &at); err != nil {
+			return nil, err
+		}
+		var p Pin
+		copy(p.Key[:], key)
+		p.At = time.UnixMilli(at)
+		out[name] = p
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) SetPin(name string, key [32]byte, at time.Time) error {
+	_, err := s.db.Exec(`INSERT OR REPLACE INTO pins VALUES (?, ?, ?)`, name, key[:], at.UnixMilli())
+	return err
+}
+
+func (s *Store) Unpin(name string) error {
+	_, err := s.db.Exec(`DELETE FROM pins WHERE name = ?`, name)
+	return err
+}
+
 // SetPath records the repeaters a received message came through.
 func (s *Store) SetPath(id int64, path []byte, hashSize int) error {
 	_, err := s.db.Exec(`UPDATE messages SET path = ?, path_hash = ? WHERE id = ?`, path, hashSize, id)
@@ -278,7 +349,7 @@ func (s *Store) AddRepeat(id int64) (int, error) {
 	return n, err
 }
 
-const messageCols = `id, convo, out, sender, text, sent_at, recv_at, hops, snr, has_snr, signed, state, ack, attempts, rtt_ms, flood, repeats, path, path_hash`
+const messageCols = `id, convo, out, sender, text, sent_at, recv_at, hops, snr, has_snr, signed, state, ack, attempts, rtt_ms, flood, repeats, path, path_hash, sig, sig_key`
 
 // scanMessage reads messageCols, plus any extra columns that follow them.
 func scanMessage(sc interface{ Scan(...any) error }, extra ...any) (Message, error) {
@@ -286,7 +357,7 @@ func scanMessage(sc interface{ Scan(...any) error }, extra ...any) (Message, err
 	var convo string
 	var out, hasSNR, signed, state, flood int
 	var sent, recv, rtt int64
-	dest := []any{&m.ID, &convo, &out, &m.Sender, &m.Text, &sent, &recv, &m.Hops, &m.SNR, &hasSNR, &signed, &state, &m.Ack, &m.Attempts, &rtt, &flood, &m.Repeats, &m.Path, &m.PathHash}
+	dest := []any{&m.ID, &convo, &out, &m.Sender, &m.Text, &sent, &recv, &m.Hops, &m.SNR, &hasSNR, &signed, &state, &m.Ack, &m.Attempts, &rtt, &flood, &m.Repeats, &m.Path, &m.PathHash, &m.Sig, &m.SigKey}
 	err := sc.Scan(append(dest, extra...)...)
 	m.Convo, m.Out, m.HasSNR, m.Signed, m.State, m.Flood = Convo(convo), out == 1, hasSNR == 1, signed == 1, State(state), flood == 1
 	m.SentAt, m.RecvAt, m.RTT = time.UnixMilli(sent), time.UnixMilli(recv), time.Duration(rtt)*time.Millisecond

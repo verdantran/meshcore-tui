@@ -49,6 +49,24 @@ type Radio interface {
 	Device() Device // the companion's own settings and counters; nil when there's no companion
 }
 
+// Signer is a radio that can sign channel messages with its own key, and send and receive the datagrams
+// that carry the signatures (firmware v1.15 or later).
+type Signer interface {
+	// SendChannelAt sends a channel message and reports the timestamp it went with, which its signature must use.
+	SendChannelAt(ctx context.Context, idx int, text string) (uint32, error)
+	Sign(ctx context.Context, data []byte) ([64]byte, error) // the radio signs with its key, which never leaves it
+	SendChannelData(ctx context.Context, idx int, dataType uint16, data []byte) error
+}
+
+// ChannelData is a binary datagram heard on a channel; signatures for channel messages arrive this way.
+type ChannelData struct {
+	At   time.Time
+	Idx  int
+	SNR  float32
+	Type uint16
+	Data []byte
+}
+
 // LoginResult answers a login. Permissions is the server's level: 0 guest, 1 read-only, 2 read-write, 3 admin.
 type LoginResult struct {
 	Prefix      [6]byte

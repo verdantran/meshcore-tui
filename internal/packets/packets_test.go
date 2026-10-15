@@ -9,6 +9,7 @@ import (
 	meshcore "github.com/OwlShack/meshcore-go"
 
 	"meshcore-tui/internal/radio"
+	"meshcore-tui/internal/signing"
 )
 
 func build(t *testing.T, route, typ byte, path, payload []byte) []byte {
@@ -241,3 +242,49 @@ func TestOthersPrivateTrafficIsNotNamed(t *testing.T) {
 }
 
 func bytesOf(b byte, n int) []byte { return []byte(strings.Repeat(string([]byte{b}), n)) }
+
+func channelData(t *testing.T, psk [16]byte, dataType uint16, data []byte) []byte {
+	t.Helper()
+	plain, _ := meshcore.BuildGroupDataPayload(meshcore.GroupDataPayload{DataType: dataType, Data: data})
+	gd, err := meshcore.NewGroupData(meshcore.DeriveChannelHash(psk), psk[:], plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := gd.ToBytes()
+	return build(t, meshcore.RouteTypeFlood, meshcore.PayloadTypeGrpData, []byte{0xA3}, payload)
+}
+
+func TestChannelDatagrams(t *testing.T) {
+	psk := meshcore.DeriveHashtagPSK("#bristol")
+	book := Book{Channels: []radio.Channel{{Idx: 1, Name: "#bristol", Secret: psk}}}
+	sig := signing.Datagram{KeyID: [8]byte{0xAB, 0xCD, 1, 2, 3, 4, 5, 6}, TS: 1760000000}
+	sig.Sig[0] = 0x5A
+
+	d := Decode(channelData(t, psk, signing.DataType, sig.Bytes()), book)
+	checkSpans(t, d)
+	if d.Type != "GRP_DATA" || !d.Decrypted || d.Channel != "#bristol" || d.Signature == nil || *d.Signature != sig {
+		t.Fatalf("signature = %+v", d)
+	}
+	if !strings.Contains(d.Summary, "#bristol · signature by key AB CD 01 02") {
+		t.Errorf("summary = %q", d.Summary)
+	}
+	names := map[string]string{}
+	for _, f := range d.Fields {
+		names[f.Name] = f.Value
+	}
+	if v := names["ciphertext, decrypted"]; !strings.Contains(v, "key AB CD 01 02 03 04 05 06") || !strings.Contains(v, "2025-10-09 08:53:20 UTC") || !strings.Contains(v, "5A 00") {
+		t.Errorf("fields = %v", names)
+	}
+
+	// Another kind of datagram, one that isn't a signature, and one on a channel we don't hold.
+	other := Decode(channelData(t, psk, 0x1234, []byte("hello")), book)
+	if other.Signature != nil || other.DataType != 0x1234 || !strings.Contains(other.Summary, "data type 0x1234 · 5 B") {
+		t.Errorf("other data = %+v", other)
+	}
+	if junk := Decode(channelData(t, psk, signing.DataType, []byte("MC1 too short")), book); junk.Signature != nil {
+		t.Error("not a signature")
+	}
+	if far := Decode(channelData(t, meshcore.DeriveHashtagPSK("#elsewhere"), signing.DataType, sig.Bytes()), book); far.Decrypted || far.Signature != nil {
+		t.Error("a channel we don't hold")
+	}
+}

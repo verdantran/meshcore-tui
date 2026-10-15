@@ -1,7 +1,9 @@
 package radio
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"strings"
 	"testing"
@@ -535,5 +537,57 @@ func TestSignedRoomPost(t *testing.T) {
 	in := next[Incoming](t, l, nil)
 	if !in.Signed || in.Author != [4]byte{0x3A, 0xAA} || in.CLI {
 		t.Errorf("room post = %+v", in)
+	}
+}
+
+func TestLinkSigning(t *testing.T) {
+	f := newFakeDevice()
+	l := startLink(t, f)
+	next[Ready](t, l, nil)
+	ctx := context.Background()
+	before := time.Now().Unix()
+	ts, err := l.SendChannelAt(ctx, 1, "meet at the hill")
+	if err != nil || int64(ts) < before || int64(ts) > time.Now().Unix() {
+		t.Fatalf("send at = %d %v", ts, err)
+	}
+	var sent companion.SendChannelTxtMsgCommand
+	for _, c := range f.commands() {
+		if s, ok := c.(companion.SendChannelTxtMsgCommand); ok {
+			sent = s
+		}
+	}
+	if sent.SenderTimestamp != ts {
+		t.Errorf("the message went with %d, reported %d", sent.SenderTimestamp, ts)
+	}
+
+	data := bytes.Repeat([]byte("signed bytes "), 30) // more than one frame's worth
+	sig, err := l.Sign(ctx, data)
+	if want := sha256.Sum256(data); err != nil || !bytes.Equal(sig[:32], want[:]) {
+		t.Fatalf("sign = %x %v", sig[:8], err)
+	}
+	if _, err := l.Sign(ctx, make([]byte, 9000)); err == nil {
+		t.Error("more than the radio will sign")
+	}
+	if err := l.SendChannelData(ctx, 1, 0xFFFF, []byte("MC1")); err != nil {
+		t.Fatal(err)
+	}
+
+	// A datagram heard on a channel arrives as an event.
+	f.mu.Lock()
+	f.queue = append(f.queue, companion.ChannelDataRecvResponse{SNR: 2.5, ChannelIdx: 1, PathLen: 2, DataType: 0xFFFF, Data: []byte("MC1 sig")}.ToBytes())
+	f.mu.Unlock()
+	f.push(companion.PushMsgWaitingResponse{}.ToBytes())
+	cd := next[ChannelData](t, l, nil)
+	if cd.Idx != 1 || cd.Type != 0xFFFF || string(cd.Data) != "MC1 sig" || cd.SNR != 2.5 {
+		t.Errorf("channel data = %+v", cd)
+	}
+	if w, ok := late(companion.Response{Data: companion.ChannelDataRecvResponse{ChannelIdx: 1, Data: []byte{1}}}); !ok || w.ChannelData == nil {
+		t.Error("a late datagram is kept")
+	}
+	f.mu.Lock()
+	f.fail[companion.CmdSignStart] = true
+	f.mu.Unlock()
+	if _, err := l.Sign(ctx, data); err == nil {
+		t.Error("sign start refused")
 	}
 }

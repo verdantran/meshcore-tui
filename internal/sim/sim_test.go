@@ -2,6 +2,7 @@ package sim
 
 import (
 	"context"
+	"crypto/ed25519"
 	"fmt"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 	"meshcore-tui/internal/packets"
 	"meshcore-tui/internal/radio"
+	"meshcore-tui/internal/signing"
 )
 
 func TestBootThenPacketsThatDecode(t *testing.T) {
@@ -394,5 +396,30 @@ func TestAdminServers(t *testing.T) {
 	s.RequestStatus(ctx, room)
 	if _, err := meshcore.ParseRoomStats(waitFor[radio.StatusReport](t, s).Data); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestSimSigns(t *testing.T) {
+	s := New(1).Fast()
+	ctx := context.Background()
+	data := signing.Canonical("#bristol", 1760000000, "hello")
+	sig, err := s.Sign(ctx, data)
+	self := key(0xC0, "MeshCore-k4")
+	if err != nil || !ed25519.Verify(self[:], data, sig[:]) {
+		t.Fatal("the radio signs with its own key")
+	}
+	if ts, err := s.SendChannelAt(ctx, 1, "hi"); err != nil || ts == 0 {
+		t.Errorf("send at = %d %v", ts, err)
+	}
+	if err := s.SendChannelData(ctx, 1, signing.DataType, []byte("MC1")); err != nil {
+		t.Error(err)
+	}
+	if err := s.SendChannelData(ctx, 9, signing.DataType, nil); err == nil {
+		t.Error("no such channel")
+	}
+	alice := key(peopleHash("Alice"), "Alice")
+	d, ok := signing.Parse(signedDatagram(ident(peopleHash("Alice"), "Alice"), "#bristol", 1760000000, "meet"))
+	if !ok || !d.Verify(alice, "#bristol", "meet") {
+		t.Error("Alice's signatures check out against her key")
 	}
 }

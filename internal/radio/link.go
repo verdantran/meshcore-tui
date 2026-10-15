@@ -276,8 +276,12 @@ func (l *Link) deliver(ms []client.WaitingMessage) {
 			m := w.Channel
 			in.Channel, in.ChannelIdx, in.Hops, in.Text = true, int(m.ChannelIdx), hopsFrom(m.PathLen), m.Text
 			in.SentAt = time.Unix(int64(m.SenderTimestamp), 0)
+		case w.ChannelData != nil:
+			d := w.ChannelData
+			l.emit(ChannelData{At: now, Idx: int(d.ChannelIdx), SNR: d.SNR, Type: d.DataType, Data: d.Data})
+			continue
 		default:
-			continue // binary channel data isn't shown yet
+			continue
 		}
 		l.emit(in)
 	}
@@ -348,6 +352,8 @@ func late(r companion.Response) (client.WaitingMessage, bool) {
 		m := companion.ChannelMsgRecvResponse{ChannelIdx: d.ChannelIdx, PathLen: d.PathLen, TxtType: d.TxtType,
 			SenderTimestamp: d.SenderTimestamp, SenderPrefix: d.SenderPrefix, Text: d.Text}
 		return client.WaitingMessage{IsChannel: true, Channel: &m, SNR: d.SNR, HasSNR: true}, true
+	case companion.ChannelDataRecvResponse:
+		return client.WaitingMessage{IsChannel: true, ChannelData: &d, SNR: d.SNR, HasSNR: true}, true
 	}
 	return client.WaitingMessage{}, false
 }
@@ -378,6 +384,44 @@ func (l *Link) SendText(ctx context.Context, to [32]byte, text string) (Sent, er
 func (l *Link) SendChannel(ctx context.Context, idx int, text string) error {
 	_, err := l.client.SendChannelTextMessage(ctx, byte(idx), text, companion.TxtTypePlain)
 	return err
+}
+
+// SendChannelAt sends a channel message and reports its timestamp. The SDK stamps the message with the time
+// itself, so this waits until a second is well under way: the stamp is then this second's.
+func (l *Link) SendChannelAt(ctx context.Context, idx int, text string) (uint32, error) {
+	if ns := time.Now().Nanosecond(); ns > 800_000_000 {
+		time.Sleep(time.Duration(1_000_000_000-ns) + 10*time.Millisecond)
+	}
+	ts := uint32(time.Now().Unix())
+	_, err := l.client.SendChannelTextMessage(ctx, byte(idx), text, companion.TxtTypePlain)
+	return ts, err
+}
+
+// signChunk is how much is fed to the radio to sign per frame, inside the 172-byte frame limit.
+const signChunk = 160
+
+// Sign has the radio sign data with its own key.
+func (l *Link) Sign(ctx context.Context, data []byte) ([64]byte, error) {
+	start, err := l.client.SignStart(ctx)
+	if err != nil {
+		return [64]byte{}, err
+	}
+	if uint32(len(data)) > start.MaxSignDataLen {
+		return [64]byte{}, fmt.Errorf("%d bytes is more than the radio will sign (%d)", len(data), start.MaxSignDataLen)
+	}
+	for len(data) > 0 {
+		n := min(len(data), signChunk)
+		if err := l.client.SignData(ctx, data[:n]); err != nil {
+			return [64]byte{}, err
+		}
+		data = data[n:]
+	}
+	sig, err := l.client.SignFinish(ctx)
+	return sig.Signature, err
+}
+
+func (l *Link) SendChannelData(ctx context.Context, idx int, dataType uint16, data []byte) error {
+	return l.client.SendChannelDataFlood(ctx, byte(idx), dataType, data)
 }
 
 func (l *Link) ResetPath(ctx context.Context, contact [32]byte) error {
@@ -469,7 +513,7 @@ func (l *Link) registerPushes() {
 		}
 	})
 	c.OnPush(companion.PushMsgWaiting, func(companion.Response) { l.nudge() })
-	for _, code := range []byte{companion.RespContactMsgRecv, companion.RespContactMsgRecvV3, companion.RespChannelMsgRecv, companion.RespChannelMsgRecvV3} {
+	for _, code := range []byte{companion.RespContactMsgRecv, companion.RespContactMsgRecvV3, companion.RespChannelMsgRecv, companion.RespChannelMsgRecvV3, companion.RespChannelDataRecv} {
 		c.OnPush(code, func(r companion.Response) {
 			if w, ok := late(r); ok {
 				l.deliver([]client.WaitingMessage{w})

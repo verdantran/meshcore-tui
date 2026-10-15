@@ -326,3 +326,45 @@ func TestMessagePaths(t *testing.T) {
 		}
 	}
 }
+
+func TestSignaturesAndPins(t *testing.T) {
+	s, _ := Open(":memory:")
+	defer s.Close()
+	at := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	ch := ChannelConvo(1)
+	m := Message{Convo: ch, Sender: "Alice", Text: "hi", SentAt: at, RecvAt: at.Add(2 * time.Second)}
+	s.AddMessage(dev, &m)
+	other := Message{Convo: ch, Sender: "Bob", Text: "yo", SentAt: at.Add(time.Second), RecvAt: at.Add(2 * time.Second)}
+	s.AddMessage(dev, &other)
+	got, err := s.AwaitingSig(dev, ch, at)
+	if err != nil || len(got) != 1 || got[0].ID != m.ID {
+		t.Fatalf("awaiting = %+v %v", got, err)
+	}
+	key := [32]byte{0xAA, 1}
+	if err := s.SetSig(m.ID, SigValid, key[:]); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.AwaitingSig(dev, ch, at); len(got) != 0 {
+		t.Error("signed now")
+	}
+	msgs, _ := s.Messages(dev, ch, 10)
+	if msgs[0].Sig != SigValid || [32]byte(msgs[0].SigKey) != key || msgs[1].Sig != Unsigned {
+		t.Errorf("read back = %+v", msgs)
+	}
+
+	if err := s.SetPin("Alice 🛰", key, at); err != nil {
+		t.Fatal(err)
+	}
+	pins, _ := s.Pins()
+	if p, ok := pins["Alice 🛰"]; !ok || p.Key != key || !p.At.Equal(at) {
+		t.Errorf("pins = %+v", pins)
+	}
+	s.Unpin("Alice 🛰")
+	if pins, _ := s.Pins(); len(pins) != 0 {
+		t.Error("unpinned")
+	}
+	s.Close()
+	if _, err := s.Pins(); err == nil {
+		t.Error("closed")
+	}
+}

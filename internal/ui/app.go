@@ -258,6 +258,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.mapMsg(msg))
 	case sendResultMsg:
 		cmds = append(cmds, m.chatResult(msg))
+	case signedSentMsg:
+		cmds = append(cmds, m.signedSent(msg))
 	case ackTimeoutMsg:
 		cmds = append(cmds, m.chatTimeout(msg))
 	case tea.PasteMsg:
@@ -768,6 +770,8 @@ func (m *Model) screenKeys() []string {
 			key("ctrl+f", "search every conversation"), key("K J", "scroll history"),
 			key("→", "pick a message: ↑↓ move, r replies to it (naming them in a channel), M shows its route, y copies it, ← goes back"),
 			key("paste", "pastes into whatever you're typing in; in Chats it starts a message"),
+			key("S", "sign your messages on the open channel, or stop; ctrl+s while writing flips it for one message"),
+			key("p P", "on a picked signed message, pin its key to the sender's name · replace a pin"),
 			key("M", "show on the map the route of the newest message received in view"),
 			key("L", "log in to the room server whose conversation is open"),
 			key("n", "add a channel: #name, a private one with its secret, or a shared link"),

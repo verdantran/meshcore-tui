@@ -381,3 +381,28 @@ func TestUSBReportsTheFailureWhenNothingAnswers(t *testing.T) {
 		t.Error("describe")
 	}
 }
+
+func TestUSBSigning(t *testing.T) {
+	ctx := context.Background()
+	s := sim.New(6).Fast()
+	u := &USB{port: "/dev/cu.test", events: make(chan radio.Event, 8), inner: s}
+	if _, err := u.SendChannelAt(ctx, 1, "hi"); err != nil {
+		t.Error(err)
+	}
+	if _, err := u.Sign(ctx, []byte("x")); err != nil {
+		t.Error(err)
+	}
+	if err := u.SendChannelData(ctx, 1, 0xFFFF, []byte("MC1")); err != nil {
+		t.Error(err)
+	}
+	u.inner = NewRepeater("/dev/cu.test", nil, nil) // a repeater's console can't sign
+	if _, err := u.SendChannelAt(ctx, 1, "hi"); err == nil {
+		t.Error("console")
+	}
+	if _, err := u.Sign(ctx, nil); err == nil {
+		t.Error("console")
+	}
+	if err := u.SendChannelData(ctx, 1, 0, nil); err == nil {
+		t.Error("console")
+	}
+}

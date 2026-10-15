@@ -404,6 +404,7 @@ func (m *Model) deviceRows() []devRow {
 				}
 				return func(ctx context.Context, d radio.Device) error { return d.SetPin(ctx, uint32(n)) }, nil
 			}},
+		m.signingRow(),
 		devRow{id: "export", group: "Security", label: "Export private key", value: "show", kind: rowAction,
 			hint: "Anyone with this key can be you on the mesh.",
 			press: func(m *Model) tea.Cmd {
@@ -632,4 +633,22 @@ func (m *Model) deviceAnimating() bool {
 		}
 	}
 	return false
+}
+
+// signingRow says whether this radio can sign channel messages. Signing is chosen per channel in Chats, since
+// the radio has no setting of its own for it.
+func (m *Model) signingRow() devRow {
+	value, hint := "supported", "The radio signs with its own key, which never leaves it. Turn it on per channel with S in Chats; ctrl+s while writing flips it for one message. Each signed message is two packets."
+	if err := m.canSign(); err != nil {
+		value, hint = "not available", err.Error()+". Other people's signatures are still checked."
+	}
+	return devRow{id: "signing", group: "Security", label: "Message signing", value: value, kind: rowAction, hint: hint,
+		press: func(m *Model) tea.Cmd {
+			if m.opt.Config == nil || len(m.opt.Config.Messages.SignChannels) == 0 {
+				m.addLog(m.now, "SIGNING  no channels sign your messages yet: open one in Chats and press S", radio.ToneInfo)
+				return nil
+			}
+			m.addLog(m.now, "SIGNING  your messages are signed in "+strings.Join(m.opt.Config.Messages.SignChannels, ", "), radio.ToneInfo)
+			return nil
+		}}
 }

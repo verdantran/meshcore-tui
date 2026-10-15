@@ -15,6 +15,7 @@ import (
 	meshcore "github.com/OwlShack/meshcore-go"
 
 	"meshcore-tui/internal/radio"
+	"meshcore-tui/internal/signing"
 )
 
 type node struct {
@@ -448,8 +449,34 @@ func (s *Sim) chatter(now time.Time) {
 	hops := s.hops(s.intn(4) + 1)
 	// The radio hears the encrypted packet and then hands over the message it decrypted.
 	s.heardPacket(now, s.groupText(now, hops, ch, who, text))
-	s.emit(radio.Incoming{At: now, Channel: true, ChannelIdx: ch.Idx, Hops: len(hops), SentAt: now,
+	sent := time.Unix(now.Unix(), 0)
+	s.emit(radio.Incoming{At: now, Channel: true, ChannelIdx: ch.Idx, Hops: len(hops), SentAt: sent,
 		Text: who + ": " + text, SNR: float32(s.intn(48)-12) / 4, HasSNR: true})
+	if who != "Alice" {
+		return
+	}
+	// Alice signs most of her channel messages. Now and then someone else posts as Alice, signing with
+	// their own key, or doesn't sign: what the signing checks are for.
+	signer := ident(peopleHash("Alice"), "Alice")
+	switch x := s.float(); {
+	case x < 0.15:
+		return
+	case x < 0.25:
+		signer = ident(0x99, "Mallory")
+	}
+	go func() {
+		time.Sleep(s.delay(400))
+		s.emit(radio.ChannelData{At: time.Now(), Idx: ch.Idx, SNR: 4, Type: signing.DataType, Data: signedDatagram(signer, ch.Name, uint32(sent.Unix()), text)})
+	}()
+}
+
+// signedDatagram is the signature for a channel message, as SIGNING.md has a companion send it.
+func signedDatagram(id meshcore.LocalIdentity, channel string, ts uint32, text string) []byte {
+	d := signing.Datagram{TS: ts}
+	pub := id.PublicKey()
+	copy(d.KeyID[:], pub[:8])
+	copy(d.Sig[:], id.Sign(signing.Canonical(channel, ts, text)))
+	return d.Bytes()
 }
 
 func peopleHash(name string) byte {
@@ -506,6 +533,28 @@ func (s *Sim) SendText(ctx context.Context, to [32]byte, text string) (radio.Sen
 		}()
 	}
 	return radio.Sent{Ack: ack, Timeout: time.Duration(float64(4*time.Second) / s.speed)}, nil
+}
+
+func (s *Sim) SendChannelAt(ctx context.Context, idx int, text string) (uint32, error) {
+	ts := uint32(time.Now().Unix())
+	return ts, s.SendChannel(ctx, idx, text)
+}
+
+// Sign signs as the radio does, with its own key.
+func (s *Sim) Sign(ctx context.Context, data []byte) ([64]byte, error) {
+	s.frame(33, 19)
+	var sig [64]byte
+	copy(sig[:], ident(0xC0, "MeshCore-k4").Sign(data))
+	return sig, nil
+}
+
+func (s *Sim) SendChannelData(ctx context.Context, idx int, dataType uint16, data []byte) error {
+	if !slices.ContainsFunc(s.channelList(), func(c radio.Channel) bool { return c.Idx == idx }) {
+		return errors.New("no such channel")
+	}
+	s.frame(62, 0, data...)
+	s.emit(radio.Transmit{At: time.Now(), What: "SEND_CHANNEL_DATA"})
+	return nil
 }
 
 func (s *Sim) SendChannel(ctx context.Context, idx int, text string) error {

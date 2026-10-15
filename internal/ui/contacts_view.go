@@ -150,8 +150,17 @@ func (m *Model) contactDetail(w int) []string {
 	}
 	out = append(out, label("advert path")+adv)
 	out = append(out, label("trace")+m.traceLine(ct))
+	sig := th.Fg(th.Dim, false).Render("not pinned · K pins this key to " + ct.Name + ", so messages signed as them can be checked")
+	if p, ok := m.pins()[ct.Name]; ok {
+		if p.Key == ct.Key {
+			sig = th.Fg(th.Green, true).Render("✓ pinned") + th.Fg(th.Dim, false).Render(" · K unpins")
+		} else {
+			sig = th.Fg(th.Red, true).Render("⚠ the name is pinned to a different key, "+radio.KeyHex(p.Key[:4])) + th.Fg(th.Dim, false).Render(" · K pins this one instead")
+		}
+	}
+	out = append(out, label("signing key")+sig)
 	out = append(out, "")
-	keys := "m message · t trace · d discover route · p set route · r reset route · f favourite · e share · x remove · I import · a heard · A auto-add · F type or favourites · s sort · / filter"
+	keys := "m message · t trace · d discover route · p set route · r reset route · M route on the map · K pin signing key · f favourite · e share · x remove · I import · a heard · A auto-add · F type or favourites · s sort · / filter"
 	for _, l := range strings.Split(ansi.Wrap(keys, w, "·"), "\n") {
 		out = append(out, th.Fg(th.Dim, false).Render(l))
 	}

@@ -10,6 +10,7 @@ import (
 
 	"meshcore-tui/internal/chat"
 	"meshcore-tui/internal/mapview"
+	"meshcore-tui/internal/motion"
 	"meshcore-tui/internal/radio"
 	"meshcore-tui/internal/store"
 )
@@ -25,6 +26,8 @@ type pathView struct {
 	saved  mapview.View
 	auto   bool
 	fit    bool
+	play   bool // replay the route once the view has settled
+	playAt time.Time
 }
 
 // showPath opens the map on one path, or several alternatives, remembering where to go back to.
@@ -39,7 +42,7 @@ func (m *Model) showPath(title, to string, routes []mapRoute) {
 	if m.tab != 2 {
 		mv.path.back = m.tab
 	}
-	mv.path.title, mv.path.to, mv.path.routes, mv.path.sel, mv.path.fit = title, to, routes, 0, true
+	mv.path.title, mv.path.to, mv.path.routes, mv.path.sel, mv.path.fit, mv.path.play = title, to, routes, 0, true, true
 	mv.cacheKey = ""
 	m.setTab(2)
 }
@@ -66,9 +69,11 @@ func (m *Model) pathKey(s string) (tea.Cmd, bool) {
 	case "esc":
 		m.leavePath()
 	case "]":
-		p.sel = min(p.sel+1, len(p.routes)-1)
+		p.sel, p.play = min(p.sel+1, len(p.routes)-1), true
 	case "[":
-		p.sel = max(p.sel-1, 0)
+		p.sel, p.play = max(p.sel-1, 0), true
+	case "space":
+		p.play = true
 	case "m":
 		p.fit = true
 	case "t", "d":
@@ -107,6 +112,12 @@ func (m *Model) renderPath(w, mapH int) []string {
 		}
 		mv.auto = false
 	}
+	if p.play {
+		p.play, p.playAt = false, m.now
+		if motion.Running(mv.movedAt, mapGlide, m.now) {
+			p.playAt = mv.movedAt.Add(mapGlide)
+		}
+	}
 	v := m.mapCurrent()
 	v.W, v.H = w*2, mapH*4
 	layers := mapview.Layers{Labels: true, Roads: mv.layers.Roads, Selected: 0, PathOnly: true}
@@ -124,6 +135,15 @@ func (m *Model) renderPath(w, mapH int) []string {
 		mv.rows, mv.cacheKey = mv.cache.Render(!th.Mono), key
 	}
 	out := append([]string(nil), mv.rows...)
+	if anims := m.pathAnims(r, nodes); len(anims) > 0 {
+		c := mv.cache.Clone()
+		mapview.DrawAnims(c, v, anims, mapview.LatLon{}, m.level, m.now, pal) // no sweep on a path
+		for y := range out {
+			if c.Dirty(y) {
+				out[y] = c.RenderRow(y, !th.Mono)
+			}
+		}
+	}
 	if pts, _, _ := r.Placed(nodes); len(pts) < 2 {
 		note := " None of this path's nodes has a location, so it can't be drawn; its hops are listed below. "
 		if len(pts) == 1 {
@@ -133,7 +153,38 @@ func (m *Model) renderPath(w, mapH int) []string {
 	}
 	back := strings.ToLower(tabNames[p.back])
 	return append(out, clip(m.routeLine(r, nodes, p.to), w), clip(th.Fg(th.Dim, false).Render(
-		"[ ] other routes · ←↑↓→ hjkl move · + - zoom · m fit the path · L labels · r roads · esc back to "+back), w))
+		"[ ] other routes · space replay · ←↑↓→ hjkl move · + - zoom · m fit the path · L labels · r roads · esc back to "+back), w))
+}
+
+// pathAnims replays the path as the full map shows a packet arriving: a comet along it, and a ripple where a
+// flood started.
+func (m *Model) pathAnims(r mapview.Route, nodes []mapview.Node) []mapview.Anim {
+	p := m.mapv.path
+	pts, links, _ := r.Placed(nodes)
+	if p.playAt.IsZero() || len(pts) < 2 {
+		return nil
+	}
+	anims := []mapview.Anim{{Kind: mapview.Comet, Start: p.playAt, Path: pts, Links: links}}
+	if p.routes[p.sel].flood {
+		anims = append(anims, mapview.Anim{Kind: mapview.Ripple, Start: p.playAt, At: pts[0]})
+	}
+	return anims
+}
+
+// pathPlaying reports the replay still to run or running, so frames keep coming through it.
+func (m *Model) pathPlaying() bool {
+	p := m.mapv.path
+	if p == nil || p.playAt.IsZero() {
+		return false
+	}
+	nodes := m.mapNodes()
+	r, nodes := m.resolve(p.routes[p.sel], nodes)
+	for _, a := range m.pathAnims(r, nodes) {
+		if m.now.Before(a.Start.Add(a.Dur())) && a.Allowed(m.level) {
+			return true
+		}
+	}
+	return false
 }
 
 // showPacketPath opens the map on a packet's path, with each copy heard as an alternative.

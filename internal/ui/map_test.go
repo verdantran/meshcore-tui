@@ -732,3 +732,39 @@ func TestReadingScrollsOnlyAsNeeded(t *testing.T) {
 		t.Errorf("back down at the newest: scroll %d", h.m.chats.scroll)
 	}
 }
+
+func TestPathReplays(t *testing.T) {
+	h := newHarness(t)
+	h.hear(channelPacket(t, h, "Public", "Bob", "hello all", []byte{0x5F, 0x77}), 6)
+	h.hear(channelPacket(t, h, "Public", "Bob", "hello all", []byte{0xA3}), -2)
+	h.keys("4M")
+	h.until("the map", func() bool { return h.m.mapv.world != nil })
+	still := h.screen()
+	p := h.m.mapv.path
+	if p.playAt.IsZero() || !h.m.mapAnimating() {
+		t.Fatal("the route plays on opening")
+	}
+	h.clk.t = p.playAt.Add(mapview.HopDur)
+	if moving := h.screen(); moving == still {
+		t.Error("a comet runs along it")
+	}
+	h.clk.t = h.clk.t.Add(10 * time.Second)
+	if h.m.mapAnimating() {
+		t.Error("and finishes")
+	}
+	h.keys("]")
+	h.screen()
+	if p.playAt != h.clk.t || !h.m.mapAnimating() {
+		t.Error("another route plays when picked")
+	}
+	h.clk.t = h.clk.t.Add(10 * time.Second)
+	h.key(tea.KeySpace)
+	h.screen()
+	if p.playAt != h.clk.t {
+		t.Error("space replays it")
+	}
+	h.m.level = motion.Off
+	if h.m.mapAnimating() {
+		t.Error("no replay with motion off")
+	}
+}

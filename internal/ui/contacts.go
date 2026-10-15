@@ -19,7 +19,7 @@ const (
 	opTimeout    = 15 * time.Second
 	traceTimeout = 20 * time.Second
 	traceReveal  = 900 * time.Millisecond
-	detailRows   = 9
+	detailRows   = 11
 )
 
 type overlay int
@@ -481,6 +481,13 @@ func (m *Model) contactAction(s string, ct radio.Contact) (tea.Cmd, bool) {
 	switch s {
 	case "M":
 		m.showContactPath(ct)
+		return nil, true
+	case "K":
+		if p, ok := m.pins()[ct.Name]; ok && p.Key == ct.Key {
+			m.unpin(ct.Name)
+		} else {
+			m.pin(ct.Name, ct.Key)
+		}
 		return nil, true
 	case "m":
 		if ct.Type != radio.TypeChat && ct.Type != radio.TypeRoom {

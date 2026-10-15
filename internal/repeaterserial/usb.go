@@ -2,6 +2,7 @@ package repeaterserial
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sync"
 
@@ -191,6 +192,39 @@ func (u *USB) SendCLI(ctx context.Context, k [32]byte, command string) error {
 }
 
 func (u *USB) Device() radio.Device { return u.cur().Device() }
+
+var errNoSigning = errors.New("this radio can't sign messages")
+
+func (u *USB) signer() (radio.Signer, error) {
+	if s, ok := u.cur().(radio.Signer); ok {
+		return s, nil
+	}
+	return nil, errNoSigning
+}
+
+func (u *USB) SendChannelAt(ctx context.Context, idx int, text string) (uint32, error) {
+	s, err := u.signer()
+	if err != nil {
+		return 0, err
+	}
+	return s.SendChannelAt(ctx, idx, text)
+}
+
+func (u *USB) Sign(ctx context.Context, data []byte) ([64]byte, error) {
+	s, err := u.signer()
+	if err != nil {
+		return [64]byte{}, err
+	}
+	return s.Sign(ctx, data)
+}
+
+func (u *USB) SendChannelData(ctx context.Context, idx int, dataType uint16, data []byte) error {
+	s, err := u.signer()
+	if err != nil {
+		return err
+	}
+	return s.SendChannelData(ctx, idx, dataType, data)
+}
 
 func (u *USB) Channels(ctx context.Context) ([]radio.Channel, error) { return u.cur().Channels(ctx) }
 func (u *USB) SetChannel(ctx context.Context, c radio.Channel) error {

@@ -173,6 +173,23 @@ func (s *Service) AttachPath(c store.Convo, sender, text string, since time.Time
 	return m.ID, true, s.store.SetPath(m.ID, path, hashSize)
 }
 
+// AwaitingSig lists a channel's received messages sent at a time that have no signature yet.
+func (s *Service) AwaitingSig(idx int, sentAt time.Time) ([]store.Message, error) {
+	return s.store.AwaitingSig(s.device, store.ChannelConvo(idx), sentAt)
+}
+
+func (s *Service) SetSig(id int64, sig store.Sig, key []byte) error {
+	return s.store.SetSig(id, sig, key)
+}
+
+func (s *Service) Pins() (map[string]store.Pin, error) { return s.store.Pins() }
+
+func (s *Service) Pin(name string, key [32]byte, at time.Time) error {
+	return s.store.SetPin(name, key, at)
+}
+
+func (s *Service) Unpin(name string) error { return s.store.Unpin(name) }
+
 // Incoming files a received message under its conversation.
 func (s *Service) Incoming(in radio.Incoming) (store.Message, error) {
 	m := store.Message{Text: in.Text, SentAt: in.SentAt, RecvAt: in.At, Hops: in.Hops, SNR: in.SNR, HasSNR: in.HasSNR, Signed: in.Signed, State: store.Received}

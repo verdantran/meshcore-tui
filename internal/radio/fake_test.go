@@ -33,6 +33,7 @@ type fakeDevice struct {
 	autoAdd     companion.AutoAddConfigResponse
 	nextAck     uint32
 	exportBytes []byte
+	signing     []byte // what's been fed to the radio to sign
 }
 
 func newFakeDevice() *fakeDevice {
@@ -240,8 +241,26 @@ func (f *fakeDevice) Send(cmd []byte) error {
 		companion.ImportContactCommand, companion.SendChannelTxtMsgCommand,
 		companion.SetAdvertNameCommand, companion.SetAdvertLatLonCommand, companion.SendSelfAdvertCommand, companion.SetRadioParamsCommand,
 		companion.SetTxPowerCommand, companion.SetTuningParamsCommand, companion.SetOtherParamsCommand, companion.SetPathHashModeCommand,
-		companion.SetDefaultFloodScopeCommand, companion.SetDevicePinCommand, companion.ImportPrivateKeyCommand, companion.SetCustomVarCommand:
+		companion.SetDefaultFloodScopeCommand, companion.SetDevicePinCommand, companion.ImportPrivateKeyCommand, companion.SetCustomVarCommand,
+		companion.SendChannelDataCommand:
 		f.push(ok)
+	case companion.SignStartCommand:
+		f.mu.Lock()
+		f.signing = nil
+		f.mu.Unlock()
+		f.push(companion.SignStartResponse{MaxSignDataLen: 8192}.ToBytes())
+	case companion.SignDataCommand:
+		f.mu.Lock()
+		f.signing = append(f.signing, c.Data...)
+		f.mu.Unlock()
+		f.push(ok)
+	case companion.SignFinishCommand:
+		f.mu.Lock()
+		sum := sha256.Sum256(f.signing) // a stand-in: the test checks the radio was given every byte
+		f.mu.Unlock()
+		var sig [64]byte
+		copy(sig[:], sum[:])
+		f.push(companion.SignatureResponse{Signature: sig}.ToBytes())
 	case companion.RebootCommand, companion.FactoryResetCommand:
 		// The radio goes away without a reply.
 	case companion.GetTuningParamsCommand:

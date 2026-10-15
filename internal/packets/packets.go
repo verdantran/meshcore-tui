@@ -6,10 +6,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strings"
+	"time"
 
 	meshcore "github.com/OwlShack/meshcore-go"
 
 	"meshcore-tui/internal/radio"
+	"meshcore-tui/internal/signing"
 )
 
 // Field is one decoded value and the bytes [Start, End) it occupies in the raw packet.
@@ -51,6 +53,11 @@ type Decoded struct {
 	Decrypted bool
 	Sender    string
 	Text      string
+
+	// Channel datagrams, when we hold the channel's secret; a signed message's signature is one.
+	DataType  uint16
+	Data      []byte
+	Signature *signing.Datagram
 
 	// Adverts.
 	Name     string
@@ -222,6 +229,15 @@ func (d *Decoded) decodePayload(p *meshcore.Packet, at int, book Book) {
 			d.Summary = fmt.Sprintf("%s · %d B, can't decrypt", ch.Name, len(g.EncryptedPayload))
 			if p.PayloadType() != meshcore.PayloadTypeGrpTxt {
 				d.Summary = fmt.Sprintf("%s · %d B of data", ch.Name, len(g.EncryptedPayload))
+				gd, err := meshcore.GroupDataFromBytes(pl)
+				if err != nil {
+					break
+				}
+				data, err := gd.DecryptStruct(ch.Secret[:])
+				if err != nil {
+					continue // another channel can share a 1-byte hash
+				}
+				d.decodeData(ch.Name, data.DataType, data.Data)
 				break
 			}
 			msg, err := g.DecryptStruct(ch.Secret[:])
@@ -301,6 +317,23 @@ func (d *Decoded) decodePayload(p *meshcore.Packet, at int, book Book) {
 		body("payload", 0)
 		d.Summary = fmt.Sprintf("%s · %d B", strings.ToLower(d.Type), len(pl))
 	}
+}
+
+// decodeData describes a channel datagram we could decrypt. What's in it is inside the ciphertext, so it's
+// described in that field's value.
+func (d *Decoded) decodeData(channel string, dataType uint16, data []byte) {
+	d.Decrypted, d.DataType, d.Data = true, dataType, data
+	ct := &d.Fields[len(d.Fields)-1]
+	ct.Name, ct.Value = "ciphertext, decrypted", fmt.Sprintf("data type 0x%04X · %d bytes", dataType, len(data))
+	d.Summary = fmt.Sprintf("%s · data type 0x%04X · %d B", channel, dataType, len(data))
+	sig, ok := signing.Parse(data)
+	if dataType != signing.DataType || !ok {
+		return
+	}
+	d.Signature = &sig
+	ct.Value = fmt.Sprintf("a signature by key %s for the message sent %s: %s", hexs(sig.KeyID[:]),
+		time.Unix(int64(sig.TS), 0).UTC().Format("2006-01-02 15:04:05 UTC"), hexs(sig.Sig[:8])+" …")
+	d.Summary = fmt.Sprintf("%s · signature by key %s", channel, hexs(sig.KeyID[:4]))
 }
 
 // address adds a to/from hash. Only one matching our own key is shown; it's a one-byte hash,

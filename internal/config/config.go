@@ -33,8 +33,9 @@ type Config struct {
 		TimeSyncDrift int    `toml:"time_sync_drift_s"`
 	} `toml:"connection"`
 	Messages struct {
-		DMRetries     int  `toml:"dm_retries"`
-		FloodFallback bool `toml:"flood_fallback"`
+		DMRetries     int      `toml:"dm_retries"`
+		FloodFallback bool     `toml:"flood_fallback"`
+		SignChannels  []string `toml:"sign_channels"` // channels whose messages you send are signed (SIGNING.md)
 	} `toml:"messages"`
 	Notifications struct {
 		Events  []string `toml:"events"` // dm, mention

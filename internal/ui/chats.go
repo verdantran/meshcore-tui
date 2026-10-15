@@ -45,6 +45,12 @@ type chatsModel struct {
 	heard  []heardMessage      // message packets heard lately, for giving messages their paths
 	routed map[int64]time.Time // when a message was given its path
 
+	sigs     []pendingSig         // signatures waiting for their message
+	signFlip bool                 // ctrl+s: sign, or don't, against the channel's setting, for this message
+	pins     map[string]store.Pin // keys names are trusted to sign with; nil until read
+
+	signedMsgs map[string]store.Message // the message each signature heard was for, by channel and timestamp
+
 	arrived map[int64]time.Time // incoming messages, for the decode and the bar flash
 	acked   map[int64]time.Time // for the ✓ pop
 	echoed  map[int64]time.Time // a channel message's latest repeat, for its flash
@@ -63,7 +69,7 @@ type chatsModel struct {
 
 func newChats() chatsModel {
 	return chatsModel{arrived: map[int64]time.Time{}, acked: map[int64]time.Time{}, failed: map[int64]time.Time{}, echoed: map[int64]time.Time{},
-		routed: map[int64]time.Time{}}
+		routed: map[int64]time.Time{}, signedMsgs: map[string]store.Message{}}
 }
 
 type sendResultMsg struct {
@@ -172,6 +178,7 @@ func (m *Model) chatEvent(e radio.Event) tea.Cmd {
 		}
 		m.chats.arrived[msg.ID] = m.now
 		m.routeArrived(msg)
+		m.sigArrived(msg)
 		title := m.chat.Title(msg.Convo)
 		tone := radio.ToneInfo
 		if m.chat.Mentions(msg.Text) {
@@ -180,6 +187,8 @@ func (m *Model) chatEvent(e radio.Event) tea.Cmd {
 		m.addLog(m.now, fmt.Sprintf("MSG  %s · %s: %s", title, msg.Sender, truncate(msg.Text, 60)), tone)
 		m.refreshChats()
 		return m.considerNote(msg, title)
+	case radio.ChannelData:
+		m.onChannelData(e)
 	case radio.ContactUpdated:
 		m.chat.ContactUpdated(e.Contact)
 		m.refreshChats()
@@ -236,13 +245,21 @@ func (m *Model) composeSend() tea.Cmd {
 	if !ok || m.chat == nil {
 		return nil
 	}
+	sign := m.signThis()
+	if err := m.canSign(); sign && err != nil {
+		m.addLog(m.now, "SENDING UNSIGNED  "+err.Error(), radio.ToneWarn)
+		sign = false
+	}
 	_, send, err := m.chat.Compose(cur.Convo, m.chats.input, m.now)
 	if err != nil {
 		m.fail(err.Error())
 		return nil
 	}
-	m.chats.input, m.chats.scroll = "", 0
+	m.chats.input, m.chats.scroll, m.chats.signFlip = "", 0, false
 	m.refreshChats()
+	if sign {
+		return m.signedSendCmd(send, cur.Title)
+	}
 	return m.sendCmd(send)
 }
 
@@ -278,8 +295,12 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 	}
 	if c.writing {
 		switch s {
+		case "ctrl+s":
+			if cur, ok := m.selectedConvo(); ok && cur.Kind == chat.KindChannel {
+				c.signFlip = !c.signFlip
+			}
 		case "esc":
-			c.writing = false
+			c.writing, c.signFlip = false, false
 		case "tab":
 			m.completeMention()
 		case "enter":
@@ -336,6 +357,8 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		if i := m.newestReceived(); i >= 0 {
 			m.showMessagePath(c.msgs[i])
 		}
+	case "S":
+		m.toggleChannelSigning()
 	case "pgup", "K":
 		c.scroll = min(c.scroll+5, max(len(c.msgs)-1, 0))
 	case "pgdown", "J":
@@ -394,6 +417,9 @@ func (m *Model) readingKey(s string) (tea.Cmd, bool) {
 		return nil, true
 	case "M":
 		m.showMessagePath(c.msgs[i])
+		return nil, true
+	case "p", "P":
+		m.pinPicked(c.msgs[i], s == "P")
 		return nil, true
 	case "y":
 		msg := c.msgs[i]
@@ -536,6 +562,9 @@ func (m *Model) convoPane(w, rows int) []string {
 	switch cur.Kind {
 	case chat.KindChannel:
 		route = "channel · flood"
+		if m.signedChannel(cur.Title) {
+			route += " · ✍ signing your messages (S)"
+		}
 	default:
 		route = "not a contact · can't reply"
 		if ct, ok := m.chat.Contact(cur.Convo); ok {
@@ -571,6 +600,13 @@ func (m *Model) convoPane(w, rows int) []string {
 	counter := th.Fg(counterCol, used*10 >= limit*9).Render(fmt.Sprintf("%d/%d", used, limit))
 	if hint := m.mentionHint(); hint != "" {
 		counter = th.Fg(th.Cyan, false).Render(hint) + counter
+	}
+	if c.writing && cur.Kind == chat.KindChannel {
+		if m.signThis() {
+			counter = th.Fg(th.Green, true).Render("✍ signed ") + th.Fg(th.Dim, false).Render("ctrl+s ") + counter
+		} else {
+			counter = th.Fg(th.Dim, false).Render("ctrl+s signs ") + counter
+		}
 	}
 	var compose string
 	if c.writing {
@@ -662,6 +698,9 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 	name := th.Fg(nameCol, true).Render(msg.Sender)
 	meta := m.messageMeta(msg)
 	if picked {
+		if _, pinned := m.pins()[msg.Sender]; msg.Sig == store.SigValid && !msg.Out && !pinned {
+			meta = th.Fg(th.Cyan, true).Render("p") + th.Fg(th.Dim, false).Render(" pin key · ") + meta
+		}
 		meta = th.Fg(th.Cyan, true).Render("r") + th.Fg(th.Dim, false).Render(" reply · ") +
 			th.Fg(th.Cyan, true).Render("M") + th.Fg(th.Dim, false).Render(" route · ") +
 			th.Fg(th.Cyan, true).Render("y") + th.Fg(th.Dim, false).Render(" copy   ") + meta
@@ -720,6 +759,9 @@ func (m *Model) messageMeta(msg store.Message) string {
 		if msg.Signed {
 			meta += th.Fg(th.Violet, true).Render(" · signed")
 		}
+		if b := m.sigBadge(msg); b != "" {
+			meta += th.Fg(th.Dim, false).Render(" · ") + b
+		}
 		return meta
 	}
 	ramp := func(label string) string {
@@ -737,6 +779,9 @@ func (m *Model) messageMeta(msg store.Message) string {
 		return ramp("sending")
 	case store.Sent:
 		if strings.HasPrefix(string(msg.Convo), "ch:") {
+			if b := m.sigBadge(msg); b != "" {
+				return b + th.Fg(th.Dim, false).Render(" · ") + m.repeatsMeta(msg)
+			}
 			return m.repeatsMeta(msg)
 		}
 		how := "direct"

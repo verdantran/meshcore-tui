@@ -634,7 +634,7 @@ func (m *Model) mapAnimating() bool {
 	if !m.visible(2) || mv.world == nil {
 		return mv.loading && m.visible(2)
 	}
-	if mv.fetching || motion.Running(mv.movedAt, mapGlide, m.now) && m.level.Allows(motion.Wipe) {
+	if mv.fetching || motion.Running(mv.movedAt, mapGlide, m.now) && m.level.Allows(motion.Wipe) || m.pathPlaying() {
 		return true
 	}
 	if motion.Running(mv.eventAt, motion.TypeDur(mv.event, logCPS), m.now) && m.level.Allows(motion.Typing) {
