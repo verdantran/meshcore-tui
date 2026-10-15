@@ -3,8 +3,10 @@ package ui
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"strings"
 	"time"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -13,6 +15,7 @@ import (
 	"meshcore-tui/internal/motion"
 	"meshcore-tui/internal/radio"
 	"meshcore-tui/internal/store"
+	"meshcore-tui/internal/theme"
 )
 
 const (
@@ -256,9 +259,7 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		case "enter":
 			c.filtering = false
 		case "backspace":
-			if r := []rune(c.filter); len(r) > 0 {
-				c.filter = string(r[:len(r)-1])
-			}
+			c.filter = dropLast(c.filter)
 		case "space":
 			c.filter += " "
 		default:
@@ -284,9 +285,7 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		case "enter":
 			return m.composeSend(), true
 		case "backspace":
-			if r := []rune(c.input); len(r) > 0 {
-				c.input = string(r[:len(r)-1])
-			}
+			c.input = dropLast(c.input)
 		case "space":
 			c.input += " "
 		default:
@@ -396,6 +395,10 @@ func (m *Model) readingKey(s string) (tea.Cmd, bool) {
 	case "M":
 		m.showMessagePath(c.msgs[i])
 		return nil, true
+	case "y":
+		msg := c.msgs[i]
+		m.addLog(m.now, "COPIED  "+msg.Sender+"'s message, to the clipboard", radio.ToneOK)
+		return tea.SetClipboard(msg.Text), true
 	default:
 		return nil, false
 	}
@@ -538,11 +541,7 @@ func (m *Model) convoPane(w, rows int) []string {
 		if ct, ok := m.chat.Contact(cur.Convo); ok {
 			route = "flood (no stored route)"
 			if ct.PathLen >= 0 {
-				var hops []string
-				for _, b := range ct.Path {
-					hops = append(hops, fmt.Sprintf("%02X", b))
-				}
-				route = fmt.Sprintf("direct · %d hops %s", ct.PathLen, strings.Join(hops, "·"))
+				route = "direct · " + strings.TrimSpace(plural(ct.PathLen, "hop")+" "+pathText(ct.Path, 1)) + " · M shows it"
 			}
 		}
 	}
@@ -587,6 +586,7 @@ func (m *Model) convoPane(w, rows int) []string {
 			compose = th.Fg(th.Magenta, true).Render("▸ ") + th.Fg(th.Text, false).Render("↑↓ messages · ") +
 				th.Fg(th.Cyan, true).Render("r") + th.Fg(th.Text, false).Render(" reply · ") +
 				th.Fg(th.Cyan, true).Render("M") + th.Fg(th.Text, false).Render(" route on the map · ") +
+				th.Fg(th.Cyan, true).Render("y") + th.Fg(th.Text, false).Render(" copy · ") +
 				th.Fg(th.Dim, false).Render("← back to conversations")
 		}
 	}
@@ -655,16 +655,16 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 		bar = th.Fg(th.Magenta.Lerp(th.Bg, motion.Progress(at, arriveDur, now)), true).Render("▌")
 	}
 	stamp := th.Fg(th.Dim, false).Render(msg.RecvAt.Local().Format("15:04") + " ")
-	nameCol := th.Cyan
+	nameCol := m.nameColour(msg.Sender)
 	if msg.Out {
 		nameCol = th.Magenta
 	}
 	name := th.Fg(nameCol, true).Render(msg.Sender)
 	meta := m.messageMeta(msg)
 	if picked {
-		name = m.raised(" " + msg.Sender + " ")
 		meta = th.Fg(th.Cyan, true).Render("r") + th.Fg(th.Dim, false).Render(" reply · ") +
-			th.Fg(th.Cyan, true).Render("M") + th.Fg(th.Dim, false).Render(" route   ") + meta
+			th.Fg(th.Cyan, true).Render("M") + th.Fg(th.Dim, false).Render(" route · ") +
+			th.Fg(th.Cyan, true).Render("y") + th.Fg(th.Dim, false).Render(" copy   ") + meta
 	}
 
 	text := msg.Text
@@ -680,7 +680,24 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 	for _, l := range strings.Split(ansi.Wrap(text, max(w-8, 10), ""), "\n") {
 		out = append(out, bar+"      "+m.highlight(l, m.chats.filter, th.Text))
 	}
+	if picked {
+		for i := range out {
+			out[i] = m.rowBackground(out[i], w)
+		}
+	}
 	return out
+}
+
+// rowBackground lays the raised colour under a whole styled row, out to its full width, keeping the colours
+// of what's on it. In the mono theme it reverses the row instead.
+func (m *Model) rowBackground(row string, w int) string {
+	row = fit(row, w)
+	if m.th.Mono {
+		return "\x1b[7m" + strings.NewReplacer("\x1b[0m", "\x1b[0m\x1b[7m", "\x1b[m", "\x1b[m\x1b[7m").Replace(row) + "\x1b[0m"
+	}
+	r := m.th.Raised
+	bg := fmt.Sprintf("\x1b[48;2;%d;%d;%dm", r.R, r.G, r.B)
+	return bg + strings.NewReplacer("\x1b[0m", "\x1b[0m"+bg, "\x1b[m", "\x1b[m"+bg, "\x1b[49m", bg).Replace(row) + "\x1b[0m"
 }
 
 // messageMeta is the right-hand detail: route and signal for received messages, delivery state for sent ones.
@@ -835,6 +852,35 @@ func (m *Model) mentionNames() []string {
 	return out
 }
 
+// nameMatches reports whether what's been typed after @ could be the start of a name. Names often begin
+// with an emoji, which is awkward to type, so the letters can start at any word, or after the emoji.
+func nameMatches(name, typed string) bool {
+	name, typed = strings.ToLower(name), strings.ToLower(typed)
+	if strings.HasPrefix(name, typed) {
+		return true
+	}
+	if strings.HasPrefix(strings.TrimLeftFunc(name, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }), typed) {
+		return true
+	}
+	for _, word := range strings.FieldsFunc(name, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
+		if strings.HasPrefix(word, typed) {
+			return true
+		}
+	}
+	return false
+}
+
+// nameColour gives each sender their own colour, the same every time, from the theme's colours other than
+// magenta, which is yours, and red, which means trouble.
+func (m *Model) nameColour(name string) theme.RGB {
+	th := m.th
+	colours := []theme.RGB{th.Cyan, th.Green, th.Yellow, th.Violet, th.Cyan.Lerp(th.Green, 0.5), th.Yellow.Lerp(th.Red, 0.4),
+		th.Violet.Lerp(th.Cyan, 0.5), th.Green.Lerp(th.Yellow, 0.5), th.Violet.Lerp(th.Magenta, 0.35), th.Cyan.Lerp(th.Text, 0.45)}
+	h := fnv.New32a()
+	h.Write([]byte(strings.ToLower(name)))
+	return colours[h.Sum32()%uint32(len(colours))]
+}
+
 // completeMention turns the @name being typed into @[Name], the form the MeshCore apps recognise.
 func (m *Model) completeMention() {
 	c := &m.chats
@@ -856,7 +902,7 @@ func (m *Model) completeMention() {
 	}
 	var matches []string
 	for _, name := range m.mentionNames() {
-		if strings.HasPrefix(strings.ToLower(name), strings.ToLower(partial)) {
+		if nameMatches(name, partial) {
 			matches = append(matches, name)
 		}
 	}

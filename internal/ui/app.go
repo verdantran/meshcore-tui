@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -259,7 +260,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.chatResult(msg))
 	case ackTimeoutMsg:
 		cmds = append(cmds, m.chatTimeout(msg))
+	case tea.PasteMsg:
+		cmds = append(cmds, m.paste(msg.Content))
 	case tea.KeyPressMsg:
+		if utf8.RuneCountInString(msg.Text) > 1 && m.typing() {
+			cmds = append(cmds, m.typeText(msg.Text)) // an emoji made of several characters
+			break
+		}
 		if cmd, quit := m.key(msg); quit {
 			m.shutdown()
 			return m, tea.Quit
@@ -745,7 +752,7 @@ func (m *Model) screenKeys() []string {
 		return []string{key("↑↓ j k", "choose a packet; g jumps back to the newest"), key("[ ]", "step through decoded fields, highlighting their bytes"),
 			key("space", "pause, so the list holds still"), key("R n", "filter by route · minimum signal"), key("/", "filter by text"),
 			key("C", "clear"), key(":export packets", "save the visible packets as JSON lines"),
-			key("M", "show the packet's path on the map, with each copy heard"), ""}
+			key("M", "show the packet's path on the map, with each copy heard"), key("y", "copy the packet's bytes"), ""}
 	}
 	if m.tab == 1 {
 		return []string{key("↑↓ j k", "choose a contact"), key("m", "message them"), key("t", "trace the route, showing signal at each hop"),
@@ -759,7 +766,8 @@ func (m *Model) screenKeys() []string {
 		return []string{key("↑↓ j k", "choose a conversation"), key("enter i", "write a message; enter sends"), key("tab", "while writing, complete an @name; again for the next match"),
 			key("esc", "stop writing, or clear the filter"), key("/", "filter this conversation"),
 			key("ctrl+f", "search every conversation"), key("K J", "scroll history"),
-			key("→", "pick a message: ↑↓ move, r replies to it (naming them in a channel), M shows its route, ← goes back"),
+			key("→", "pick a message: ↑↓ move, r replies to it (naming them in a channel), M shows its route, y copies it, ← goes back"),
+			key("paste", "pastes into whatever you're typing in; in Chats it starts a message"),
 			key("M", "show on the map the route of the newest message received in view"),
 			key("L", "log in to the room server whose conversation is open"),
 			key("n", "add a channel: #name, a private one with its secret, or a shared link"),

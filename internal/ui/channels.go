@@ -110,9 +110,7 @@ func (m *Model) channelKey(s string) (tea.Cmd, bool) {
 	typing := func() {
 		switch s {
 		case "backspace":
-			if r := []rune(c.chanInput); len(r) > 0 {
-				c.chanInput = string(r[:len(r)-1])
-			}
+			c.chanInput = dropLast(c.chanInput)
 		case "space":
 			c.chanInput += " "
 		default:

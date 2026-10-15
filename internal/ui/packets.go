@@ -198,9 +198,7 @@ func (m *Model) inspectorKey(s string) (tea.Cmd, bool) {
 		case "enter":
 			in.filtering = false
 		case "backspace":
-			if r := []rune(in.filter); len(r) > 0 {
-				in.filter = string(r[:len(r)-1])
-			}
+			in.filter = dropLast(in.filter)
 		default:
 			if len([]rune(s)) == 1 {
 				in.filter += s
@@ -247,6 +245,11 @@ func (m *Model) inspectorKey(s string) (tea.Cmd, bool) {
 	case "M":
 		if r, ok := m.selectedPacket(); ok {
 			m.showPacketPath(r)
+		}
+	case "y":
+		if r, ok := m.selectedPacket(); ok {
+			m.addLog(m.now, "COPIED  the packet's bytes, to the clipboard (hidden ones as ··)", radio.ToneOK)
+			return tea.SetClipboard(r.dec.MaskedHex()), true
 		}
 	case "esc":
 		if in.filter == "" {

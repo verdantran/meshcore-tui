@@ -106,9 +106,7 @@ func (m *Model) paletteKey(s string) {
 		p.history = append(p.history, line)
 		m.runCommand(line)
 	case "backspace":
-		if r := []rune(p.input); len(r) > 0 {
-			p.input = string(r[:len(r)-1])
-		}
+		p.input = dropLast(p.input)
 	case "tab":
 		p.input = m.completeInput(p.input)
 	case "up":

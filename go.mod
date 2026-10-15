@@ -8,6 +8,7 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/OwlShack/meshcore-go v1.9.0
 	github.com/charmbracelet/x/ansi v0.11.9
+	github.com/rivo/uniseg v0.4.7
 	github.com/zalando/go-keyring v0.2.8
 	go.bug.st/serial v1.8.0
 	modernc.org/sqlite v1.60.1
@@ -33,7 +34,6 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/xo/terminfo v1.0.0 // indirect
 	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect

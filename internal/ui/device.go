@@ -534,9 +534,7 @@ func (m *Model) devicePromptKey(s string) tea.Cmd {
 	typing := func() {
 		switch s {
 		case "backspace":
-			if r := []rune(dm.input); len(r) > 0 {
-				dm.input = string(r[:len(r)-1])
-			}
+			dm.input = dropLast(dm.input)
 		case "space":
 			dm.input += " "
 		default:

@@ -954,9 +954,7 @@ func (m *Model) consoleKey(s string, ct radio.Contact, sess *admin.Session) (tea
 	case "tab":
 		a.console = completeConsole(a.console, sess.Type)
 	case "backspace":
-		if r := []rune(a.console); len(r) > 0 {
-			a.console = string(r[:len(r)-1])
-		}
+		a.console = dropLast(a.console)
 	case "space":
 		a.console += " "
 	default:
@@ -1035,9 +1033,7 @@ func (m *Model) adminPromptKey(s string) tea.Cmd {
 	typing := func() {
 		switch s {
 		case "backspace":
-			if r := []rune(a.input); len(r) > 0 {
-				a.input = string(r[:len(r)-1])
-			}
+			a.input = dropLast(a.input)
 		case "space":
 			a.input += " "
 		default:

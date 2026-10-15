@@ -422,9 +422,7 @@ func (m *Model) contactsKey(s string) (tea.Cmd, bool) {
 		case "enter":
 			c.filtering = false
 		case "backspace":
-			if r := []rune(c.filter); len(r) > 0 {
-				c.filter = string(r[:len(r)-1])
-			}
+			c.filter = dropLast(c.filter)
 		default:
 			if len([]rune(s)) == 1 {
 				c.filter += s
@@ -621,9 +619,7 @@ func (m *Model) overlayKey(s string) tea.Cmd {
 			}
 			return m.contactOp("IMPORTED  contact from link", func(ctx context.Context, r radio.Radio) error { return r.ImportContact(ctx, link) })
 		case "backspace":
-			if r := []rune(c.importIn); len(r) > 0 {
-				c.importIn = string(r[:len(r)-1])
-			}
+			c.importIn = dropLast(c.importIn)
 		default:
 			if len([]rune(s)) == 1 {
 				c.importIn += s

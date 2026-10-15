@@ -49,8 +49,8 @@ func (m *Model) searchKey(k string) {
 		}
 		s.open = false
 	case "backspace":
-		if r := []rune(s.query); len(r) > 0 {
-			s.query = string(r[:len(r)-1])
+		if s.query != "" {
+			s.query = dropLast(s.query)
 			m.runSearch()
 		}
 	case "space":

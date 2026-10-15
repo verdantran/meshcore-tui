@@ -81,9 +81,7 @@ func (c *connectModel) key(s string, now time.Time, forget func(Target)) (Target
 				return Target{Kind: "TCP", Addr: strings.TrimSpace(c.input)}, true, false
 			}
 		case "backspace":
-			if r := []rune(c.input); len(r) > 0 {
-				c.input = string(r[:len(r)-1])
-			}
+			c.input = dropLast(c.input)
 		case "space":
 		default:
 			if len([]rune(s)) == 1 {

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"meshcore-tui/internal/packets"
@@ -132,14 +133,15 @@ func (m *Model) routeArrived(msg store.Message) {
 	}
 }
 
-// pathText is a message's path as compact hex, such as 5F·77, for the line above it.
+// pathText is a path as compact hex for the line above a message: 5F·77 for two hops, and the first and last
+// with an ellipsis between for more, such as 77…44; the map shows them all.
 func pathText(path []byte, size int) string {
-	out := ""
+	var hops []string
 	for i := 0; size > 0 && i+size <= len(path); i += size {
-		if i > 0 {
-			out += "·"
-		}
-		out += fmt.Sprintf("%X", path[i:i+size])
+		hops = append(hops, fmt.Sprintf("%X", path[i:i+size]))
 	}
-	return out
+	if len(hops) > 2 {
+		return hops[0] + "…" + hops[len(hops)-1]
+	}
+	return strings.Join(hops, "·")
 }
