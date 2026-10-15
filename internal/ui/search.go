@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 
+	"meshcore-tui/internal/chat"
 	"meshcore-tui/internal/config"
 	"meshcore-tui/internal/radio"
 	"meshcore-tui/internal/store"
@@ -99,7 +99,7 @@ func (m *Model) searchLines(w, rows int) []string {
 		r := s.results[i]
 		where := m.chat.Title(r.Convo)
 		line := th.Fg(th.Dim, false).Render(r.RecvAt.Local().Format("02 Jan 15:04")+"  ") +
-			th.Fg(th.Cyan, false).Render(fmt.Sprintf("%-14s", truncate(where, 14))) + " " +
+			th.Fg(th.Cyan, false).Render(col(where, 14)) + " " +
 			th.Fg(th.Muted, true).Render(r.Sender+": ") + m.highlight(r.Text, s.query, th.Text)
 		if i == s.sel {
 			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(" "+plainResult(r, where), w-1)))
@@ -112,10 +112,8 @@ func (m *Model) searchLines(w, rows int) []string {
 
 // plainResult is a result row without colour, for drawing on the raised selection fill.
 func plainResult(r store.Message, where string) string {
-	return r.RecvAt.Local().Format("02 Jan 15:04") + "  " + fmt.Sprintf("%-14s", truncate(where, 14)) + " " + r.Sender + ": " + r.Text
+	return r.RecvAt.Local().Format("02 Jan 15:04") + "  " + col(where, 14) + " " + r.Sender + ": " + r.Text
 }
-
-var mentionRe = regexp.MustCompile(`@[A-Za-z0-9_\-]+`)
 
 type span struct {
 	start, end int
@@ -141,12 +139,12 @@ func (m *Model) highlight(line, query string, base theme.RGB) string {
 	if m.chat != nil {
 		self = strings.ToLower(m.chat.Self())
 	}
-	for _, loc := range mentionRe.FindAllStringIndex(line, -1) {
+	for _, mn := range chat.FindMentions(line) {
 		kind := 2
-		if strings.EqualFold(line[loc[0]+1:loc[1]], self) {
+		if strings.EqualFold(mn.Name, self) {
 			kind = 1
 		}
-		spans = append(spans, span{loc[0], loc[1], kind})
+		spans = append(spans, span{mn.Start, mn.End, kind})
 	}
 	sort.SliceStable(spans, func(i, j int) bool { return spans[i].start < spans[j].start })
 	var b strings.Builder
@@ -162,9 +160,9 @@ func (m *Model) highlight(line, query string, base theme.RGB) string {
 		case 0:
 			b.WriteString(th.Block(th.Bg, th.Yellow).Render(seg))
 		case 1:
-			b.WriteString(th.Block(th.Bg, th.Magenta).Render(seg))
-		default:
-			b.WriteString(th.Fg(th.Cyan, true).Render(seg))
+			b.WriteString(th.Block(th.Text, th.Tint(th.Magenta)).Render(mentionLabel(seg)))
+		default: // violet, so it stands apart from the cyan sender names around it
+			b.WriteString(th.Block(th.Text, th.Tint(th.Violet)).Render(mentionLabel(seg)))
 		}
 		pos = sp.end
 	}
@@ -229,4 +227,12 @@ func exportCommand() command {
 			return nil
 		},
 		complete: func(*Model) []string { return []string{"json", "all", "packets"} }}
+}
+
+// mentionLabel shows @[name] as @name; the brackets are only there so names can hold spaces.
+func mentionLabel(seg string) string {
+	if strings.HasPrefix(seg, "@[") && strings.HasSuffix(seg, "]") {
+		return "@" + seg[2:len(seg)-1]
+	}
+	return seg
 }

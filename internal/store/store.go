@@ -50,6 +50,7 @@ type Message struct {
 	Attempts int
 	RTT      time.Duration
 	Flood    bool
+	Repeats  int // copies of an outgoing channel message heard coming back from repeaters
 }
 
 type Summary struct {
@@ -72,7 +73,8 @@ CREATE TABLE IF NOT EXISTS messages (
 	id INTEGER PRIMARY KEY AUTOINCREMENT, device TEXT NOT NULL, convo TEXT NOT NULL, out INTEGER NOT NULL,
 	sender TEXT NOT NULL, text TEXT NOT NULL, sent_at INTEGER NOT NULL, recv_at INTEGER NOT NULL,
 	hops INTEGER NOT NULL, snr REAL NOT NULL, has_snr INTEGER NOT NULL, signed INTEGER NOT NULL,
-	state INTEGER NOT NULL, ack INTEGER NOT NULL, attempts INTEGER NOT NULL, rtt_ms INTEGER NOT NULL, flood INTEGER NOT NULL);
+	state INTEGER NOT NULL, ack INTEGER NOT NULL, attempts INTEGER NOT NULL, rtt_ms INTEGER NOT NULL, flood INTEGER NOT NULL,
+	repeats INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS messages_convo ON messages (device, convo, id);
 CREATE TABLE IF NOT EXISTS reads (
 	device TEXT NOT NULL, convo TEXT NOT NULL, last_read INTEGER NOT NULL,
@@ -95,10 +97,27 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Store{db: db}, nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
+
+// migrate adds columns that databases made by earlier versions don't have.
+func migrate(db *sql.DB) error {
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name = 'repeats'`).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		_, err := db.Exec(`ALTER TABLE messages ADD COLUMN repeats INTEGER NOT NULL DEFAULT 0`)
+		return err
+	}
+	return nil
+}
 
 func b2i(b bool) int {
 	if b {
@@ -216,7 +235,14 @@ func (s *Store) UpdateDelivery(m Message) error {
 	return err
 }
 
-const messageCols = `id, convo, out, sender, text, sent_at, recv_at, hops, snr, has_snr, signed, state, ack, attempts, rtt_ms, flood`
+// AddRepeat counts one more copy of an outgoing message heard from a repeater, and returns the total.
+func (s *Store) AddRepeat(id int64) (int, error) {
+	var n int
+	err := s.db.QueryRow(`UPDATE messages SET repeats = repeats + 1 WHERE id = ? RETURNING repeats`, id).Scan(&n)
+	return n, err
+}
+
+const messageCols = `id, convo, out, sender, text, sent_at, recv_at, hops, snr, has_snr, signed, state, ack, attempts, rtt_ms, flood, repeats`
 
 // scanMessage reads messageCols, plus any extra columns that follow them.
 func scanMessage(sc interface{ Scan(...any) error }, extra ...any) (Message, error) {
@@ -224,7 +250,7 @@ func scanMessage(sc interface{ Scan(...any) error }, extra ...any) (Message, err
 	var convo string
 	var out, hasSNR, signed, state, flood int
 	var sent, recv, rtt int64
-	dest := []any{&m.ID, &convo, &out, &m.Sender, &m.Text, &sent, &recv, &m.Hops, &m.SNR, &hasSNR, &signed, &state, &m.Ack, &m.Attempts, &rtt, &flood}
+	dest := []any{&m.ID, &convo, &out, &m.Sender, &m.Text, &sent, &recv, &m.Hops, &m.SNR, &hasSNR, &signed, &state, &m.Ack, &m.Attempts, &rtt, &flood, &m.Repeats}
 	err := sc.Scan(append(dest, extra...)...)
 	m.Convo, m.Out, m.HasSNR, m.Signed, m.State, m.Flood = Convo(convo), out == 1, hasSNR == 1, signed == 1, State(state), flood == 1
 	m.SentAt, m.RecvAt, m.RTT = time.UnixMilli(sent), time.UnixMilli(recv), time.Duration(rtt)*time.Millisecond
@@ -263,6 +289,21 @@ func (s *Store) Conversations(device string) ([]Summary, error) {
 		out = append(out, sum)
 	}
 	return out, rows.Err()
+}
+
+// DeleteConvo removes a conversation's history, for a channel whose slot is being freed.
+func (s *Store) DeleteConvo(device string, c Convo) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, q := range []string{`DELETE FROM messages WHERE device = ? AND convo = ?`, `DELETE FROM reads WHERE device = ? AND convo = ?`} {
+		if _, err := tx.Exec(q, device, string(c)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *Store) MarkRead(device string, c Convo) error {

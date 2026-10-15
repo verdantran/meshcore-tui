@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -200,5 +201,44 @@ func TestUpsertAllAndFailures(t *testing.T) {
 	os.WriteFile(file, nil, 0o644)
 	if _, err := Open(filepath.Join(file, "x.db")); err == nil {
 		t.Error("a database under a file can't be opened")
+	}
+}
+
+func TestRepeatsAndMigration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	old, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A database from before repeats were counted.
+	if _, err := old.Exec(`CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, device TEXT NOT NULL, convo TEXT NOT NULL,
+		out INTEGER NOT NULL, sender TEXT NOT NULL, text TEXT NOT NULL, sent_at INTEGER NOT NULL, recv_at INTEGER NOT NULL,
+		hops INTEGER NOT NULL, snr REAL NOT NULL, has_snr INTEGER NOT NULL, signed INTEGER NOT NULL,
+		state INTEGER NOT NULL, ack INTEGER NOT NULL, attempts INTEGER NOT NULL, rtt_ms INTEGER NOT NULL, flood INTEGER NOT NULL);
+		INSERT INTO messages VALUES (1,'d','ch:0',1,'me','old',0,0,-1,0,0,0,1,0,1,0,1);`); err != nil {
+		t.Fatal(err)
+	}
+	old.Close()
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if n, err := s.AddRepeat(1); err != nil || n != 1 {
+		t.Fatalf("repeat on a migrated database = %d, %v", n, err)
+	}
+	s.AddRepeat(1)
+	msgs, _ := s.Messages("d", ChannelConvo(0), 5)
+	if len(msgs) != 1 || msgs[0].Repeats != 2 {
+		t.Errorf("messages = %+v", msgs)
+	}
+	if _, err := s.AddRepeat(99); err == nil {
+		t.Error("no such message")
+	}
+	s.Close()
+	if s2, err := Open(path); err != nil {
+		t.Errorf("reopening an up-to-date database: %v", err)
+	} else {
+		s2.Close()
 	}
 }

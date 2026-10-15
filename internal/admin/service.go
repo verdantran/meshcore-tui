@@ -153,10 +153,11 @@ type Service struct {
 	running  *Job
 	nextID   int
 	random   func() [4]byte
+	early    map[uint32]radio.BinaryReply // replies that arrived before their request's tag
 }
 
 func New(names Names) *Service {
-	return &Service{names: names, sessions: map[[32]byte]*Session{}, random: func() [4]byte {
+	return &Service{names: names, sessions: map[[32]byte]*Session{}, early: map[uint32]radio.BinaryReply{}, random: func() [4]byte {
 		var b [4]byte
 		rand.Read(b[:])
 		return b
@@ -259,10 +260,18 @@ func (s *Service) RequestOwner(c radio.Contact, now time.Time) *Job {
 }
 
 // Sent records the tag a binary request went out with, so its reply can be matched.
-func (s *Service) Sent(id int, tag uint32) {
-	if s.running != nil && s.running.ID == id {
-		s.running.tag = tag
+// Sent records the tag a binary request went out with. A reply that beat it here is matched now,
+// and the next job to start is returned.
+func (s *Service) Sent(id int, tag uint32, now time.Time) (*Session, *Job) {
+	if s.running == nil || s.running.ID != id {
+		return nil, nil
 	}
+	s.running.tag = tag
+	if r, ok := s.early[tag]; ok {
+		delete(s.early, tag)
+		return s.OnBinary(r, now)
+	}
+	return nil, nil
 }
 
 // Failed ends a job whose request the radio refused.
@@ -342,6 +351,14 @@ func (s *Service) OnTelemetry(r radio.Telemetry, now time.Time) (*Session, *Job)
 // OnBinary matches a binary reply to the request that's waiting for it.
 func (s *Service) OnBinary(r radio.BinaryReply, now time.Time) (*Session, *Job) {
 	j := s.running
+	if j != nil && j.Kind >= JobNeighbours && j.tag == 0 && r.Tag != 0 {
+		// A console answers at once, so its reply can arrive before the request's tag: hold it until then.
+		if len(s.early) > 16 {
+			clear(s.early)
+		}
+		s.early[r.Tag] = r
+		return nil, nil
+	}
 	if j == nil || j.tag != r.Tag || j.Kind < JobNeighbours {
 		return nil, nil
 	}
@@ -424,7 +441,7 @@ func (s *Service) CommandSent(c *Command, err error, now time.Time) *Command {
 		return nil
 	}
 	if err != nil {
-		s.settle(sess, "couldn't send: "+err.Error(), true, now)
+		s.settle(sess, "couldn't send: "+radio.Explain(err), true, now)
 		return s.nextCommand(sess, now)
 	}
 	if c.Silent {

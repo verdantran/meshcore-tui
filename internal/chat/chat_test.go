@@ -54,7 +54,7 @@ func TestIncomingIsFiledByConversation(t *testing.T) {
 		t.Fatalf("unknown sender convo = %q", stranger.Convo)
 	}
 
-	infos, err := s.Conversations()
+	infos, err := s.Conversations("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,13 +62,18 @@ func TestIncomingIsFiledByConversation(t *testing.T) {
 	for _, i := range infos {
 		titles = append(titles, i.Title)
 	}
-	// Channels first, then conversations with messages (newest first), then the remaining chat and room contacts.
-	want := []string{"Public", "#bristol", "EE0102030405", "Alice", "Clifton Room"}
+	// Channels first, then conversations with messages, newest first. Contacts and rooms without any aren't listed.
+	want := []string{"Public", "#bristol", "EE0102030405", "Alice"}
 	if strings.Join(titles, ",") != strings.Join(want, ",") {
 		t.Fatalf("conversation order = %v, want %v", titles, want)
 	}
-	if infos[1].Unread != 1 || infos[4].Kind != KindRoom {
+	if infos[1].Unread != 1 || infos[3].Kind != KindDirect {
 		t.Fatalf("unread/kind wrong: %+v", infos)
+	}
+	s.Incoming(radio.Incoming{At: t0, From: room.Prefix(), Text: "a post", Signed: true})
+	infos, _ = s.Conversations("")
+	if infos[2].Title != "Clifton Room" || infos[2].Kind != KindRoom {
+		t.Fatalf("a room with posts is listed as a room: %+v", infos)
 	}
 }
 
@@ -188,6 +193,8 @@ func TestMentionsAndExport(t *testing.T) {
 	for text, want := range map[string]bool{
 		"hey @MeshCore-k4 you there": true, "@meshcore-k4": true, "ping @MeshCore-k4x": false,
 		"MeshCore-k4 without the at": false, "@MeshCore-k4, and @MeshCore-k42": true,
+		"@[MeshCore-k4] are you hearing Purdown?": true, "hi @[ meshcore-k4 ]": true, "@[MeshCore-k42] not you": false,
+		"@[MeshCore-k4": false, "@[] nobody": false,
 	} {
 		if got := s.Mentions(text); got != want {
 			t.Errorf("Mentions(%q) = %v, want %v", text, got, want)
@@ -195,7 +202,7 @@ func TestMentionsAndExport(t *testing.T) {
 	}
 	s.Incoming(radio.Incoming{At: t0, Channel: true, ChannelIdx: 1, Text: "Carol: @meshcore-k4 is Purdown up?", Hops: 3, SNR: 6.5, HasSNR: true})
 	s.Incoming(radio.Incoming{At: t0, From: alice.Prefix(), Text: "hi", Hops: -1})
-	infos, _ := s.Conversations()
+	infos, _ := s.Conversations("")
 	if !infos[1].Mention || infos[0].Mention {
 		t.Fatalf("mention flags: %+v", infos[:2])
 	}
@@ -286,7 +293,7 @@ func TestStoreFailuresSurface(t *testing.T) {
 	if _, err := s.Incoming(radio.Incoming{Text: "x"}); err == nil {
 		t.Error("Incoming should report a broken store")
 	}
-	if _, err := s.Conversations(); err == nil {
+	if _, err := s.Conversations(""); err == nil {
 		t.Error("Conversations should report a broken store")
 	}
 	var sb strings.Builder
@@ -309,5 +316,74 @@ func TestRoomPostsNameTheirAuthor(t *testing.T) {
 	m, _ := s.Incoming(radio.Incoming{At: t0, From: alice.Prefix(), Author: [4]byte{0xC0}, Text: "dm"})
 	if m.Sender != "Alice" {
 		t.Error("only room posts carry an author")
+	}
+}
+
+func TestOnlyConversationsWithMessagesAreListed(t *testing.T) {
+	s := newService(t, 3, true)
+	titles := func(open store.Convo) string {
+		infos, _ := s.Conversations(open)
+		var out []string
+		for _, i := range infos {
+			out = append(out, i.Title)
+		}
+		return strings.Join(out, ",")
+	}
+	if got := titles(""); got != "Public,#bristol" {
+		t.Errorf("before any messages = %s", got)
+	}
+	if got := titles(store.ContactConvo(alice.Key)); got != "Public,#bristol,Alice" {
+		t.Errorf("starting one with Alice = %s", got)
+	}
+	if got := titles(store.ContactConvo(room.Key)); got != "Public,#bristol,Clifton Room" {
+		t.Errorf("opening a room = %s", got)
+	}
+	if got := titles(store.ContactConvo(rep.Key)); got != "Public,#bristol" {
+		t.Errorf("a repeater isn't someone to message = %s", got)
+	}
+	s.Incoming(radio.Incoming{At: t0, From: alice.Prefix(), Text: "hi"})
+	s.Incoming(radio.Incoming{At: t0, From: room.Prefix(), Text: "first post", Signed: true})
+	if got := titles(""); got != "Public,#bristol,Clifton Room,Alice" && got != "Public,#bristol,Alice,Clifton Room" {
+		t.Errorf("after Alice writes and the room posts = %s", got)
+	}
+}
+
+func TestChannelEchoes(t *testing.T) {
+	s := newService(t, 3, true)
+	m, _, _ := s.Compose(store.ChannelConvo(1), "anyone on Dundry?", t0)
+	s.Compose(store.ChannelConvo(1), "second", t0.Add(time.Second))
+	for i, c := range []struct {
+		idx          int
+		sender, text string
+		after        time.Duration
+		ok           bool
+		repeats      int
+	}{
+		{1, "MeshCore-k4", "anyone on Dundry?", time.Second, true, 1},
+		{1, "MeshCore-k4", "anyone on Dundry?", 2 * time.Second, true, 2},
+		{1, "Carol", "anyone on Dundry?", time.Second, false, 0},       // someone else saying the same
+		{0, "MeshCore-k4", "anyone on Dundry?", time.Second, false, 0}, // another channel
+		{1, "MeshCore-k4", "something else", time.Second, false, 0},
+		{1, "MeshCore-k4", "anyone on Dundry?", EchoWindow + time.Minute, false, 0}, // long after
+	} {
+		id, n, ok, err := s.Echo(c.idx, c.sender, c.text, t0.Add(c.after))
+		if err != nil || ok != c.ok || ok && (id != m.ID || n != c.repeats) {
+			t.Errorf("case %d: id %d n %d ok %v err %v", i, id, n, ok, err)
+		}
+	}
+	msgs, _ := s.store.Messages(s.device, store.ChannelConvo(1), 5)
+	if msgs[0].Repeats != 2 || msgs[1].Repeats != 0 {
+		t.Errorf("stored repeats = %d, %d", msgs[0].Repeats, msgs[1].Repeats)
+	}
+	if len(s.echoes) != 0 {
+		t.Error("old sends stop being listened for")
+	}
+}
+
+func TestFindMentions(t *testing.T) {
+	got := FindMentions("@[Bob Smith] and @alice, but not email@ or @[unclosed")
+	want := []Mention{{0, 12, "Bob Smith"}, {17, 23, "alice"}}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("mentions = %+v", got)
 	}
 }

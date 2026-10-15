@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	meshcore "github.com/OwlShack/meshcore-go"
@@ -23,11 +24,16 @@ const (
 	appName       = "meshcore-tui"
 	appVersion    = 3
 	stepTimeout   = 6 * time.Second
+	fetchTimeout  = 30 * time.Second // long, because the fetch queues behind whatever command is running
+	fetchTries    = 3
 	clockDriftMax = 5 * time.Second
 )
 
 // batteryEvery is how often the battery is read; tests shorten it.
 var batteryEvery = 60 * time.Second
+
+// fetchRetry is the pause before fetching again after a failure; tests shorten it.
+var fetchRetry = 3 * time.Second
 
 // sdkTransport is the SDK's serial and TCP transports, which also report drops and reconnects.
 type sdkTransport interface {
@@ -45,6 +51,8 @@ type Link struct {
 	events         chan Event
 	cancel         context.CancelFunc
 	closeOnce      sync.Once
+	slots          atomic.Int32 // how many channels the radio holds, from DEVICE_QUERY
+	waiting        chan struct{}
 }
 
 // quiet keeps the SDK's own logging off the terminal the UI is drawing on.
@@ -64,7 +72,7 @@ func NewTCP(addr string) *Link {
 }
 
 func newLink(describe, kind string, t sdkTransport) *Link {
-	l := &Link{describe: describe, kind: kind, raw: t, events: make(chan Event, 256)}
+	l := &Link{describe: describe, kind: kind, raw: t, events: make(chan Event, 256), waiting: make(chan struct{}, 1)}
 	l.tap = &tap{inner: t, emit: l.emit}
 	l.client = client.New(l.tap)
 	return l
@@ -111,6 +119,7 @@ func (l *Link) Start(ctx context.Context) {
 		l.step("link", "LINK", l.describe, StepOK)
 		l.sync(ctx)
 		go l.pollBattery(ctx)
+		go l.fetchLoop(ctx)
 	}()
 }
 
@@ -163,19 +172,8 @@ func (l *Link) sync(ctx context.Context) {
 	contacts, _ := run(l, ctx, "contacts", "CONTACTS", c.GetContacts, func(cs []companion.ContactResponse) string {
 		return fmt.Sprintf("%d synced", len(cs))
 	})
-	channels, _ := run(l, ctx, "channels", "CHANNELS", func(ctx context.Context) ([]Channel, error) {
-		var out []Channel
-		for i := 0; i < max(int(dev.MaxChannels), 1); i++ {
-			ch, err := c.GetChannel(ctx, byte(i))
-			if err != nil {
-				break
-			}
-			if ch.Name != "" {
-				out = append(out, Channel{Idx: int(ch.ChannelIdx), Name: ch.Name, Secret: ch.Secret})
-			}
-		}
-		return out, nil
-	}, func(cs []Channel) string { return fmt.Sprintf("%d configured", len(cs)) })
+	l.slots.Store(int32(dev.MaxChannels))
+	channels, _ := run(l, ctx, "channels", "CHANNELS", l.Channels, func(cs []Channel) string { return fmt.Sprintf("%d configured", len(cs)) })
 	waiting, _ := run(l, ctx, "queue", "QUEUE", c.GetWaitingMessages, func(ms []client.WaitingMessage) string {
 		return fmt.Sprintf("%d received", len(ms))
 	})
@@ -247,15 +245,73 @@ func (l *Link) deliver(ms []client.WaitingMessage) {
 	}
 }
 
-// drain fetches queued messages after the radio says some are waiting.
-func (l *Link) drain() {
-	ctx, cancel := context.WithTimeout(context.Background(), stepTimeout)
+// nudge asks fetchLoop to fetch; several pushes while it's busy make one more fetch, not a pile of them.
+func (l *Link) nudge() {
+	select {
+	case l.waiting <- struct{}{}:
+	default:
+	}
+}
+
+func (l *Link) fetchLoop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-l.waiting:
+		}
+		for try := 1; ; try++ {
+			err := l.fetch(ctx)
+			if err == nil || ctx.Err() != nil {
+				break
+			}
+			if try == fetchTries {
+				l.emit(Log{At: time.Now(), Text: "COULDN'T FETCH MESSAGES  " + Explain(err) + "; they wait on the radio until the next try", Tone: ToneWarn})
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(fetchRetry):
+			}
+		}
+	}
+}
+
+func (l *Link) fetch(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, fetchTimeout)
 	defer cancel()
 	ms, err := l.client.GetWaitingMessages(ctx)
-	if err != nil {
-		l.emit(Log{At: time.Now(), Text: "COULDN'T FETCH MESSAGES  " + err.Error(), Tone: ToneWarn})
-	}
 	l.deliver(ms)
+	return err
+}
+
+// Explain words an error for the log, turning Go's timeout message into something plain.
+func Explain(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "the radio didn't answer in time"
+	}
+	return err.Error()
+}
+
+// late catches a message whose fetch gave up waiting just before the radio answered. The radio has
+// already taken it off its queue, so this is its only copy.
+func late(r companion.Response) (client.WaitingMessage, bool) {
+	switch d := r.Data.(type) {
+	case companion.ContactMsgRecvResponse:
+		return client.WaitingMessage{Contact: &d}, true
+	case companion.ContactMsgRecvV3Response:
+		m := companion.ContactMsgRecvResponse{PubKeyPrefix: d.PubKeyPrefix, PathLen: d.PathLen, TxtType: d.TxtType,
+			SenderTimestamp: d.SenderTimestamp, SenderPrefix: d.SenderPrefix, Text: d.Text}
+		return client.WaitingMessage{Contact: &m, SNR: d.SNR, HasSNR: true}, true
+	case companion.ChannelMsgRecvResponse:
+		return client.WaitingMessage{IsChannel: true, Channel: &d}, true
+	case companion.ChannelMsgRecvV3Response:
+		m := companion.ChannelMsgRecvResponse{ChannelIdx: d.ChannelIdx, PathLen: d.PathLen, TxtType: d.TxtType,
+			SenderTimestamp: d.SenderTimestamp, SenderPrefix: d.SenderPrefix, Text: d.Text}
+		return client.WaitingMessage{IsChannel: true, Channel: &m, SNR: d.SNR, HasSNR: true}, true
+	}
+	return client.WaitingMessage{}, false
 }
 
 func (l *Link) refreshContact(key [32]byte) {
@@ -361,7 +417,15 @@ func (l *Link) registerPushes() {
 			l.emit(Acked{Ack: p.AckCode, RTT: time.Duration(p.RoundTrip) * time.Millisecond})
 		}
 	})
-	c.OnPush(companion.PushMsgWaiting, func(companion.Response) { go l.drain() })
+	c.OnPush(companion.PushMsgWaiting, func(companion.Response) { l.nudge() })
+	for _, code := range []byte{companion.RespContactMsgRecv, companion.RespContactMsgRecvV3, companion.RespChannelMsgRecv, companion.RespChannelMsgRecvV3} {
+		c.OnPush(code, func(r companion.Response) {
+			if w, ok := late(r); ok {
+				l.deliver([]client.WaitingMessage{w})
+				l.nudge() // the fetch that lost it stopped early, so more may be waiting
+			}
+		})
+	}
 	c.OnPush(companion.PushContactsFull, func(companion.Response) { l.emit(ContactsFull{}) })
 	c.OnPush(companion.PushLoginSuccess, func(r companion.Response) {
 		if p, ok := r.Data.(companion.PushLoginSuccessResponse); ok {
@@ -413,7 +477,7 @@ func (t *tap) SetErrorHandler(h func(error))     { t.inner.SetErrorHandler(h) }
 func (t *tap) Send(cmd []byte) error {
 	if len(cmd) > 0 {
 		now := time.Now()
-		t.emit(Frame{At: now, Dir: ToRadio, Code: cmd[0], Name: CommandName(cmd[0]), Bytes: append([]byte(nil), cmd...)})
+		t.emit(CommandFrame(now, cmd))
 		if overAir[cmd[0]] {
 			t.emit(Transmit{At: now, What: CommandName(cmd[0])})
 		}
@@ -576,4 +640,23 @@ func (l *Link) BinaryRequest(ctx context.Context, key [32]byte, data []byte) (ui
 func (l *Link) SendCLI(ctx context.Context, key [32]byte, command string) error {
 	_, err := l.client.SendTextMessage(ctx, meshcore.NewIdentity(key), command, companion.TxtTypeCLIData)
 	return err
+}
+
+// Channels reads every slot; empty ones are left out.
+func (l *Link) Channels(ctx context.Context) ([]Channel, error) {
+	var out []Channel
+	for i := 0; i < max(int(l.slots.Load()), 1); i++ {
+		ch, err := l.client.GetChannel(ctx, byte(i))
+		if err != nil {
+			break
+		}
+		if ch.Name != "" {
+			out = append(out, Channel{Idx: int(ch.ChannelIdx), Name: ch.Name, Secret: ch.Secret})
+		}
+	}
+	return out, nil
+}
+
+func (l *Link) SetChannel(ctx context.Context, c Channel) error {
+	return l.client.SetChannel(ctx, byte(c.Idx), c.Name, c.Secret)
 }

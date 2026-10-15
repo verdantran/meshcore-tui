@@ -13,10 +13,12 @@ import (
 )
 
 // Field is one decoded value and the bytes [Start, End) it occupies in the raw packet.
+// Hidden fields name who other people's private traffic is for or from; their bytes aren't shown either.
 type Field struct {
 	Name, Value string
 	Start, End  int
 	Part        Part
+	Hidden      bool
 }
 
 // Part groups fields so the hex dump can colour them.
@@ -112,7 +114,7 @@ func Decode(raw []byte, book Book) Decoded {
 	d.HashSize, d.Path = int(size), p.Path
 
 	add := func(name, value string, start, end int, part Part) {
-		d.Fields = append(d.Fields, Field{name, value, start, end, part})
+		d.Fields = append(d.Fields, Field{Name: name, Value: value, Start: start, End: end, Part: part})
 	}
 	add("header", fmt.Sprintf("0x%02X  route %s · %s · version %d", p.Header, d.Route, d.Type, p.PayloadVer()+1), 0, 1, PartHeader)
 	i := 1
@@ -143,7 +145,7 @@ func Decode(raw []byte, book Book) Decoded {
 }
 
 func (d *Decoded) field(name, value string, start, end int, part Part) {
-	d.Fields = append(d.Fields, Field{name, value, start, end, part})
+	d.Fields = append(d.Fields, Field{Name: name, Value: value, Start: start, End: end, Part: part})
 }
 
 func (d *Decoded) decodePayload(p *meshcore.Packet, at int, book Book) {
@@ -154,16 +156,17 @@ func (d *Decoded) decodePayload(p *meshcore.Packet, at int, book Book) {
 			d.field(name, fmt.Sprintf("%d bytes", end-at-from), at+from, end, PartBody)
 		}
 	}
+	// Private traffic between other people only shows what a repeater needs; see SPEC §10.
 	addressed := func(what string) {
 		if len(pl) < 4 {
 			d.Summary = what + " (truncated)"
 			return
 		}
-		d.field("to", book.Name(pl[0]), at, at+1, PartAddress)
-		d.field("from", book.Name(pl[1]), at+1, at+2, PartAddress)
+		to := d.address("to", pl[0], at, book, "addressed to your hash")
+		from := d.address("from", pl[1], at+1, book, "sent from your hash")
 		d.field("MAC", hexs(pl[2:4]), at+2, at+4, PartMeta)
 		body("ciphertext", 4)
-		d.Summary = fmt.Sprintf("%s to %s from %s · %d B encrypted", what, book.Name(pl[0]), book.Name(pl[1]), len(pl)-4)
+		d.Summary = fmt.Sprintf("encrypted %s · %d B%s%s", what, len(pl)-4, to, from)
 	}
 	switch p.PayloadType() {
 	case meshcore.PayloadTypeAdvert:
@@ -232,9 +235,9 @@ func (d *Decoded) decodePayload(p *meshcore.Packet, at int, book Book) {
 			break
 		}
 	case meshcore.PayloadTypeTxtMsg:
-		addressed("message")
+		addressed("direct message")
 	case meshcore.PayloadTypePath:
-		addressed("returned path")
+		addressed("route reply")
 	case meshcore.PayloadTypeReq:
 		addressed("request")
 	case meshcore.PayloadTypeResponse:
@@ -265,11 +268,19 @@ func (d *Decoded) decodePayload(p *meshcore.Packet, at int, book Book) {
 			d.Summary = "anonymous request, malformed"
 			return
 		}
-		d.field("to", book.Name(pl[0]), at, at+1, PartAddress)
-		d.field("one-time key", radio.KeyHex(pl[1:7])+"…", at+1, at+33, PartAddress)
+		to := d.address("to", pl[0], at, book, "addressed to your hash")
+		var key [32]byte
+		copy(key[:], pl[1:33])
+		from := ""
+		if key == book.Self && book.Self != ([32]byte{}) {
+			d.field("sender's key", "yours", at+1, at+33, PartAddress)
+			from = " · sent by you"
+		} else {
+			d.Fields = append(d.Fields, Field{Name: "sender's key", Value: "not shown", Start: at + 1, End: at + 33, Part: PartAddress, Hidden: true})
+		}
 		d.field("MAC", hexs(pl[33:35]), at+33, at+35, PartMeta)
 		body("ciphertext", 35)
-		d.Summary = "anonymous request to " + book.Name(pl[0])
+		d.Summary = fmt.Sprintf("encrypted anonymous request · %d B%s%s", len(pl)-35, to, from)
 	case meshcore.PayloadTypeControl:
 		c, err := meshcore.ControlFromBytes(pl)
 		if err != nil {
@@ -290,4 +301,38 @@ func (d *Decoded) decodePayload(p *meshcore.Packet, at int, book Book) {
 		body("payload", 0)
 		d.Summary = fmt.Sprintf("%s · %d B", strings.ToLower(d.Type), len(pl))
 	}
+}
+
+// address adds a to/from hash. Only one matching our own key is shown; it's a one-byte hash,
+// so a match means the packet may be ours, not that it is.
+func (d *Decoded) address(name string, h byte, at int, book Book, mine string) string {
+	if book.Self != ([32]byte{}) && h == book.Self[0] {
+		d.field(name, fmt.Sprintf("%02X, your hash", h), at, at+1, PartAddress)
+		return " · " + mine
+	}
+	d.Fields = append(d.Fields, Field{Name: name, Value: "not shown", Start: at, End: at + 1, Part: PartAddress, Hidden: true})
+	return ""
+}
+
+// Hidden reports whether byte i belongs to a hidden field.
+func (d Decoded) Hidden(i int) bool {
+	for _, f := range d.Fields {
+		if f.Hidden && i >= f.Start && i < f.End {
+			return true
+		}
+	}
+	return false
+}
+
+// MaskedHex is the packet as hex, with hidden bytes written as "··".
+func (d Decoded) MaskedHex() string {
+	var b strings.Builder
+	for i, c := range d.Raw {
+		if d.Hidden(i) {
+			b.WriteString("··")
+		} else {
+			fmt.Fprintf(&b, "%02x", c)
+		}
+	}
+	return b.String()
 }

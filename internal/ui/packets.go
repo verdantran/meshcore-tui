@@ -1,9 +1,9 @@
 package ui
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"meshcore-tui/internal/chat"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,26 +39,48 @@ type packetRow struct {
 	copies []heardCopy
 }
 
-var typeChoices = []string{"all", "ADVERT", "GRP_TXT", "TXT_MSG", "ACK", "PATH", "TRACE", "REQ", "RESPONSE", "ANON_REQ", "CONTROL"}
 var routeChoices = []string{"all", "flood", "direct"}
 var snrChoices = []float32{-99, 0, 5}
 
 type inspectorModel struct {
-	rows      []*packetRow // oldest first
+	rows      []*packetRow     // oldest first, only messages on open channels
+	others    int              // everything else heard, counted but not kept
+	seen      map[[8]byte]bool // every packet's hash, so repeats of hidden ones aren't counted twice
+	seenOrder [][8]byte
+	mesh      meshTally
 	byHash    map[[8]byte]*packetRow
 	sel       int // index in the filtered list, newest first; 0 follows live traffic
 	field     int
 	selAt     time.Time
 	paused    bool
 	held      int // packets that arrived while paused
-	typeIdx   int
 	routeIdx  int
 	snrIdx    int
 	filter    string
 	filtering bool
 }
 
-func newInspector() inspectorModel { return inspectorModel{byHash: map[[8]byte]*packetRow{}} }
+func newInspector() inspectorModel {
+	return inspectorModel{byHash: map[[8]byte]*packetRow{}, seen: map[[8]byte]bool{}, mesh: newMeshTally()}
+}
+
+// shown reports whether a packet belongs on the Packets screen: an advert, which is broadcast to
+// everyone, or a message on Public or a hashtag channel we've joined, which anyone may read.
+// Everything else stays off it; see SPEC §10.
+func (m *Model) shown(d packets.Decoded) bool {
+	if d.Err == nil && d.Type == "ADVERT" {
+		return true
+	}
+	if d.Err != nil || d.Type != "GRP_TXT" || !d.Decrypted || m.chat == nil {
+		return false
+	}
+	for _, ch := range m.chat.Channels() {
+		if ch.Name == d.Channel {
+			return chat.IsOpen(ch)
+		}
+	}
+	return false
+}
 
 func (m *Model) book() packets.Book {
 	b := packets.Book{Self: m.ready.Self.PubKey}
@@ -68,10 +90,31 @@ func (m *Model) book() packets.Book {
 	return b
 }
 
-// heardPacket files a packet from the radio, grouping repeats of one already seen.
+// heardPacket files a packet from the radio, grouping repeats of one already seen. Every packet feeds
+// the mesh tally; only messages on open channels are kept to look at.
 func (m *Model) heardPacket(p radio.Packet) {
 	in := &m.inspector
 	dec := packets.Decode(p.Raw, m.book())
+	first := dec.Err != nil || !in.seen[dec.Hash]
+	if first && dec.Err == nil {
+		in.seen[dec.Hash] = true
+		in.seenOrder = append(in.seenOrder, dec.Hash)
+		if len(in.seenOrder) > 4*packetKeep {
+			delete(in.seen, in.seenOrder[0])
+			in.seenOrder = in.seenOrder[1:]
+		}
+	}
+	in.mesh.add(dec, p.SNR, first, m.now)
+	if dec.Decrypted && dec.Type == "GRP_TXT" {
+		m.heardEcho(dec.Channel, dec.Sender, dec.Text) // every copy is another repeater passing it on
+	}
+	if !m.shown(dec) {
+		if first {
+			in.others++
+		}
+		return
+	}
+	m.ticker.add(hexBytes(p.Raw, dec.Hidden), m.now, m.w)
 	copy := heardCopy{at: m.now, snr: p.SNR, rssi: p.RSSI, path: dec.Path}
 	if dec.Err == nil {
 		if row, ok := in.byHash[dec.Hash]; ok {
@@ -102,8 +145,6 @@ func (m *Model) heardPacket(p radio.Packet) {
 func (m *Model) shows(r *packetRow) bool {
 	in := &m.inspector
 	switch {
-	case in.typeIdx > 0 && r.dec.Type != typeChoices[in.typeIdx]:
-		return false
 	case in.routeIdx == 1 && !r.dec.Flood || in.routeIdx == 2 && r.dec.Flood:
 		return false
 	case r.bestSNR() < snrChoices[in.snrIdx]:
@@ -191,10 +232,10 @@ func (m *Model) inspectorKey(s string) (tea.Cmd, bool) {
 			in.held = 0
 		}
 	case "C":
+		mesh := in.mesh // clearing the list doesn't reset the Stats tally
 		*in = newInspector()
+		in.mesh = mesh
 		m.addLog(m.now, "PACKETS CLEARED", radio.ToneInfo)
-	case "F":
-		in.typeIdx, in.sel = (in.typeIdx+1)%len(typeChoices), 0
 	case "R":
 		in.routeIdx, in.sel = (in.routeIdx+1)%len(routeChoices), 0
 	case "n":
@@ -231,10 +272,10 @@ func (m *Model) inspectorAnimating() bool {
 func (m *Model) inspectorTitle() string {
 	in := &m.inspector
 	t := fmt.Sprintf("PACKETS %d", len(in.rows))
-	var f []string
-	if in.typeIdx > 0 {
-		f = append(f, "type "+typeChoices[in.typeIdx])
+	if in.others > 0 {
+		t += fmt.Sprintf(" · %d OTHERS NOT SHOWN", in.others)
 	}
+	var f []string
 	if in.routeIdx > 0 {
 		f = append(f, routeChoices[in.routeIdx])
 	}
@@ -267,7 +308,7 @@ func (m *Model) renderInspector(w, rows int) []string {
 	}
 	list := m.visiblePackets()
 	if len(list) == 0 {
-		msg := "Waiting for packets. Everything the radio hears appears here."
+		msg := "Waiting for adverts, and messages on Public or a hashtag channel you've joined. Nothing else is shown here."
 		if len(in.rows) > 0 {
 			msg = "Nothing matches the filters."
 		}
@@ -358,7 +399,7 @@ func (m *Model) packetDetail(w, rows int) []string {
 		}
 		left = append(left, "", th.Fg(th.Magenta, true).Render(fmt.Sprintf("heard %d times: ", n))+th.Fg(th.Muted, false).Render(strings.Join(via, " · ")))
 	}
-	left = append(left, "", th.Fg(th.Dim, false).Render("[ ] step through fields · space pause · F type · R route · n signal · / filter · C clear"))
+	left = append(left, "", th.Fg(th.Dim, false).Render("[ ] step through fields · space pause · R route · n signal · / filter · C clear"))
 
 	shown := len(r.dec.Raw)
 	if m.level.Allows(motion.Typing) && motion.Running(in.selAt, hexReveal, now) {
@@ -382,6 +423,9 @@ func (m *Model) packetDetail(w, rows int) []string {
 				continue
 			}
 			cell := fmt.Sprintf("%02X", r.dec.Raw[i])
+			if r.dec.Hidden(i) {
+				cell = "··"
+			}
 			if i >= sel.Start && i < sel.End {
 				b.WriteString(" " + th.Block(th.Bg, colours[partAt(i)]).Render(cell))
 			} else {
@@ -438,7 +482,7 @@ func (m *Model) exportPackets() error {
 	for i := len(list) - 1; i >= 0; i-- {
 		r := list[i]
 		j := packetJSON{Time: r.first, SNR: r.copies[0].snr, RSSI: r.copies[0].rssi, Route: r.dec.Route, Type: r.dec.Type,
-			Path: hashes(r.dec.Path), Hex: hex.EncodeToString(r.dec.Raw), Summary: r.dec.Summary, Channel: r.dec.Channel, Copies: len(r.copies)}
+			Path: hashes(r.dec.Path), Hex: r.dec.MaskedHex(), Summary: r.dec.Summary, Channel: r.dec.Channel, Copies: len(r.copies)}
 		if r.dec.Decrypted {
 			j.Decrypted = r.dec.Sender + ": " + r.dec.Text
 		}

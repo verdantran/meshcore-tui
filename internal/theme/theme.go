@@ -143,6 +143,96 @@ var Light = Theme{
 	Red:     Hex("#c0213a"),
 }
 
+// Vapor: deep violet, pastel pink focus, aqua for live data.
+var Vapor = Theme{
+	Name:    "vapor",
+	Bg:      Hex("#120a1f"),
+	Panel:   Hex("#1b1030"),
+	Raised:  Hex("#2a1a48"),
+	Line:    Hex("#45306e"),
+	Text:    Hex("#fdf0ff"),
+	Muted:   Hex("#b39ad6"),
+	Dim:     Hex("#7e68a6"),
+	Magenta: Hex("#ff71ce"),
+	Cyan:    Hex("#01cdfe"),
+	Violet:  Hex("#b967ff"),
+	Green:   Hex("#05ffa1"),
+	Yellow:  Hex("#fffb96"),
+	Red:     Hex("#ff4f7b"),
+}
+
+// Midnight: navy, gold focus, sky blue for live data.
+var Midnight = Theme{
+	Name:    "midnight",
+	Bg:      Hex("#070a1a"),
+	Panel:   Hex("#0d1228"),
+	Raised:  Hex("#18203f"),
+	Line:    Hex("#2b3766"),
+	Text:    Hex("#eef1ff"),
+	Muted:   Hex("#9aa5d1"),
+	Dim:     Hex("#64709c"),
+	Magenta: Hex("#ffcc33"),
+	Cyan:    Hex("#6ee7ff"),
+	Violet:  Hex("#9fa8ff"),
+	Green:   Hex("#4dffa6"),
+	Yellow:  Hex("#ff9f43"),
+	Red:     Hex("#ff4d6d"),
+}
+
+// Ember: charred black, flame orange focus, gold for live data.
+var Ember = Theme{
+	Name:    "ember",
+	Bg:      Hex("#0e0605"),
+	Panel:   Hex("#190b08"),
+	Raised:  Hex("#2c140e"),
+	Line:    Hex("#52261a"),
+	Text:    Hex("#fff0e6"),
+	Muted:   Hex("#d09a80"),
+	Dim:     Hex("#946450"),
+	Magenta: Hex("#ff6a2b"),
+	Cyan:    Hex("#ffc53d"),
+	Violet:  Hex("#ff8f8f"),
+	Green:   Hex("#a6f06a"),
+	Yellow:  Hex("#ffe14d"),
+	Red:     Hex("#ff3355"),
+}
+
+// Toxic: black, acid lime focus, teal for live data, violet to set them off.
+var Toxic = Theme{
+	Name:    "toxic",
+	Bg:      Hex("#050903"),
+	Panel:   Hex("#0b1207"),
+	Raised:  Hex("#16230e"),
+	Line:    Hex("#2e4a1c"),
+	Text:    Hex("#efffe0"),
+	Muted:   Hex("#9cc27e"),
+	Dim:     Hex("#678a4e"),
+	Magenta: Hex("#c6ff00"),
+	Cyan:    Hex("#00ffd0"),
+	Violet:  Hex("#c070ff"),
+	Green:   Hex("#4dff7a"),
+	Yellow:  Hex("#ffb300"),
+	Red:     Hex("#ff3860"),
+}
+
+// Paper: warm cream for long reading in daylight; rust focus, teal for live data.
+var Paper = Theme{
+	Name:    "paper",
+	Bg:      Hex("#f7f1e3"),
+	Panel:   Hex("#efe6d2"),
+	Raised:  Hex("#e3d6ba"),
+	Line:    Hex("#c4b28c"),
+	Text:    Hex("#2b2014"),
+	Muted:   Hex("#5c4a33"),
+	Dim:     Hex("#76624b"),
+	Magenta: Hex("#a3361f"),
+	Cyan:    Hex("#1f6b75"),
+	Violet:  Hex("#6a3f9e"),
+	Green:   Hex("#2e7d32"),
+	Yellow:  Hex("#8a5a00"),
+	Red:     Hex("#c0103e"),
+}
+
 var HighContrast = func() Theme {
 	t := Neon
 	t.Name = "high-contrast"
@@ -158,7 +248,7 @@ var Mono = func() Theme {
 }()
 
 // All is the order themes cycle in.
-var All = []Theme{Neon, Dusk, Ice, Amber, Phosphor, Light, HighContrast, Mono}
+var All = []Theme{Neon, Dusk, Vapor, Ice, Midnight, Ember, Amber, Toxic, Phosphor, Light, Paper, HighContrast, Mono}
 
 func ByName(name string) Theme {
 	for _, t := range All {
@@ -186,6 +276,9 @@ func (t Theme) Next() Theme {
 	}
 	return Neon
 }
+
+// Tint is an accent faded most of the way into the background, for highlights that shouldn't shout.
+func (t Theme) Tint(c RGB) RGB { return c.Lerp(t.Bg, 0.6) }
 
 // Blend crossfades every token from a to b. Mono has no colours to blend, so it switches at the midpoint.
 func Blend(a, b Theme, t float64) Theme {

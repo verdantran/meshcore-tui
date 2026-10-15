@@ -33,6 +33,9 @@ func (m *Model) adminTitle() string {
 		}
 	}
 	title := fmt.Sprintf("ADMIN · %d NODES · %d SIGNED IN", len(m.adminNodes()), in)
+	if m.adm.favOnly {
+		title = fmt.Sprintf("ADMIN · %d FAVOURITES · %d SIGNED IN", len(m.adminNodes()), in)
+	}
 	alerts := 0
 	for _, c := range m.adminNodes() {
 		if m.alerts(c).Any() {
@@ -141,28 +144,32 @@ func (m *Model) authBadge(sess *admin.Session, ok bool) string {
 func (m *Model) nodeList(w, rows int) []string {
 	th, now := m.th, m.now
 	nodes := m.adminNodes()
+	if len(nodes) == 0 && m.adm.favOnly {
+		return []string{th.Fg(th.Dim, false).Render("No favourite repeaters or room servers. F shows them all; f on one marks it a favourite.")}
+	}
 	if len(nodes) == 0 {
 		return []string{th.Fg(th.Dim, false).Render("No repeaters or room servers in your contacts yet. They're added when their adverts are heard.")}
 	}
 	nameW := min(max(w/6, 12), 24)
-	out := []string{th.Fg(th.Muted, true).Render(fmt.Sprintf("  %-*s %-9s %-15s %-2s %-8s %-9s %-6s %-9s %-9s %s", nameW, "NAME", "TYPE", "SESSION", "PW", "BATTERY", "UPTIME", "NOISE", "FIRMWARE", "POLLED", "ALERTS"))}
+	out := []string{th.Fg(th.Muted, true).Render(fmt.Sprintf("  %-*s %-9s %-15s %-2s %-18s %-9s %-6s %-9s %-9s %s", nameW, "NAME", "TYPE", "SESSION", "PW", "BATTERY", "UPTIME", "NOISE", "FIRMWARE", "POLLED", "ALERTS"))}
 	room := rows - 2
 	start := min(max(m.adm.sel-room/2, 0), max(len(nodes)-room, 0))
 	for i := start; i < len(nodes) && len(out) < rows-1; i++ {
 		c := nodes[i]
 		sess, has := m.admin.Find(c.Key)
-		batt, up, noise, polled, fw := "—", "—", "—", "never", "—"
+		batt := th.Fg(th.Text, false).Render(fmt.Sprintf("%-18s", "—"))
+		up, noise, polled, fw := "—", "—", "never", "—"
 		if has && sess.Owner != nil {
 			fw = sess.Owner.FirmwareVersion
 		}
 		saved := " "
-		if _, ok := m.opt.Keychain.Get(c.Key); ok {
+		if ok, _ := m.keys.Saved(c.Key); ok {
 			saved = "●"
 		}
 		if has {
 			if p, ok := sess.Latest(); ok {
 				st := statsOf(p)
-				batt = fmt.Sprintf("%.2f V", float64(st.BattMilliVolts)/1000)
+				batt = m.batteryText(radio.Battery{MilliVolts: st.BattMilliVolts}, false)
 				up, noise, polled = uptime(st.UpTimeSecs), fmt.Sprint(st.NoiseFloor), ago(now.Sub(p.At))
 			}
 		}
@@ -172,14 +179,18 @@ func (m *Model) nodeList(w, rows int) []string {
 		if i == m.adm.sel {
 			marker = th.Fg(th.Magenta, true).Render("▌")
 		}
-		line := marker + " " + th.Fg(th.Text, i == m.adm.sel).Render(fmt.Sprintf("%-*s", nameW, clip(c.Name, nameW))) + " " +
+		star := " "
+		if favourite(c) {
+			star = th.Fg(th.Yellow, true).Render("★")
+		}
+		line := marker + star + th.Fg(th.Text, i == m.adm.sel).Render(col(c.Name, nameW)) + " " +
 			th.Fg(typeColour(th, c.Type), false).Render(fmt.Sprintf("%-9s", c.Type)) + " " + badge + pad + " " +
 			th.Fg(th.Green, false).Render(fmt.Sprintf("%-2s ", saved)) +
-			th.Fg(th.Text, false).Render(fmt.Sprintf("%-8s %-9s %-6s %-9s ", batt, up, noise, clip(fw, 9))) + th.Fg(th.Dim, false).Render(fmt.Sprintf("%-9s ", polled)) +
+			batt + " " + th.Fg(th.Text, false).Render(fmt.Sprintf("%-9s %-6s %-9s ", up, noise, clip(fw, 9))) + th.Fg(th.Dim, false).Render(fmt.Sprintf("%-9s ", polled)) +
 			th.Fg(th.Red, true).Render(m.alerts(c).String())
 		out = append(out, clip(line, w))
 	}
-	return append(out, "", th.Fg(th.Dim, false).Render(clip("↑↓ choose · enter open (logs in first) · P poll every node · L log out · F forget saved password · ● password saved", w)))
+	return append(out, "", th.Fg(th.Dim, false).Render(clip("↑↓ choose · enter open · f favourite · F favourites only · P poll the list · L log out · X forget password · ● saved", w)))
 }
 
 func uptime(secs uint32) string {
@@ -251,7 +262,7 @@ func (m *Model) promptLines(ct radio.Contact, sess *admin.Session, w, rows int) 
 		}
 		start := min(max(a.pickSel-(rows-3)/2, 0), max(len(people)-(rows-2), 0))
 		for i := start; i < len(people) && len(out) < rows; i++ {
-			line := fmt.Sprintf(" %-24s %s", clip(people[i].Name, 24), radio.KeyHex(people[i].Key[:6]))
+			line := fmt.Sprintf(" %s %s", col(people[i].Name, 24), radio.KeyHex(people[i].Key[:6]))
 			if i == a.pickSel {
 				out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(line, w-1)))
 				continue
@@ -354,7 +365,8 @@ func (m *Model) statusLines(ct radio.Contact, sess *admin.Session, w int) []stri
 	}
 	out := []string{
 		label("Uptime") + val(fmt.Sprintf("%-10s", uptime(cur.UpTimeSecs))) + label("Battery") +
-			val(fmt.Sprintf("%.2f V ", roll(float64(old.BattMilliVolts), float64(cur.BattMilliVolts))/1000)) + m.spark(batt, min(24, w/4), latest.At) +
+			m.batteryText(radio.Battery{MilliVolts: uint16(roll(float64(old.BattMilliVolts), float64(cur.BattMilliVolts)))}, true) + " " +
+			m.spark(batt, min(24, w/4), latest.At) +
 			"   " + label("Queue") + val(fmt.Sprint(cur.TxQueueLen)),
 		label("Noise floor") + val(fmt.Sprintf("%-6.0f", roll(float64(old.NoiseFloor), float64(cur.NoiseFloor)))) +
 			label("Last RSSI") + val(fmt.Sprintf("%-6d", cur.LastRSSI)) + label("Last SNR") + th.Fg(th.SNR(snr), true).Render(fmt.Sprintf("%-6.1f", snr)) +
@@ -564,7 +576,7 @@ func (m *Model) neighbourLines(sess *admin.Session, w, rows int) []string {
 		if i == m.adm.nbSel {
 			marker = th.Fg(th.Magenta, true).Render("▌") + " "
 		}
-		out = append(out, clip(marker+th.Fg(th.Text, false).Render(fmt.Sprintf("%-24s ", clip(n.Name, 24)))+
+		out = append(out, clip(marker+th.Fg(th.Text, false).Render(col(n.Name, 24)+" ")+
 			th.Fg(th.Muted, false).Render(fmt.Sprintf("%-14s ", radio.KeyHex(n.Prefix)))+
 			th.Fg(th.SNR(float64(n.SNR)), true).Render(fmt.Sprintf("%+-8.1f", n.SNR))+th.Fg(th.Dim, false).Render(ago(n.Heard)), w))
 	}
@@ -584,7 +596,7 @@ func (m *Model) aclLines(sess *admin.Session, w, rows int) []string {
 		if len(out) >= rows-2 {
 			break
 		}
-		line := fmt.Sprintf(" %-24s %-14s %s", clip(r.Name, 24), radio.KeyHex(r.Prefix[:]), admin.LevelName(r.Level))
+		line := fmt.Sprintf(" %s %-14s %s", col(r.Name, 24), radio.KeyHex(r.Prefix[:]), admin.LevelName(r.Level))
 		if i == a.aclSel {
 			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(line, w-1)))
 			continue
@@ -624,7 +636,7 @@ func (m *Model) regionLines(sess *admin.Session, w, rows int) []string {
 		if r.Depth > 0 {
 			branch = strings.Repeat("  ", r.Depth-1) + "└ "
 		}
-		name := fmt.Sprintf(" %-22s", branch+r.Name)
+		name := " " + col(branch+r.Name, 22)
 		if i == a.regSel {
 			out = append(out, clip(th.Fg(th.Magenta, true).Render("▌")+m.raised(name)+" "+flood+home, w))
 			continue

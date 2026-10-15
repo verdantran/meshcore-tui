@@ -45,11 +45,14 @@ func (s *stubRadio) ExportContact(context.Context, [32]byte) (string, error) {
 func (s *stubRadio) AdvertPath(context.Context, [32]byte) (radio.AdvertPath, error) {
 	return radio.AdvertPath{}, nil
 }
-func (s *stubRadio) Login(context.Context, [32]byte, string) error    { return nil }
-func (s *stubRadio) Logout(context.Context, [32]byte) error           { return nil }
-func (s *stubRadio) RequestStatus(context.Context, [32]byte) error    { return nil }
-func (s *stubRadio) RequestTelemetry(context.Context, [32]byte) error { return nil }
-func (s *stubRadio) SendCLI(context.Context, [32]byte, string) error  { return nil }
+func (s *stubRadio) Login(context.Context, [32]byte, string) error     { return nil }
+func (s *stubRadio) Logout(context.Context, [32]byte) error            { return nil }
+func (s *stubRadio) RequestStatus(context.Context, [32]byte) error     { return nil }
+func (s *stubRadio) RequestTelemetry(context.Context, [32]byte) error  { return nil }
+func (s *stubRadio) SendCLI(context.Context, [32]byte, string) error   { return nil }
+func (s *stubRadio) Device() radio.Device                              { return nil }
+func (s *stubRadio) Channels(context.Context) ([]radio.Channel, error) { return nil, nil }
+func (s *stubRadio) SetChannel(context.Context, radio.Channel) error   { return nil }
 func (s *stubRadio) BinaryRequest(context.Context, [32]byte, []byte) (uint32, error) {
 	return 1, nil
 }
@@ -75,6 +78,17 @@ func newTestModel(t *testing.T, level motion.Level, w, h int) (*Model, *clock) {
 func tick(m *Model, c *clock, d time.Duration) {
 	c.t = c.t.Add(d)
 	m.Update(frameMsg(c.t))
+}
+
+// bootDone steps the clock until the boot log's closing pause has run out.
+func bootDone(t *testing.T, m *Model, c *clock) {
+	t.Helper()
+	for i := 0; i < 20 && m.phase != phaseMain; i++ {
+		tick(m, c, 500*time.Millisecond)
+	}
+	if m.phase != phaseMain {
+		t.Fatal("still in boot after the handover delay")
+	}
 }
 
 func send(m *Model, c *clock, after time.Duration, e radio.Event) {
@@ -123,9 +137,10 @@ func TestBootThenMainScreen(t *testing.T) {
 		}
 
 		tick(m, c, time.Second)
-		if m.phase != phaseMain {
-			t.Fatalf("%v: still in boot after the handover delay", size)
+		if m.phase != phaseBoot {
+			t.Fatalf("%v: the finished boot log stays up long enough to read", size)
 		}
+		bootDone(t, m, c)
 		send(m, c, 100*time.Millisecond, radio.Packet{SNR: 7.25, RSSI: -92, Raw: []byte{0x15, 0x02, 0xA3, 0x5F, 0x01, 0x02}})
 		send(m, c, 0, radio.Log{Text: "PATH UPDATED  Alice → A3", Tone: radio.ToneOK})
 		tick(m, c, 2*time.Second)
@@ -175,7 +190,7 @@ func TestFailedBootStopsTicking(t *testing.T) {
 func TestIdleMainScreenStopsTicking(t *testing.T) {
 	m, c := newTestModel(t, motion.Full, 100, 30)
 	boot(m, c)
-	tick(m, c, time.Second)
+	bootDone(t, m, c)
 	tick(m, c, 30*time.Second)
 	if m.animating() {
 		t.Error("an idle main screen should not tick")
@@ -185,7 +200,7 @@ func TestIdleMainScreenStopsTicking(t *testing.T) {
 func TestThemeCycleCrossfades(t *testing.T) {
 	m, c := newTestModel(t, motion.Full, 100, 30)
 	boot(m, c)
-	tick(m, c, time.Second)
+	bootDone(t, m, c)
 	m.Update(tea.KeyPressMsg{Code: 'T', Text: "T"})
 	if m.Theme().Name != theme.Dusk.Name {
 		t.Fatalf("T should move to dusk, got %s", m.Theme().Name)
@@ -223,7 +238,7 @@ func key(m *Model, code rune) { m.Update(tea.KeyPressMsg{Code: code}) }
 func TestPalette(t *testing.T) {
 	m, c := newTestModel(t, motion.Full, 120, 30)
 	boot(m, c)
-	tick(m, c, time.Second)
+	bootDone(t, m, c)
 
 	typeKeys(m, ":")
 	if !m.pal.open {
@@ -328,18 +343,57 @@ func TestThemeChoicePersists(t *testing.T) {
 	}
 	typeKeys(m, "TT")
 	back, _ = config.Load(path)
-	if back.UI.Theme != "amber" {
+	if back.UI.Theme != "ice" {
 		t.Fatalf("after three presses the saved theme is %q", back.UI.Theme)
 	}
 
 	m2, c2 := newTestModel(t, motion.Full, 100, 30)
 	m2.opt.Config = back
 	boot(m2, c2)
-	tick(m2, c2, time.Second)
+	bootDone(t, m2, c2)
 	typeKeys(m2, ":theme ice")
 	key(m2, tea.KeyEnter)
 	back, _ = config.Load(path)
 	if back.UI.Theme != "ice" {
 		t.Fatalf("after :theme ice the saved theme is %q", back.UI.Theme)
+	}
+}
+
+func TestEnterSkipsTheBootPause(t *testing.T) {
+	m, c := newTestModel(t, motion.Full, 100, 30)
+	boot(m, c)
+	tick(m, c, 100*time.Millisecond)
+	if m.phase != phaseBoot {
+		t.Fatal("the boot log is still up")
+	}
+	key(m, tea.KeyEnter)
+	if m.phase != phaseMain {
+		t.Error("enter goes straight on")
+	}
+	if m.boot.typedBy(motion.Off) != m.boot.lines[len(m.boot.lines)-1].at {
+		t.Error("without typing, the log is shown as soon as each line arrives")
+	}
+}
+
+func TestHeaderLampsLightUp(t *testing.T) {
+	for _, level := range []motion.Level{motion.Full, motion.Off} {
+		m, c := newTestModel(t, level, 120, 30)
+		boot(m, c)
+		bootDone(t, m, c)
+		tick(m, c, 2*time.Second) // the header finishes sliding in
+		idle := m.header()
+		send(m, c, 0, radio.Packet{SNR: 5, Raw: []byte{0x15, 0x00}})
+		lit := m.header()
+		if lit == idle || ansi.Strip(lit) != ansi.Strip(idle) {
+			t.Errorf("%v: the RX lamp lights without moving anything", level)
+		}
+		tick(m, c, 300*time.Millisecond)
+		if level == motion.Full && (m.header() == lit || m.header() == idle) {
+			t.Errorf("%v: it fades", level)
+		}
+		tick(m, c, time.Second)
+		if m.header() != idle {
+			t.Errorf("%v: and goes out", level)
+		}
 	}
 }

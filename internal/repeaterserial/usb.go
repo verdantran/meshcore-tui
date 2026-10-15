@@ -187,3 +187,10 @@ func (u *USB) BinaryRequest(ctx context.Context, k [32]byte, data []byte) (uint3
 func (u *USB) SendCLI(ctx context.Context, k [32]byte, command string) error {
 	return u.cur().SendCLI(ctx, k, command)
 }
+
+func (u *USB) Device() radio.Device { return u.cur().Device() }
+
+func (u *USB) Channels(ctx context.Context) ([]radio.Channel, error) { return u.cur().Channels(ctx) }
+func (u *USB) SetChannel(ctx context.Context, c radio.Channel) error {
+	return u.cur().SetChannel(ctx, c)
+}

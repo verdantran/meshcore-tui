@@ -62,3 +62,58 @@ func (k *MemoryKeychain) Forget(node [32]byte) error {
 	delete(k.m, node)
 	return nil
 }
+
+// Cached remembers what a keychain said, since asking the system keychain can mean starting a
+// process: macOS's is reached through /usr/bin/security. Redraws read only the cache.
+type Cached struct {
+	inner Keychain
+	mu    sync.Mutex
+	known map[[32]byte]cachedEntry
+}
+
+type cachedEntry struct {
+	password string
+	saved    bool
+}
+
+func NewCached(k Keychain) *Cached { return &Cached{inner: k, known: map[[32]byte]cachedEntry{}} }
+
+func (c *Cached) Get(node [32]byte) (string, bool) {
+	c.mu.Lock()
+	e, ok := c.known[node]
+	c.mu.Unlock()
+	if ok {
+		return e.password, e.saved
+	}
+	pw, saved := c.inner.Get(node)
+	c.mu.Lock()
+	c.known[node] = cachedEntry{pw, saved}
+	c.mu.Unlock()
+	return pw, saved
+}
+
+// Saved reports what's cached without asking the keychain; known is false until it has been asked.
+func (c *Cached) Saved(node [32]byte) (saved, known bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.known[node]
+	return e.saved, ok
+}
+
+func (c *Cached) Set(node [32]byte, password string) error {
+	if err := c.inner.Set(node, password); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	c.known[node] = cachedEntry{password, true}
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *Cached) Forget(node [32]byte) error {
+	err := c.inner.Forget(node)
+	c.mu.Lock()
+	c.known[node] = cachedEntry{}
+	c.mu.Unlock()
+	return err
+}

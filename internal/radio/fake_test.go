@@ -107,7 +107,8 @@ func (f *fakeDevice) Send(cmd []byte) error {
 	case companion.AppStartCommand:
 		f.push(f.self.ToBytes())
 	case companion.DeviceQueryCommand:
-		f.push(companion.DeviceInfoResponse{FirmwareVersion: 10, MaxContacts: 350, MaxChannels: 4, Model: "Heltec V4", FirmwareVersionStr: "v1.17.1", FirmwareBuildDate: "14 Aug 2026"}.ToBytes())
+		f.push(companion.DeviceInfoResponse{FirmwareVersion: 10, MaxContacts: 350, MaxChannels: 4, Model: "Heltec V4", FirmwareVersionStr: "v1.17.1",
+			FirmwareBuildDate: "14 Aug 2026", BLEPin: 123456, RepeatEnabled: true, PathHashMode: 1}.ToBytes())
 	case companion.GetDeviceTimeCommand:
 		f.push(companion.CurrTimeResponse{Timestamp: uint32(time.Now().Add(-f.drift).Unix())}.ToBytes())
 	case companion.SetDeviceTimeCommand:
@@ -125,11 +126,29 @@ func (f *fakeDevice) Send(cmd []byte) error {
 		}
 		f.push(companion.EndOfContactsResponse{MostRecentLastmod: 1760000000}.ToBytes())
 	case companion.GetChannelCommand:
-		if int(c.ChannelIdx) >= len(f.channels) {
-			f.push(companion.ErrResponse{ErrorCode: companion.ErrCodeNotFound, HasErrorCode: true}.ToBytes())
-		} else {
-			f.push(f.channels[c.ChannelIdx].ToBytes())
+		f.mu.Lock()
+		var ch companion.ChannelInfoResponse
+		have := int(c.ChannelIdx) < len(f.channels)
+		if have {
+			ch = f.channels[c.ChannelIdx]
 		}
+		f.mu.Unlock()
+		switch {
+		case have:
+			f.push(ch.ToBytes())
+		case c.ChannelIdx < 4: // firmware answers every slot it has, named or not
+			f.push(companion.ChannelInfoResponse{ChannelIdx: c.ChannelIdx}.ToBytes())
+		default:
+			f.push(companion.ErrResponse{ErrorCode: companion.ErrCodeNotFound, HasErrorCode: true}.ToBytes())
+		}
+	case companion.SetChannelCommand:
+		f.mu.Lock()
+		for len(f.channels) <= int(c.ChannelIdx) {
+			f.channels = append(f.channels, companion.ChannelInfoResponse{ChannelIdx: byte(len(f.channels))})
+		}
+		f.channels[c.ChannelIdx] = companion.ChannelInfoResponse{ChannelIdx: c.ChannelIdx, Name: c.Name, Secret: c.Secret}
+		f.mu.Unlock()
+		f.push(ok)
 	case companion.SyncNextMessageCommand:
 		f.mu.Lock()
 		var next []byte
@@ -207,8 +226,34 @@ func (f *fakeDevice) Send(cmd []byte) error {
 		}
 		f.push(companion.ErrResponse{ErrorCode: companion.ErrCodeNotFound, HasErrorCode: true}.ToBytes())
 	case companion.AddUpdateContactCommand, companion.RemoveContactCommand, companion.ResetPathCommand,
-		companion.ImportContactCommand, companion.SendChannelTxtMsgCommand:
+		companion.ImportContactCommand, companion.SendChannelTxtMsgCommand,
+		companion.SetAdvertNameCommand, companion.SetAdvertLatLonCommand, companion.SendSelfAdvertCommand, companion.SetRadioParamsCommand,
+		companion.SetTxPowerCommand, companion.SetTuningParamsCommand, companion.SetOtherParamsCommand, companion.SetPathHashModeCommand,
+		companion.SetDefaultFloodScopeCommand, companion.SetDevicePinCommand, companion.ImportPrivateKeyCommand, companion.SetCustomVarCommand:
 		f.push(ok)
+	case companion.RebootCommand, companion.FactoryResetCommand:
+		// The radio goes away without a reply.
+	case companion.GetTuningParamsCommand:
+		f.push(companion.TuningParamsResponse{RxDelayBase: 1.2, AirtimeFactor: 1}.ToBytes())
+	case companion.GetAllowedRepeatFreqCommand:
+		f.push(companion.AllowedRepeatFreqResponse{Ranges: []companion.FreqRange{{LowerFreq: 433000, UpperFreq: 433500}, {LowerFreq: 869400, UpperFreq: 869650}}}.ToBytes())
+	case companion.GetDefaultFloodScopeCommand:
+		f.push(companion.DefaultFloodScopeResponse{Name: "#bristol", Key: make([]byte, 16)}.ToBytes())
+	case companion.ExportPrivateKeyCommand:
+		f.push(companion.PrivateKeyResponse{PrivateKey: [64]byte{0x5E, 0xC2}}.ToBytes())
+	case companion.GetCustomVarsCommand:
+		f.push(companion.CustomVarsResponse{Vars: "gps:1,sensor.interval:60"}.ToBytes())
+	case companion.GetStatsCommand:
+		r := companion.StatsResponse{StatsType: c.StatsType}
+		switch c.StatsType {
+		case companion.StatsTypeCore:
+			r.Core = &companion.CoreStats{BatteryMV: 4020, UptimeSecs: 7200, QueueLen: 1}
+		case companion.StatsTypeRadio:
+			r.Radio = &companion.RadioStats{NoiseFloor: -112, LastRSSI: -90, LastSNR: 6.25, TxAirSecs: 30, RxAirSecs: 400}
+		default:
+			r.Packets = &companion.PacketStats{PacketsRecv: 900, PacketsSent: 40, SentFlood: 30, SentDirect: 10, RecvFlood: 700, RecvDirect: 200, RecvErrors: 3}
+		}
+		f.push(r.ToBytes())
 	default:
 		return errors.New("fake device: unhandled command")
 	}

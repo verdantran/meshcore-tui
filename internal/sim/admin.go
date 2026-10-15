@@ -240,7 +240,7 @@ func (s *Sim) SendCLI(ctx context.Context, k [32]byte, command string) error {
 	if !ok {
 		return errors.New("not a repeater or room server")
 	}
-	s.frame(2, 6, []byte(command)...)
+	s.frame(2, 6) // console text can hold passwords, so it isn't recorded
 	if level, in := s.level(k); !in || level < 3 {
 		return nil
 	}

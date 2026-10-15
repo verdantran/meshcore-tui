@@ -37,7 +37,9 @@ const (
 var typeFilters = []struct {
 	name string
 	typ  radio.ContactType
-}{{"all", 0}, {"chat", radio.TypeChat}, {"repeater", radio.TypeRepeater}, {"room", radio.TypeRoom}, {"sensor", radio.TypeSensor}}
+	fav  bool
+}{{"all", 0, false}, {"favourites", 0, true}, {"chat", radio.TypeChat, false}, {"repeater", radio.TypeRepeater, false},
+	{"room", radio.TypeRoom, false}, {"sensor", radio.TypeSensor, false}}
 
 var sortNames = []string{"last heard", "name", "hops"}
 
@@ -182,10 +184,10 @@ func (m *Model) contactRows() []radio.Contact {
 	}
 	c := &m.contacts
 	var out []radio.Contact
-	want := typeFilters[c.typeFilter].typ
+	want, favOnly := typeFilters[c.typeFilter].typ, typeFilters[c.typeFilter].fav
 	q := strings.ToLower(c.filter)
 	for _, ct := range m.chat.Contacts() {
-		if want != 0 && ct.Type != want {
+		if want != 0 && ct.Type != want || favOnly && ct.Flags&radio.FlagFavourite == 0 {
 			continue
 		}
 		if q != "" && !strings.Contains(strings.ToLower(ct.Name), q) && !strings.Contains(strings.ToLower(radio.KeyHex(ct.Key[:1])), q) {
@@ -356,7 +358,7 @@ func (m *Model) contactsMsg(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case contactsSyncedMsg:
 		if msg.err != nil {
-			m.fail("CONTACT SYNC  " + msg.err.Error())
+			m.fail("CONTACT SYNC  " + radio.Explain(msg.err))
 		} else if m.chat != nil {
 			m.chat.ReplaceContacts(msg.list)
 			m.refreshChats()
@@ -367,7 +369,7 @@ func (m *Model) contactsMsg(msg tea.Msg) (tea.Cmd, bool) {
 		}
 	case traceStartedMsg:
 		if msg.err != nil {
-			m.fail("TRACE  " + msg.err.Error())
+			m.fail("TRACE  " + radio.Explain(msg.err))
 			return nil, true
 		}
 		c.traces[msg.tag] = &traceRun{key: msg.key, path: msg.path, started: m.now}
@@ -383,20 +385,20 @@ func (m *Model) contactsMsg(msg tea.Msg) (tea.Cmd, bool) {
 	case exportedMsg:
 		if msg.err != nil {
 			c.overlay = noOverlay
-			m.fail("SHARE  " + msg.err.Error())
+			m.fail("SHARE  " + radio.Explain(msg.err))
 		} else {
 			c.link = msg.link
 		}
 	case autoAddMsg:
 		if msg.err != nil {
 			c.overlay = noOverlay
-			m.fail("AUTO-ADD  " + msg.err.Error())
+			m.fail("AUTO-ADD  " + radio.Explain(msg.err))
 		} else {
 			c.auto, c.autoReady = msg.auto, true
 		}
 	case opDoneMsg:
 		if msg.err != nil {
-			m.fail(msg.what + "  " + msg.err.Error())
+			m.fail(msg.what + "  " + radio.Explain(msg.err))
 			return nil, true
 		}
 		m.addLog(m.now, msg.what, radio.ToneOK)
@@ -529,6 +531,10 @@ func (m *Model) jumpToConvo(cv store.Convo) {
 	m.setTab(0)
 	ch := &m.chats
 	ch.filter, ch.filtering = "", false
+	if strings.HasPrefix(string(cv), "dm:") {
+		m.openDraft(cv)
+		return
+	}
 	for i, info := range ch.infos {
 		if info.Convo == cv {
 			ch.sel = i

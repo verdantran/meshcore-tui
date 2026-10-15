@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	listenFor  = 30 * time.Second // after this, a channel message with no repeats heard says so
 	decodeDur  = 320 * time.Millisecond
 	arriveDur  = 700 * time.Millisecond
 	popDur     = 450 * time.Millisecond
@@ -37,12 +38,22 @@ type chatsModel struct {
 
 	arrived map[int64]time.Time // incoming messages, for the decode and the bar flash
 	acked   map[int64]time.Time // for the ✓ pop
+	echoed  map[int64]time.Time // a channel message's latest repeat, for its flash
 	failed  map[int64]time.Time // for the glitch
 	unread  int
+
+	draft store.Convo // a conversation started from Contacts, listed until it's left without a message
+
+	mention *mentionCycle // tab completing an @name in the compose box
+
+	chanStage chanStage // adding, sharing or removing a channel
+	chanInput string
+	chanName  string
+	shareCh   radio.Channel
 }
 
 func newChats() chatsModel {
-	return chatsModel{arrived: map[int64]time.Time{}, acked: map[int64]time.Time{}, failed: map[int64]time.Time{}}
+	return chatsModel{arrived: map[int64]time.Time{}, acked: map[int64]time.Time{}, failed: map[int64]time.Time{}, echoed: map[int64]time.Time{}}
 }
 
 type sendResultMsg struct {
@@ -71,7 +82,10 @@ func (m *Model) refreshChats() {
 	if cur, ok := m.selectedConvo(); ok {
 		keep = cur.Convo
 	}
-	infos, err := m.chat.Conversations()
+	if keep != c.draft {
+		c.draft = "" // moved away from a conversation that was never written in
+	}
+	infos, err := m.chat.Conversations(c.draft)
 	if err != nil {
 		m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 		return
@@ -176,7 +190,7 @@ func (m *Model) chatResult(r sendResultMsg) tea.Cmd {
 	}
 	if msg.State == store.Failed && msg.ID != 0 {
 		m.chats.failed[msg.ID] = m.now
-		m.fail(fmt.Sprintf("SEND FAILED  %s: %v", m.chat.Title(msg.Convo), r.err))
+		m.fail(fmt.Sprintf("SEND FAILED  %s: %s", m.chat.Title(msg.Convo), radio.Explain(r.err)))
 	}
 	m.refreshChats()
 	if wait != nil {
@@ -224,6 +238,9 @@ func (m *Model) composeSend() tea.Cmd {
 // chatsKey handles keys on the Chats screen. It returns handled=false for keys the screen leaves to the app.
 func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 	c := &m.chats
+	if c.chanStage != chanNone {
+		return m.channelKey(s)
+	}
 	if c.filtering {
 		switch s {
 		case "esc":
@@ -249,6 +266,8 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		switch s {
 		case "esc":
 			c.writing = false
+		case "tab":
+			m.completeMention()
 		case "enter":
 			return m.composeSend(), true
 		case "backspace":
@@ -289,6 +308,8 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		if len(c.infos) > 0 {
 			c.writing = true
 		}
+	case "n", "s", "x", "r":
+		return m.channelKey(s)
 	case "L":
 		if ct, ok := m.selectedRoom(); ok {
 			m.loginFromChats(ct)
@@ -322,9 +343,16 @@ func (m *Model) chatsAnimating() bool {
 			return true
 		}
 	}
+	for _, t := range m.chats.echoed {
+		if motion.Running(t, popDur, now) {
+			return true
+		}
+	}
 	if m.tab == 0 {
 		for _, msg := range m.chats.msgs {
-			waiting := msg.State == store.Pending || msg.State == store.Sent && !strings.HasPrefix(string(msg.Convo), "ch:")
+			channel := strings.HasPrefix(string(msg.Convo), "ch:")
+			listening := channel && msg.State == store.Sent && msg.Repeats == 0 && now.Sub(msg.SentAt) < listenFor
+			waiting := msg.State == store.Pending || msg.State == store.Sent && !channel || listening
 			if msg.Out && waiting {
 				return true // the waiting ramp runs until the message settles
 			}
@@ -338,6 +366,9 @@ func seconds(d time.Duration) string { return fmt.Sprintf("%.1fs", d.Seconds()) 
 // renderChats lays out the conversation list, the open conversation and the compose line.
 func (m *Model) renderChats(inner, rows int) []string {
 	th, c := m.th, &m.chats
+	if c.chanStage != chanNone && m.chat != nil {
+		return m.channelLines(inner, rows)
+	}
 	if m.chat == nil || len(c.infos) == 0 {
 		return []string{th.Fg(th.Dim, false).Render("No conversations yet. Channels and contacts appear here once the radio has synced.")}
 	}
@@ -459,6 +490,9 @@ func (m *Model) convoPane(w, rows int) []string {
 		counterCol = th.Yellow
 	}
 	counter := th.Fg(counterCol, used*10 >= limit*9).Render(fmt.Sprintf("%d/%d", used, limit))
+	if hint := m.mentionHint(); hint != "" {
+		counter = th.Fg(th.Cyan, false).Render(hint) + counter
+	}
 	var compose string
 	if c.writing {
 		text := c.input
@@ -574,7 +608,7 @@ func (m *Model) messageMeta(msg store.Message) string {
 		return ramp("sending")
 	case store.Sent:
 		if strings.HasPrefix(string(msg.Convo), "ch:") {
-			return th.Fg(th.Dim, false).Render("sent")
+			return m.repeatsMeta(msg)
 		}
 		how := "direct"
 		if msg.Flood {
@@ -590,6 +624,142 @@ func (m *Model) messageMeta(msg store.Message) string {
 		return th.Fg(col, true).Render("✓") + th.Fg(th.Green, popping).Render(" "+seconds(msg.RTT))
 	case store.Failed:
 		return th.Fg(th.Red, true).Render(fmt.Sprintf("[FAIL] not delivered after %d tries", max(msg.Attempts, 1)))
+	}
+	return ""
+}
+
+// openDraft lists and selects a conversation with a contact who hasn't been messaged yet.
+func (m *Model) openDraft(cv store.Convo) {
+	c := &m.chats
+	c.draft = cv
+	if infos, err := m.chat.Conversations(cv); err == nil {
+		c.infos = infos
+		for i, info := range infos {
+			if info.Convo == cv {
+				c.sel = i
+			}
+		}
+	}
+	c.scroll = 0
+	m.refreshChats()
+}
+
+// repeatsMeta says whether a channel message we sent was heard coming back from repeaters.
+func (m *Model) repeatsMeta(msg store.Message) string {
+	th, now := m.th, m.now
+	switch {
+	case msg.Repeats > 0:
+		label := fmt.Sprintf("✓ sent · heard %d repeats", msg.Repeats)
+		if msg.Repeats == 1 {
+			label = "✓ sent · heard 1 repeat"
+		}
+		col := th.Green
+		if at := m.chats.echoed[msg.ID]; m.level.Allows(motion.Flash) && motion.Running(at, popDur, now) {
+			col = th.Text.Lerp(th.Green, motion.Progress(at, popDur, now))
+		}
+		return th.Fg(col, true).Render(label)
+	case now.Sub(msg.SentAt) < listenFor:
+		r := "…"
+		if m.level.Allows(motion.Ramp) {
+			r = motion.RampBar(now, 3)
+		}
+		return th.Fg(th.Cyan, true).Render(r) + th.Fg(th.Cyan, false).Render(" sent · listening for repeats")
+	}
+	return th.Fg(th.Yellow, false).Render("sent · no repeats heard")
+}
+
+// heardEcho counts a heard copy of a channel message we sent.
+func (m *Model) heardEcho(channel, sender, text string) {
+	if m.chat == nil {
+		return
+	}
+	for _, ch := range m.chat.Channels() {
+		if ch.Name != channel {
+			continue
+		}
+		id, _, ok, err := m.chat.Echo(ch.Idx, sender, text, m.now)
+		if err != nil {
+			m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
+		}
+		if ok {
+			m.chats.echoed[id] = m.now
+			m.refreshChats()
+		}
+		return
+	}
+}
+
+// mentionCycle is a tab completion in progress: the names that fit, and which one is showing.
+type mentionCycle struct {
+	at      int // where the @ is in the input
+	matches []string
+	i       int
+	last    string // the input as completed, so a further tab cycles rather than starting again
+}
+
+// mentionNames are the people who can be mentioned here: contacts, and anyone who has written in
+// this conversation, since most people on a channel aren't contacts.
+func (m *Model) mentionNames() []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(name string) {
+		if k := strings.ToLower(name); name != "" && !seen[k] {
+			seen[k] = true
+			out = append(out, name)
+		}
+	}
+	for i := len(m.chats.msgs) - 1; i >= 0; i-- {
+		if msg := m.chats.msgs[i]; !msg.Out {
+			add(msg.Sender) // most recent first: who you're likely replying to
+		}
+	}
+	if m.chat != nil {
+		for _, ct := range m.chat.Contacts() {
+			if ct.Type == radio.TypeChat {
+				add(ct.Name)
+			}
+		}
+	}
+	return out
+}
+
+// completeMention turns the @name being typed into @[Name], the form the MeshCore apps recognise.
+func (m *Model) completeMention() {
+	c := &m.chats
+	if mc := c.mention; mc != nil && c.input == mc.last && len(mc.matches) > 1 {
+		mc.i = (mc.i + 1) % len(mc.matches)
+		c.input = c.input[:mc.at] + "@[" + mc.matches[mc.i] + "] "
+		mc.last = c.input
+		return
+	}
+	at := strings.LastIndex(c.input, "@")
+	if at < 0 {
+		return
+	}
+	partial := c.input[at+1:]
+	bracket := strings.HasPrefix(partial, "[")
+	partial = strings.TrimPrefix(partial, "[")
+	if strings.Contains(partial, "]") || !bracket && strings.Contains(partial, " ") {
+		return // the @ is already finished, or this is past it
+	}
+	var matches []string
+	for _, name := range m.mentionNames() {
+		if strings.HasPrefix(strings.ToLower(name), strings.ToLower(partial)) {
+			matches = append(matches, name)
+		}
+	}
+	if len(matches) == 0 {
+		return
+	}
+	c.input = c.input[:at] + "@[" + matches[0] + "] "
+	c.mention = &mentionCycle{at: at, matches: matches, last: c.input}
+}
+
+// mentionHint tells the writer more names fit, while a completion is showing.
+func (m *Model) mentionHint() string {
+	c := &m.chats
+	if mc := c.mention; mc != nil && c.input == mc.last && len(mc.matches) > 1 {
+		return fmt.Sprintf("tab: %d of %d names ", mc.i+1, len(mc.matches))
 	}
 	return ""
 }

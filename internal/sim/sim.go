@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -74,7 +75,7 @@ func contacts() []radio.Contact {
 
 var chatter = map[string][]string{
 	"#bristol": {
-		"@MeshCore-k4 are you hearing Purdown from Bedminster?", "@MeshCore-k4 nice advert, came in at 3 hops",
+		"@[MeshCore-k4] are you hearing Purdown from Bedminster?", "@[MeshCore-k4] nice advert, came in at 3 hops",
 		"anyone hearing the coast relay this morning?", "Purdown's back up after the power cut",
 		"new repeater going up on Lansdown this weekend", "getting 3 hops to Bath from Bedminster now",
 		"is the #hilltop channel still a thing?", "solid -2 dB to Clevedon from the harbourside",
@@ -111,13 +112,16 @@ type Sim struct {
 	born     time.Time
 	auto     radio.AutoAdd
 	tag      uint32
+	dev      devSettings
+	chans    []radio.Channel
 }
 
 func New(seed int64) *Sim {
 	return &Sim{events: make(chan radio.Event, 256), rng: rand.New(rand.NewSource(seed)), speed: 1, mv: 4020,
 		ack: uint32(seed), pending: map[string]int{}, loss: 0.15, book: contacts(),
 		auto: radio.AutoAdd{Repeater: true, MaxHops: 0}, servers: map[[32]byte]*server{}, sessions: map[[32]byte]byte{},
-		posts: seededPosts(time.Now()), born: time.Now()}
+		posts: seededPosts(time.Now()), born: time.Now(), dev: newDevSettings(),
+		chans: append([]radio.Channel(nil), channels...)}
 }
 
 // Fast makes every delay negligible, for tests.
@@ -218,7 +222,7 @@ func (s *Sim) run(ctx context.Context) {
 		{"device", "DEVICE", device.info.Model + " · fw " + device.info.Firmware, 22, 13, 120},
 		{"clock", "CLOCK", clock, 5, 9, 160},
 		{"contacts", "CONTACTS", fmt.Sprintf("%d synced", len(cs)), 4, 4, 40 * len(cs)},
-		{"channels", "CHANNELS", fmt.Sprintf("%d configured", len(channels)), 31, 18, 100 * len(channels)},
+		{"channels", "CHANNELS", fmt.Sprintf("%d configured", len(s.channelList())), 31, 18, 100 * len(s.channelList())},
 		{"queue", "QUEUE", fmt.Sprintf("%d received", len(waiting)), 10, 10, 90 * len(waiting)},
 		{"power", "POWER", fmt.Sprintf("%.2f V · %d%%", float64(batt.MilliVolts)/1000, batt.Percent()), 20, 12, 120},
 	}
@@ -232,8 +236,8 @@ func (s *Sim) run(ctx context.Context) {
 		}
 		s.emit(radio.BootStep{Key: st.key, Label: st.label, Detail: st.detail, State: radio.StepOK})
 	}
-	s.emit(radio.Ready{Self: device.self, Device: device.info, Contacts: len(cs), Channels: len(channels), Battery: batt,
-		ContactList: cs, ChannelList: channels})
+	s.emit(radio.Ready{Self: device.self, Device: device.info, Contacts: len(cs), Channels: len(s.channelList()), Battery: batt,
+		ContactList: cs, ChannelList: s.channelList()})
 	for _, m := range waiting {
 		s.emit(m)
 	}
@@ -371,7 +375,11 @@ func (s *Sim) packet(now time.Time) ([]byte, string, bool) {
 		}
 		return build(meshcore.RouteTypeFlood, meshcore.PayloadTypeAdvert, hops, payload), desc, true
 	case x < 52:
-		return s.groupText(now, hops, channels[s.intn(len(channels))], []string{"Alice", "Bob", "Carol", "Eve"}[s.intn(4)], ""), "", true
+		cs := s.channelList()
+		if len(cs) == 0 {
+			return nil, "", false
+		}
+		return s.groupText(now, hops, cs[s.intn(len(cs))], []string{"Alice", "Bob", "Carol", "Eve"}[s.intn(4)], ""), "", true
 	case x < 64:
 		return build(meshcore.RouteTypeDirect, meshcore.PayloadTypeTxtMsg, hops, encrypted()), "", false
 	case x < 78:
@@ -426,8 +434,15 @@ func (s *Sim) chatter(now time.Time) {
 			Text: lines[s.intn(len(lines))], SNR: float32(s.intn(48)-12) / 4, HasSNR: true})
 		return
 	}
-	ch := channels[s.intn(len(channels))]
-	lines := chatter[ch.Name]
+	cs := s.channelList()
+	if len(cs) == 0 {
+		return
+	}
+	ch := cs[s.intn(len(cs))]
+	lines, ok := chatter[ch.Name]
+	if !ok {
+		lines = []string{"hello from " + ch.Name, "anyone else on here?", "testing the new channel"}
+	}
 	who := []string{"Alice", "Bob", "Carol", "Dan", "Eve", "Hilltop Ops"}[s.intn(6)]
 	text := lines[s.intn(len(lines))]
 	hops := s.hops(s.intn(4) + 1)
@@ -494,11 +509,12 @@ func (s *Sim) SendText(ctx context.Context, to [32]byte, text string) (radio.Sen
 }
 
 func (s *Sim) SendChannel(ctx context.Context, idx int, text string) error {
-	if idx < 0 || idx >= len(channels) {
+	if !slices.ContainsFunc(s.channelList(), func(c radio.Channel) bool { return c.Idx == idx }) {
 		return errors.New("no such channel")
 	}
 	s.frame(3, 0, []byte(text)...)
 	s.emit(radio.Transmit{At: time.Now(), What: "SEND_CHANNEL_TXT_MSG"})
+	go s.echo(idx, text)
 	if strings.Contains(strings.ToLower(text), "anyone") {
 		go func() {
 			time.Sleep(s.delay(2500))
@@ -701,4 +717,52 @@ func (s *Sim) SetAutoAdd(ctx context.Context, a radio.AutoAdd) error {
 	s.mu.Unlock()
 	s.frame(58, 0)
 	return nil
+}
+
+func (s *Sim) channelList() []radio.Channel {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]radio.Channel(nil), s.chans...)
+}
+
+func (s *Sim) Channels(ctx context.Context) ([]radio.Channel, error) {
+	s.frame(31, 18)
+	return s.channelList(), nil
+}
+
+// SetChannel writes a slot; an empty name frees it, as the firmware does.
+func (s *Sim) SetChannel(ctx context.Context, c radio.Channel) error {
+	if c.Idx < 0 || c.Idx >= device.info.MaxChannels {
+		return errors.New("no such channel slot")
+	}
+	s.frame(32, 0, []byte(c.Name)...)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.chans = slices.DeleteFunc(s.chans, func(o radio.Channel) bool { return o.Idx == c.Idx })
+	if c.Name != "" {
+		s.chans = append(s.chans, c)
+		slices.SortFunc(s.chans, func(a, b radio.Channel) int { return a.Idx - b.Idx })
+	}
+	return nil
+}
+
+// echo plays back our channel message as nearby repeaters pass it on; with loss, sometimes none do.
+func (s *Sim) echo(idx int, text string) {
+	s.mu.Lock()
+	copies := 1 + s.rng.Intn(3)
+	if s.rng.Float64() < s.loss/2 {
+		copies = 0
+	}
+	s.mu.Unlock()
+	var ch radio.Channel
+	for _, c := range s.channelList() {
+		if c.Idx == idx {
+			ch = c
+		}
+	}
+	for i := 0; i < copies; i++ {
+		time.Sleep(s.delay(400 + s.intn(900)))
+		now := time.Now()
+		s.heardPacket(now, s.groupText(now, s.hops(i+1), ch, device.self.Name, text))
+	}
 }

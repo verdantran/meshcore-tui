@@ -166,12 +166,17 @@ func (m *Model) header() string {
 		name = motion.DecodeText(name, 0xbeef, motion.Progress(m.mainAt, slideDur*2, now))
 	}
 	tag := th.Block(th.Bg, th.Magenta).Render(" " + name + " ")
+	// A lamp lights as a solid block, holds, then fades back into the header.
 	lamp := func(label string, at time.Time, on theme.RGB) string {
-		c := th.Dim
-		if m.level.Allows(motion.Flash) && motion.Running(at, lampDur, now) {
-			c = on.Lerp(th.Dim, motion.Progress(at, lampDur, now))
+		text := " " + label + " ● "
+		if !motion.Running(at, headerLampDur, now) {
+			return seg(text, th.Dim, false)
 		}
-		return seg(" "+label+" ", th.Dim, false) + seg("●", c, true)
+		if !m.level.Allows(motion.Flash) {
+			return th.Block(th.Bg, on).Render(text)
+		}
+		fade := max(motion.Progress(at, headerLampDur, now)-0.3, 0) / 0.7
+		return th.Block(th.Bg.Lerp(th.Dim, fade), on.Lerp(th.Panel, fade)).Render(text)
 	}
 	batt := radio.Battery{MilliVolts: uint16(m.stats.currentBatt(now))}
 	if batt.MilliVolts == 0 {
@@ -186,7 +191,7 @@ func (m *Model) header() string {
 	}
 	// Details in order of importance; the least important drop first when the terminal is narrow.
 	details := []string{
-		seg(fmt.Sprintf("⚡%.2fV %d%%", float64(batt.MilliVolts)/1000, batt.Percent()), th.Cyan, true),
+		seg(fmt.Sprintf("%.2fV ", float64(batt.MilliVolts)/1000), th.Cyan, true) + batteryIcon(th, batt.Percent(), seg) + seg(fmt.Sprintf(" %d%%", batt.Percent()), th.Cyan, true),
 		seg(r.Self.Params(), th.Cyan, true),
 		seg(r.Device.Model, th.Muted, false),
 		seg("fw "+r.Device.Firmware, th.Muted, false),
@@ -234,8 +239,6 @@ var pending = map[int]string{
 	1: "The contact table, path editor, traces and sharing arrive in milestone 3.",
 	2: "The map arrives in milestone 7; the design work so far is in prototypes/map.",
 	3: "The live packet inspector arrives in milestone 4. Raw packets already scroll along the footer.",
-	5: "Local radio configuration arrives in milestone 6.",
-	6: "Radio and mesh statistics arrive in milestone 6.",
 }
 
 func (m *Model) body(w, h int) []string {
@@ -271,6 +274,14 @@ func (m *Model) body(w, h int) []string {
 	}
 	if m.tab == 3 {
 		box := m.panel(m.inspectorTitle(), m.renderInspector(w-4, mainH-2), w, mainH, accent, true)
+		return append(m.effects(box, w), debug...)
+	}
+	if m.tab == 5 && m.phase == phaseMain {
+		box := m.panel(m.deviceTitle(), m.renderDevice(w-4, mainH-2), w, mainH, accent, true)
+		return append(m.effects(box, w), debug...)
+	}
+	if m.tab == 6 && m.phase == phaseMain {
+		box := m.panel(m.statsTitle(), m.renderStats(w-4, mainH-2), w, mainH, accent, true)
 		return append(m.effects(box, w), debug...)
 	}
 	if m.tab == 4 && m.chat != nil {
@@ -347,7 +358,11 @@ func (m *Model) footer() []string {
 			th.Fg(th.SNR(s.snrTo), true).Render(fmt.Sprintf("SNR %+.2f", snr)) +
 			th.Fg(th.Muted, false).Render(fmt.Sprintf("  RSSI %d", s.rssi))
 	}
-	status += dot + th.Fg(th.Muted, false).Render(fmt.Sprintf("%d contacts · %d channels", m.ready.Contacts, m.ready.Channels))
+	contacts, channels := m.ready.Contacts, m.ready.Channels
+	if m.chat != nil && m.chat.Device() != "" {
+		contacts, channels = len(m.chat.Contacts()), len(m.chat.Channels()) // they change after connecting
+	}
+	status += dot + th.Fg(th.Muted, false).Render(fmt.Sprintf("%d contacts · %d channels", contacts, channels))
 	status += dot + th.Fg(th.Dim, false).Render("theme "+m.themeTo.Name+" · motion "+m.level.String())
 
 	logLine := ""
@@ -388,7 +403,7 @@ func (m *Model) frameLines(n, w int) []string {
 		}
 		hex := ""
 		if len(f.Bytes) > 0 {
-			hex = "  " + hexBytes(f.Bytes)
+			hex = "  " + hexBytes(f.Bytes, func(i int) bool { return i >= f.Hidden[0] && i < f.Hidden[1] })
 		}
 		line := th.Fg(th.Dim, false).Render(f.At.Format("15:04:05.000")+" ") + th.Fg(c, true).Render(arrow) +
 			th.Fg(th.Muted, false).Render(fmt.Sprintf(" %02X ", f.Code)) + th.Fg(th.Text, false).Render(f.Name) +
@@ -399,4 +414,42 @@ func (m *Model) frameLines(n, w int) []string {
 		out = append(out, th.Fg(th.Dim, false).Render("no frames yet"))
 	}
 	return out
+}
+
+// batteryIcon draws a five-cell battery filled to the charge: green, then yellow below half, red below a fifth.
+// paint styles each piece, so the header can keep its background.
+func batteryIcon(th theme.Theme, pct int, paint func(s string, c theme.RGB, bold bool) string) string {
+	cells := min(max((pct+10)/20, 0), 5)
+	if pct > 0 {
+		cells = max(cells, 1) // an almost-flat battery still shows a sliver
+	}
+	c := th.Green
+	switch {
+	case pct < 20:
+		c = th.Red
+	case pct < 50:
+		c = th.Yellow
+	}
+	return paint(strings.Repeat("█", cells), c, false) + paint(strings.Repeat("░", 5-cells), th.Dim, false) + paint("▌", th.Dim, false)
+}
+
+// plainPaint styles without a background, for use outside the header.
+func (m *Model) plainPaint(s string, c theme.RGB, bold bool) string {
+	return m.th.Fg(c, bold).Render(s)
+}
+
+// batteryText is "4.11 V ████░▌ 87%", always 18 cells wide so it lines up in columns.
+func (m *Model) batteryText(b radio.Battery, bold bool) string {
+	th := m.th
+	return th.Fg(th.Text, bold).Render(fmt.Sprintf("%.2f V ", float64(b.MilliVolts)/1000)) + batteryIcon(th, b.Percent(), m.plainPaint) +
+		th.Fg(th.Text, bold).Render(fmt.Sprintf(" %-4s", fmt.Sprintf("%d%%", b.Percent())))
+}
+
+// col fits s to exactly w cells, cut with … or padded. Names often hold emoji, which take two cells,
+// so padding by character count would push the columns after them out of line.
+func col(s string, w int) string {
+	if visibleWidth(s) > w {
+		s = ansi.Truncate(s, w, "…")
+	}
+	return s + strings.Repeat(" ", max(w-visibleWidth(s), 0))
 }

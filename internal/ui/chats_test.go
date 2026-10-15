@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"sync"
 	"testing"
@@ -81,7 +82,7 @@ func newChatModel(t *testing.T) (*Model, *clock, *scriptRadio) {
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 34})
 	send(m, c, 0, radio.BootStep{Key: "link", Label: "LINK", State: radio.StepOK})
 	send(m, c, 100*time.Millisecond, chatReady)
-	tick(m, c, time.Second)
+	bootDone(t, m, c)
 	return m, c, r
 }
 
@@ -118,6 +119,20 @@ func follow(t *testing.T, m *Model, c *clock, cmd tea.Cmd, timeouts bool) {
 		cmd = tea.Batch(next...)
 		c.t = c.t.Add(time.Second)
 	}
+}
+
+// startConvo opens a conversation with a contact you haven't messaged, as m on Contacts does.
+func startConvo(t *testing.T, m *Model, name string) {
+	t.Helper()
+	for _, ct := range m.chat.Contacts() {
+		if ct.Name == name {
+			m.jumpToConvo(store.ContactConvo(ct.Key))
+			if cur, _ := m.selectedConvo(); cur.Title == name {
+				return
+			}
+		}
+	}
+	t.Fatalf("couldn't start a conversation with %s", name)
 }
 
 func selectConvo(t *testing.T, m *Model, title string) {
@@ -184,7 +199,7 @@ func TestChatsReceiveSendAndDeliver(t *testing.T) {
 
 func TestChatsRetryFloodThenFail(t *testing.T) {
 	m, c, r := newChatModel(t)
-	selectConvo(t, m, "Alice")
+	startConvo(t, m, "Alice")
 	key(m, tea.KeyEnter)
 	typeKeys(m, "anyone there")
 	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -232,4 +247,150 @@ func TestChatsLimitAndPaletteSend(t *testing.T) {
 	if !strings.Contains(got, "hello channel") || !strings.Contains(got, "sent") {
 		t.Errorf("channel message not shown as sent:\n%s", got)
 	}
+}
+
+func TestStartingAConversationFromContacts(t *testing.T) {
+	h := newHarness(t)
+	h.keys("1")
+	titles := func() string {
+		var out []string
+		for _, i := range h.m.chats.infos {
+			out = append(out, i.Title)
+		}
+		return strings.Join(out, ",")
+	}
+	if strings.Contains(titles(), "Bob") || strings.Contains(titles(), "Dan") {
+		t.Fatalf("contacts who haven't written aren't listed: %s", titles())
+	}
+	h.keys("2")
+	h.pick("Dan")
+	h.keys("m")
+	if cur, _ := h.m.selectedConvo(); cur.Title != "Dan" || h.m.tab != 0 {
+		t.Fatalf("m opens a new conversation: %s", titles())
+	}
+	h.keys("k") // leaving without writing drops it again
+	if strings.Contains(titles(), "Dan") {
+		t.Errorf("an empty conversation left behind is dropped: %s", titles())
+	}
+	h.m.jumpToConvo(store.ContactConvo(h.contact("Dan").Key))
+	h.keys("i")
+	h.typeLine("hello Dan")
+	h.until("sent", func() bool { return strings.Contains(h.screen(), "hello Dan") })
+	h.keys("k")
+	h.key(tea.KeyEscape)
+	if !strings.Contains(titles(), "Dan") {
+		t.Errorf("once written to, it stays: %s", titles())
+	}
+
+	// :msg reaches someone not yet messaged too.
+	h.keys(":")
+	h.typeLine("msg bob hello Bob")
+	h.until("bob", func() bool { return strings.Contains(titles(), "Bob") })
+	h.keys(":")
+	h.typeLine("msg nobody hi")
+	if !strings.Contains(h.lastLog(), "no conversation or contact called") {
+		t.Errorf("unknown: %s", h.lastLog())
+	}
+}
+
+func TestChannelRepeatsAreHeard(t *testing.T) {
+	h := newHarness(t)
+	pub, _ := h.channel("Public")
+	h.m.jumpToConvo(store.ChannelConvo(pub.Idx))
+	h.keys("i")
+	h.typeLine("testing from the shed")
+	h.until("a repeat", func() bool {
+		msgs := h.m.chats.msgs
+		return len(msgs) > 0 && msgs[len(msgs)-1].Repeats > 0
+	})
+	scr := h.screen()
+	if !strings.Contains(scr, "✓ sent · heard") {
+		t.Fatalf("repeats shown:\n%s", scr)
+	}
+	// It's saved: a fresh read of the conversation still has the count.
+	msgs, _ := h.m.chat.Messages(store.ChannelConvo(pub.Idx), 5)
+	if msgs[len(msgs)-1].Repeats == 0 {
+		t.Error("repeats are stored")
+	}
+
+	now := h.m.now
+	for _, c := range []struct {
+		msg  store.Message
+		want string
+	}{
+		{store.Message{Convo: "ch:0", Out: true, State: store.Sent, SentAt: now}, "listening for repeats"},
+		{store.Message{Convo: "ch:0", Out: true, State: store.Sent, SentAt: now.Add(-time.Minute)}, "no repeats heard"},
+		{store.Message{Convo: "ch:0", Out: true, State: store.Sent, SentAt: now, Repeats: 1}, "heard 1 repeat"},
+		{store.Message{Convo: "ch:0", Out: true, State: store.Sent, SentAt: now, Repeats: 4}, "heard 4 repeats"},
+	} {
+		if got := ansi.Strip(h.m.repeatsMeta(c.msg)); !strings.Contains(got, c.want) {
+			t.Errorf("%+v → %q, want %q", c.msg, got, c.want)
+		}
+	}
+	h.m.chat = nil
+	h.m.heardEcho("Public", "MeshCore-k4", "x") // no chat service: nothing to count
+}
+
+func TestBracketMentionsAreHighlighted(t *testing.T) {
+	h := newHarness(t)
+	pub, _ := h.channel("Public")
+	bristol, _ := h.channel("#bristol")
+	h.m.jumpToConvo(store.ChannelConvo(bristol.Idx)) // reading elsewhere, so Public's message stays unread
+	h.m.Update(eventMsg{radio.Incoming{At: h.m.now, Channel: true, ChannelIdx: pub.Idx, SentAt: h.m.now,
+		Text: "Carol: @[MeshCore-k4] are you hearing @[Bob Smith]?"}})
+	h.settle()
+	if !strings.Contains(plainLog(h), "MSG  Public · Carol") {
+		t.Fatalf("message arrived:\n%s", plainLog(h))
+	}
+	for _, info := range h.m.chats.infos {
+		if info.Title == "Public" && !info.Mention {
+			t.Error("the conversation is marked as mentioning you")
+		}
+	}
+	h.m.jumpToConvo(store.ChannelConvo(pub.Idx))
+	scr := h.screen()
+	if !strings.Contains(scr, "@MeshCore-k4 are you hearing @Bob Smith?") || strings.Contains(scr, "@[") {
+		t.Fatalf("mentions shown without brackets:\n%s", scr)
+	}
+	line := h.m.highlight("@[MeshCore-k4] and @[Bob Smith]", "", h.m.th.Text)
+	you := h.m.th.Block(h.m.th.Text, h.m.th.Tint(h.m.th.Magenta)).Render("@MeshCore-k4")
+	other := h.m.th.Block(h.m.th.Text, h.m.th.Tint(h.m.th.Violet)).Render("@Bob Smith")
+	if !strings.Contains(line, you) || !strings.Contains(line, other) {
+		t.Errorf("you on magenta, others on violet: %q", line)
+	}
+}
+
+func TestMentionCompletion(t *testing.T) {
+	h := newHarness(t)
+	bristol, _ := h.channel("#bristol")
+	h.m.jumpToConvo(store.ChannelConvo(bristol.Idx))
+	h.keys("i")
+	h.keys("hi @ca")
+	h.key(tea.KeyTab)
+	if h.m.chats.input != "hi @[Carol] " {
+		t.Fatalf("completed = %q", h.m.chats.input)
+	}
+	h.m.chats.input, h.m.chats.mention = "and @", nil
+	h.key(tea.KeyTab)
+	first := h.m.chats.input
+	if !strings.HasPrefix(first, "and @[") || !strings.Contains(h.screen(), "tab: 1 of") {
+		t.Fatalf("first of many = %q\n%s", first, h.screen())
+	}
+	h.key(tea.KeyTab)
+	if h.m.chats.input == first || !strings.Contains(h.screen(), "tab: 2 of") {
+		t.Errorf("tab again cycles: %q", h.m.chats.input)
+	}
+	h.m.chats.input = "@[Ali"
+	h.key(tea.KeyTab)
+	if h.m.chats.input != "@[Alice] " {
+		t.Errorf("bracket partial = %q", h.m.chats.input)
+	}
+	for _, in := range []string{"no at sign", "@[Alice] done", "@zzz", "@Al ice"} {
+		h.m.chats.input, h.m.chats.mention = in, nil
+		h.key(tea.KeyTab)
+		if h.m.chats.input != in {
+			t.Errorf("%q changed to %q", in, h.m.chats.input)
+		}
+	}
+	h.key(tea.KeyEscape)
 }

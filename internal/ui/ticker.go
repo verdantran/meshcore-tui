@@ -22,7 +22,8 @@ type tickItem struct {
 	x    float64 // position on the track; the window's right edge is at offset+width
 }
 
-// ticker is the footer's strip of raw packet hex, scrolling right to left.
+// ticker is the footer's strip of packets: the bytes of adverts and messages on open channels scroll
+// right to left. Everything else is only counted; the header's RX lamp shows it arriving.
 type ticker struct {
 	items []tickItem
 	t0    time.Time
@@ -30,11 +31,15 @@ type ticker struct {
 
 func newTicker() ticker { return ticker{} }
 
-func hexBytes(b []byte) string {
+// hexBytes writes the start of a packet; bytes hidden reports true for are shown as ··.
+func hexBytes(b []byte, hidden func(int) bool) string {
 	n := min(len(b), tickerBytes)
 	parts := make([]string, n)
 	for i := 0; i < n; i++ {
 		parts[i] = fmt.Sprintf("%02X", b[i])
+		if hidden != nil && hidden(i) {
+			parts[i] = "··"
+		}
 	}
 	s := strings.Join(parts, " ")
 	if len(b) > n {
@@ -50,7 +55,7 @@ func (t *ticker) offset(now time.Time) float64 {
 	return now.Sub(t.t0).Seconds() * tickerSpeed
 }
 
-func (t *ticker) push(raw []byte, now time.Time, width int) {
+func (t *ticker) add(text string, now time.Time, width int) {
 	if t.t0.IsZero() {
 		t.t0 = now
 	}
@@ -58,7 +63,7 @@ func (t *ticker) push(raw []byte, now time.Time, width int) {
 	if n := len(t.items); n > 0 {
 		x = math.Max(x, t.items[n-1].x+float64(len([]rune(t.items[n-1].text)))+3)
 	}
-	t.items = append(t.items, tickItem{text: hexBytes(raw), born: now, x: x})
+	t.items = append(t.items, tickItem{text: text, born: now, x: x})
 	if len(t.items) > 60 {
 		t.items = t.items[len(t.items)-60:]
 	}

@@ -91,7 +91,7 @@ func TestChannelDecrypt(t *testing.T) {
 func TestOtherTypesAndMalformed(t *testing.T) {
 	book := Book{Self: [32]byte{0xC0}, Contacts: []radio.Contact{dundry}}
 	msg := build(t, meshcore.RouteTypeDirect, meshcore.PayloadTypeTxtMsg, []byte{0xA3}, append([]byte{0xC0, 0xA3, 1, 2}, make([]byte, 16)...))
-	if d := Decode(msg, book); d.Summary != "message to me from Dundry · 16 B encrypted" {
+	if d := Decode(msg, book); d.Summary != "encrypted direct message · 16 B · addressed to your hash" {
 		t.Errorf("text message = %q", d.Summary)
 	} else {
 		checkSpans(t, d)
@@ -132,10 +132,10 @@ func TestEveryPayloadType(t *testing.T) {
 		payload    []byte
 		want       string
 	}{
-		{meshcore.RouteTypeFlood, meshcore.PayloadTypePath, addressed, "returned path to Dundry from me · 16 B encrypted"},
-		{meshcore.RouteTypeDirect, meshcore.PayloadTypeReq, addressed, "request to Dundry from me · 16 B encrypted"},
-		{meshcore.RouteTypeDirect, meshcore.PayloadTypeResponse, addressed, "response to Dundry from me · 16 B encrypted"},
-		{meshcore.RouteTypeFlood, meshcore.PayloadTypeAnonReq, anon, "anonymous request to Dundry"},
+		{meshcore.RouteTypeFlood, meshcore.PayloadTypePath, addressed, "encrypted route reply · 16 B · sent from your hash"},
+		{meshcore.RouteTypeDirect, meshcore.PayloadTypeReq, addressed, "encrypted request · 16 B · sent from your hash"},
+		{meshcore.RouteTypeDirect, meshcore.PayloadTypeResponse, addressed, "encrypted response · 16 B · sent from your hash"},
+		{meshcore.RouteTypeFlood, meshcore.PayloadTypeAnonReq, anon, "encrypted anonymous request · 16 B"},
 		{meshcore.RouteTypeDirect, meshcore.PayloadTypeControl, discoverBytes, "neighbour discovery request"},
 		{meshcore.RouteTypeDirect, meshcore.PayloadTypeControl, replyBytes, "neighbour discovery reply"},
 		{meshcore.RouteTypeDirect, meshcore.PayloadTypeControl, []byte{0x30, 1}, "control subtype 3"},
@@ -155,7 +155,7 @@ func TestMalformedPayloads(t *testing.T) {
 	for typ, want := range map[byte]string{
 		meshcore.PayloadTypeAdvert:  "advert, malformed",
 		meshcore.PayloadTypeGrpTxt:  "channel message, malformed",
-		meshcore.PayloadTypeTxtMsg:  "message (truncated)",
+		meshcore.PayloadTypeTxtMsg:  "direct message (truncated)",
 		meshcore.PayloadTypeTrace:   "trace, malformed",
 		meshcore.PayloadTypeAnonReq: "anonymous request, malformed",
 	} {
@@ -199,3 +199,45 @@ func TestChannelEdgeCases(t *testing.T) {
 		t.Errorf("bare advert = %q", d.Summary)
 	}
 }
+
+// Traffic between other people names nobody, and its address bytes are masked wherever they're shown.
+func TestOthersPrivateTrafficIsNotNamed(t *testing.T) {
+	alice := radio.Contact{Key: [32]byte{0x3A}, Name: "Alice"}
+	book := Book{Self: [32]byte{0xC0, 0x01}, Contacts: []radio.Contact{dundry, alice}}
+	between := append([]byte{0xA3, 0x3A, 9, 9}, make([]byte, 16)...)
+	for _, typ := range []byte{meshcore.PayloadTypeTxtMsg, meshcore.PayloadTypePath, meshcore.PayloadTypeReq, meshcore.PayloadTypeResponse} {
+		d := Decode(build(t, meshcore.RouteTypeDirect, typ, []byte{0x1E}, between), book)
+		all := d.Summary
+		for _, f := range d.Fields {
+			all += " " + f.Value
+		}
+		if strings.Contains(all, "Dundry") || strings.Contains(all, "Alice") || strings.Contains(all, "your hash") {
+			t.Errorf("%s names someone: %s", d.Type, all)
+		}
+		masked := d.MaskedHex()
+		at := strings.Index(masked, "····")
+		if at < 0 || strings.Contains(masked, "a33a") || !d.Hidden(at/2) {
+			t.Errorf("%s: addresses not masked: %s", d.Type, masked)
+		}
+	}
+
+	// An anonymous request carries the sender's real public key, so it's hidden unless it's ours.
+	someone := append(append([]byte{0xA3}, bytesOf(0x77, 32)...), append([]byte{1, 2}, make([]byte, 16)...)...)
+	d := Decode(build(t, meshcore.RouteTypeFlood, meshcore.PayloadTypeAnonReq, nil, someone), book)
+	if !strings.Contains(d.MaskedHex(), strings.Repeat("··", 33)) || strings.Contains(d.MaskedHex(), "7777") {
+		t.Errorf("anonymous sender shown: %s", d.MaskedHex())
+	}
+	ours := append(append([]byte{0xA3}, book.Self[:]...), append([]byte{1, 2}, make([]byte, 16)...)...)
+	if d := Decode(build(t, meshcore.RouteTypeFlood, meshcore.PayloadTypeAnonReq, nil, ours), book); !strings.HasSuffix(d.Summary, "sent by you") || d.Hidden(3) {
+		t.Errorf("our own anonymous request = %q", d.Summary)
+	}
+	toUs := append(append([]byte{0xC0}, bytesOf(0x77, 32)...), append([]byte{1, 2}, make([]byte, 16)...)...)
+	if d := Decode(build(t, meshcore.RouteTypeFlood, meshcore.PayloadTypeAnonReq, nil, toUs), book); !strings.Contains(d.Summary, "addressed to your hash") {
+		t.Errorf("to us = %q", d.Summary)
+	}
+	if d := Decode(build(t, meshcore.RouteTypeDirect, meshcore.PayloadTypeTxtMsg, nil, between), Book{}); d.Hidden(0) || !strings.Contains(d.MaskedHex(), "····") {
+		t.Error("with no identity of our own, nothing matches")
+	}
+}
+
+func bytesOf(b byte, n int) []byte { return []byte(strings.Repeat(string([]byte{b}), n)) }

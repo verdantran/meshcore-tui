@@ -53,6 +53,8 @@ func TestThemesStayReadable(t *testing.T) {
 			{"yellow on bg", th.Yellow, th.Bg, 3},
 			{"red on bg", th.Red, th.Bg, 3},
 			{"bg on magenta (header tag)", th.Bg, th.Magenta, 4.5},
+			{"text on tinted magenta (@you)", th.Text, th.Tint(th.Magenta), 4.5},
+			{"text on tinted violet (someone else's @mention)", th.Text, th.Tint(th.Violet), 4.5},
 		}
 		for _, c := range checks {
 			if r := contrast(c.fg, c.bg); r < c.min {

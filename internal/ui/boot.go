@@ -69,6 +69,21 @@ func (b *bootModel) typing(level motion.Level, now time.Time) bool {
 	return false
 }
 
+// typedBy is when the last boot line finishes typing out.
+func (b *bootModel) typedBy(level motion.Level) time.Time {
+	var end time.Time
+	for _, l := range b.lines {
+		t := l.at
+		if level.Allows(motion.Typing) {
+			t = t.Add(motion.TypeDur(fmt.Sprintf("▸ %-10s %s", l.label, l.detail), bootCPS))
+		}
+		if t.After(end) {
+			end = t
+		}
+	}
+	return end
+}
+
 func (b *bootModel) fail(err error, now time.Time) {
 	b.failed, b.err = true, err
 	if b.finished.IsZero() {
@@ -125,6 +140,9 @@ func (m *Model) renderBoot() []string {
 			textStyle = th.Fg(th.Red, false)
 		}
 		label := textStyle.Render(text)
+		if pct, cut, ok := batteryPercent(l, typed, text); ok {
+			label = textStyle.Render(text[:cut+1]) + batteryIcon(th, pct, m.plainPaint) + textStyle.Render(" "+text[cut+1:])
+		}
 		gap := inner - visibleWidth(label) - visibleWidth(tag)
 		dots := ""
 		if typed && gap > 2 {
@@ -184,4 +202,19 @@ func (m *Model) logo(opened time.Time) []string {
 		th.Fg(th.Cyan, false).Render(rule),
 		th.Fg(th.Dim, false).Render("companion radio console"),
 	}
+}
+
+// batteryPercent finds the percentage at the end of a typed POWER line, so the icon can go just before it.
+func batteryPercent(l bootLine, typed bool, text string) (pct, at int, ok bool) {
+	if l.key != "power" || !typed || l.state != radio.StepOK {
+		return 0, 0, false
+	}
+	at = strings.LastIndex(text, " ")
+	if at < 0 {
+		return 0, 0, false
+	}
+	if _, err := fmt.Sscanf(text[at+1:], "%d%%", &pct); err != nil {
+		return 0, 0, false
+	}
+	return pct, at, true
 }

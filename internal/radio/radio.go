@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/OwlShack/meshcore-go/companion"
 	"strings"
 	"time"
 )
@@ -41,6 +42,11 @@ type Radio interface {
 	RequestTelemetry(ctx context.Context, key [32]byte) error                     // answered by a Telemetry
 	BinaryRequest(ctx context.Context, key [32]byte, data []byte) (uint32, error) // answered by a BinaryReply with this tag
 	SendCLI(ctx context.Context, key [32]byte, command string) error              // replies arrive as Incoming with CLI set
+
+	Channels(ctx context.Context) ([]Channel, error)
+	SetChannel(ctx context.Context, c Channel) error // an empty name and secret frees the slot
+
+	Device() Device // the companion's own settings and counters; nil when there's no companion
 }
 
 // LoginResult answers a login. Permissions is the server's level: 0 guest, 1 read-only, 2 read-write, 3 admin.
@@ -315,4 +321,35 @@ type Frame struct {
 	Code  byte
 	Name  string
 	Bytes []byte // command bytes; responses arrive parsed, so these are empty for FromRadio
+	// Hidden is the [start, end) of Bytes that carried a secret; those bytes are zeroed and shown as ··.
+	Hidden [2]int
+}
+
+// CommandFrame records a command for the frames panel, with any secret in it zeroed out first.
+func CommandFrame(at time.Time, cmd []byte) Frame {
+	f := Frame{At: at, Dir: ToRadio, Code: cmd[0], Name: CommandName(cmd[0]), Bytes: append([]byte(nil), cmd...)}
+	start, end := secretBytes(cmd)
+	end = min(end, len(cmd))
+	if start < end {
+		clear(f.Bytes[start:end])
+		f.Hidden = [2]int{start, end}
+	}
+	return f
+}
+
+// secretBytes is where a command carries a private key, PIN, password, channel secret or console text.
+func secretBytes(cmd []byte) (int, int) {
+	switch cmd[0] {
+	case companion.CmdImportPrivateKey, companion.CmdSetDevicePin:
+		return 1, len(cmd)
+	case companion.CmdSendLogin:
+		return 33, len(cmd) // after the node's public key
+	case companion.CmdSetChannel:
+		return 34, 50 // after the slot and the name
+	case companion.CmdSendTxtMsg:
+		if len(cmd) > 1 && cmd[1] == companion.TxtTypeCLIData {
+			return 13, len(cmd) // console commands can set passwords and keys
+		}
+	}
+	return 0, 0
 }

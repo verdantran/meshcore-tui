@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -153,7 +154,7 @@ func TestContactsSortFilterAndErrors(t *testing.T) {
 
 func TestChatEdges(t *testing.T) {
 	m, c, r := newChatModel(t)
-	selectConvo(t, m, "Alice")
+	startConvo(t, m, "Alice")
 	key(m, tea.KeyEnter)
 	typeKeys(m, "hello x")
 	key(m, tea.KeyBackspace)
@@ -262,7 +263,7 @@ func TestShellEventsAndKeys(t *testing.T) {
 	send(m, c, 0, radio.Battery{MilliVolts: 3800})
 	send(m, c, 0, radio.Transmit{What: "SEND_SELF_ADVERT"})
 	tick(m, c, time.Second)
-	has(t, plain(screen(t, m)), "LINKED", "⚡3.80V")
+	has(t, plain(screen(t, m)), "LINKED", "3.80V ███░░▌ 56%")
 	m.linked = linkDown
 	has(t, plain(screen(t, m)), "DOWN")
 	m.linked = linkUp
@@ -396,11 +397,11 @@ func TestInspectorAndSearchKeys(t *testing.T) {
 	h := newHarness(t)
 	h.keys("4")
 	for i := 0; i < 5; i++ {
-		h.hear(rawPacket(t, 1, 3, []byte{0xA3}, []byte{byte(i), 2, 3, 4}), float32(i))
+		h.hear(channelPacket(t, h, "Public", "Bob", fmt.Sprintf("test %d", i), []byte{0xA3}), float32(i))
 	}
-	h.hear([]byte{0x15}, 0) // malformed: shown, never grouped
-	has(t, h.screen(), "malformed")
-	h.keys("/ack 00")
+	h.hear([]byte{0x15}, 0) // malformed: not shown
+	has(t, h.screen(), "1 OTHERS NOT SHOWN")
+	h.keys("/test 0")
 	h.key(tea.KeyBackspace)
 	h.key(tea.KeyEnter)
 	h.key(tea.KeyEscape)
@@ -420,7 +421,7 @@ func TestInspectorAndSearchKeys(t *testing.T) {
 
 	// The inspector keeps the newest packets once full.
 	for i := 0; i < packetKeep+5; i++ {
-		h.m.heardPacket(radio.Packet{Raw: rawPacket(t, 1, 3, nil, []byte{byte(i), byte(i >> 8), 9, 9}), SNR: 1})
+		h.m.heardPacket(radio.Packet{Raw: channelPacket(t, h, "Public", "Bob", fmt.Sprint(i), nil), SNR: 1})
 	}
 	if len(h.m.inspector.rows) != packetKeep {
 		t.Errorf("kept %d packets", len(h.m.inspector.rows))

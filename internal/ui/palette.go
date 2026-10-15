@@ -7,6 +7,7 @@ import (
 
 	"meshcore-tui/internal/motion"
 	"meshcore-tui/internal/radio"
+	"meshcore-tui/internal/store"
 	"meshcore-tui/internal/theme"
 )
 
@@ -255,7 +256,7 @@ func slug(title string) string {
 func msgCommand() command {
 	return command{name: "msg", args: "<conversation> <text>", help: "send a message without leaving this screen",
 		run: func(m *Model, a []string) error {
-			if m.chat == nil || len(m.chats.infos) == 0 {
+			if m.chat == nil {
 				return fmt.Errorf("no conversations yet")
 			}
 			if len(a) < 2 {
@@ -271,12 +272,30 @@ func msgCommand() command {
 					return nil
 				}
 			}
-			return fmt.Errorf("no conversation called %q", a[0])
+			// Someone you haven't messaged yet: start their conversation, as Contacts does.
+			for _, ct := range m.chat.Contacts() {
+				if slug(ct.Name) == want && ct.Type == radio.TypeChat {
+					m.openDraft(store.ContactConvo(ct.Key))
+					m.chats.input = strings.Join(a[1:], " ")
+					m.refreshChats()
+					m.queued = m.composeSend()
+					return nil
+				}
+			}
+			return fmt.Errorf("no conversation or contact called %q", a[0])
 		},
 		complete: func(m *Model) []string {
 			var out []string
+			seen := map[string]bool{}
 			for _, info := range m.chats.infos {
-				out = append(out, slug(info.Title))
+				out, seen[slug(info.Title)] = append(out, slug(info.Title)), true
+			}
+			if m.chat != nil {
+				for _, ct := range m.chat.Contacts() {
+					if ct.Type == radio.TypeChat && !seen[slug(ct.Name)] {
+						out = append(out, slug(ct.Name))
+					}
+				}
 			}
 			return out
 		}}

@@ -84,6 +84,9 @@ type Model struct {
 	chats     chatsModel
 	admin     *admin.Service
 	adm       adminModel
+	keys      *admin.Cached
+	device    deviceModel
+	rstats    radioStatsModel
 	contacts  contactsModel
 	inspector inspectorModel
 
@@ -148,10 +151,13 @@ func New(opt Options) *Model {
 	if m.opt.Keychain == nil {
 		m.opt.Keychain = &admin.MemoryKeychain{}
 	}
+	m.keys = admin.NewCached(m.opt.Keychain)
+	m.opt.Keychain = m.keys
 	m.adm = newAdmin()
+	m.device = newDevice()
 	m.notes = newNotifier(opt)
 	m.focused = true
-	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand(), notifyCommand(), traceCommand())
+	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand(), notifyCommand(), traceCommand(), channelCommand())
 	m.connect = newConnect(opt.Ports, m.savedTargets)
 	m.ticker = newTicker()
 	return m
@@ -221,8 +227,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case contactsSyncedMsg, advertPathMsg, traceStartedMsg, traceTimeoutMsg, exportedMsg, autoAddMsg, opDoneMsg:
 		cmd, _ := m.contactsMsg(msg)
 		cmds = append(cmds, cmd)
-	case jobSentMsg, jobTimeoutMsg, cmdSentMsg, cmdTimeoutMsg, autoStatusMsg, fleetPollMsg:
+	case jobSentMsg, jobTimeoutMsg, cmdSentMsg, cmdTimeoutMsg, autoStatusMsg, fleetPollMsg, keysCheckedMsg:
 		cmds = append(cmds, m.adminMsg(msg))
+	case devLoadedMsg, devOpMsg, keyExportedMsg:
+		cmds = append(cmds, m.deviceMsg(msg))
+	case statsMsg, statsTickMsg:
+		cmds = append(cmds, m.statsMsg(msg))
+	case channelsMsg:
+		cmds = append(cmds, m.channelsMsg(msg))
 	case sendResultMsg:
 		cmds = append(cmds, m.chatResult(msg))
 	case ackTimeoutMsg:
@@ -237,6 +249,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	m.handover()
 	m.blendTheme()
+	cmds = append(cmds, m.screenData())
 	cmds = append(cmds, m.ensureTick())
 	return m, tea.Batch(cmds...)
 }
@@ -266,10 +279,10 @@ func (m *Model) animating() bool {
 	}
 	return motion.Running(m.mainAt, slideDur, now) ||
 		motion.Running(m.tabAt, wipeDur, now) ||
-		motion.Running(m.stats.rxLamp, lampDur, now) || motion.Running(m.stats.txLamp, lampDur, now) ||
+		motion.Running(m.stats.rxLamp, headerLampDur, now) || motion.Running(m.stats.txLamp, headerLampDur, now) ||
 		motion.Running(m.stats.snrAt, countDur, now) || motion.Running(m.stats.battAt, countDur, now) ||
 		motion.Running(m.glitch, glitchDur, now) ||
-		m.latestTyping() || m.linked == linkLost || m.chatsAnimating() || m.contactsAnimating() || m.inspectorAnimating() || m.adminAnimating() ||
+		m.latestTyping() || m.linked == linkLost || m.chatsAnimating() || m.contactsAnimating() || m.inspectorAnimating() || m.adminAnimating() || m.deviceAnimating() ||
 		m.ticker.moving(m.level, now, m.w)
 }
 
@@ -305,6 +318,7 @@ func (m *Model) apply(e radio.Event) tea.Cmd {
 	case radio.Restored:
 		m.linked = linkUp
 		m.addLog(now, "LINK RESTORED", radio.ToneOK)
+		m.device.loaded, m.device.err = false, nil // a reboot or reset may have changed everything
 	case radio.Packet:
 		s := &m.stats
 		s.packets++
@@ -312,7 +326,6 @@ func (m *Model) apply(e radio.Event) tea.Cmd {
 		s.rxLamp = now
 		s.snrFrom = s.currentSNR(now)
 		s.snrTo, s.snrAt, s.rssi = float64(e.SNR), now, e.RSSI
-		m.ticker.push(e.Raw, now, m.w)
 		m.heardPacket(e)
 	case radio.Transmit:
 		m.stats.txLamp = now
@@ -348,6 +361,7 @@ func (m *Model) addLog(at time.Time, text string, tone radio.Tone) {
 
 const (
 	lampDur       = 400 * time.Millisecond
+	headerLampDur = 600 * time.Millisecond // RX and TX: long enough to catch on a busy mesh
 	countDur      = 500 * time.Millisecond
 	wipeDur       = 140 * time.Millisecond
 	slideDur      = 320 * time.Millisecond
@@ -355,7 +369,7 @@ const (
 	logoDecodeDur = 700 * time.Millisecond
 	themeFadeDur  = 420 * time.Millisecond
 	logCPS        = 140.0
-	handoverDelay = 650 * time.Millisecond
+	handoverDelay = 1500 * time.Millisecond // long enough to read the finished, all-green boot log
 )
 
 func (m *Model) latestTyping() bool {
@@ -405,6 +419,11 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 	}
 	if m.phase == phaseMain && m.tab == 4 && m.chat != nil {
 		if cmd, handled := m.adminKey(s); handled {
+			return cmd, false
+		}
+	}
+	if m.phase == phaseMain && m.tab == 5 && m.dev() != nil {
+		if cmd, handled := m.deviceKey(s); handled {
 			return cmd, false
 		}
 	}
@@ -477,6 +496,26 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 	return nil, false
 }
 
+// screenData starts reading what the current screen shows, the first time it's needed.
+func (m *Model) screenData() tea.Cmd {
+	if m.phase != phaseMain {
+		return nil
+	}
+	if m.tab == 4 && !m.adm.keysChecked {
+		return m.checkKeys()
+	}
+	if m.dev() == nil {
+		return nil
+	}
+	switch {
+	case m.tab == 5 && !m.device.loaded && !m.device.loading && m.device.err == nil:
+		return m.loadDevice()
+	case m.tab == 6 && !m.rstats.polling:
+		return m.pollStats()
+	}
+	return nil
+}
+
 func (m *Model) setTab(i int) {
 	if i != m.tab {
 		m.tab = i
@@ -497,7 +536,14 @@ func (m *Model) enterMain() {
 
 // handover moves from the boot log to the main screen shortly after Ready, so the last [ OK ] is seen.
 func (m *Model) handover() {
-	if m.phase == phaseBoot && !m.readyAt.IsZero() && m.now.Sub(m.readyAt) >= handoverDelay {
+	if m.phase != phaseBoot || m.readyAt.IsZero() {
+		return
+	}
+	shown := m.readyAt
+	if t := m.boot.typedBy(m.level); t.After(shown) {
+		shown = t
+	}
+	if m.now.Sub(shown) >= handoverDelay {
 		m.enterMain()
 	}
 }
@@ -557,15 +603,25 @@ func (m *Model) screenKeys() []string {
 	key := func(k, what string) string {
 		return th.Fg(th.Cyan, true).Render(fmt.Sprintf("%-12s", k)) + th.Fg(th.Muted, false).Render(what)
 	}
+	if m.tab == 5 {
+		return []string{key("↑↓ j k", "choose a setting"), key("enter", "edit it, switch it, or run it"),
+			key("u", "read the settings again"), key("esc", "cancel an edit"),
+			key("", "radio changes, a new identity, a reboot or a factory reset ask first"), ""}
+	}
+	if m.tab == 6 {
+		return []string{key("", fmt.Sprintf("the radio's counters are read every %s while this screen is open", statsEvery)),
+			key("", "the mesh overview counts the packets heard since connecting"), ""}
+	}
 	if m.tab == 4 {
 		return []string{key("↑↓ j k", "choose a repeater or room server"), key("enter", "open it, logging in first; an empty password is a guest login"),
 			key("← →", "switch between status, settings, neighbours, access, regions, telemetry, log and console"),
 			key("u", "refresh what's shown"), key("L", "log out"), key("esc", "back to the node list"),
+			key("f F", "mark a favourite · show favourites only, which P then polls"), key("X", "forget a saved password"),
 			key("console", "type commands as on the node's serial console; tab completes, ↑↓ recall"), ""}
 	}
 	if m.tab == 3 {
 		return []string{key("↑↓ j k", "choose a packet; g jumps back to the newest"), key("[ ]", "step through decoded fields, highlighting their bytes"),
-			key("space", "pause, so the list holds still"), key("F R n", "filter by type · route · minimum signal"), key("/", "filter by text"),
+			key("space", "pause, so the list holds still"), key("R n", "filter by route · minimum signal"), key("/", "filter by text"),
 			key("C", "clear"), key(":export packets", "save the visible packets as JSON lines"), ""}
 	}
 	if m.tab == 1 {
@@ -573,13 +629,15 @@ func (m *Model) screenKeys() []string {
 			key("d", "discover a fresh route"), key("p", "set the route by hand"), key("r", "reset the route, so messages flood"),
 			key("f", "favourite"), key("e", "share as a QR code and meshcore:// link"), key("x", "remove from the radio"),
 			key("I", "import a meshcore:// link"), key("a", "nodes heard but not added"), key("A", "auto-add settings"),
-			key("P", "suggest contacts to prune"), key("F s /", "filter by type · sort · filter by name"), ""}
+			key("P", "suggest contacts to prune"), key("F s /", "filter by type or favourites · sort · filter by name"), ""}
 	}
 	if m.tab == 0 {
-		return []string{key("↑↓ j k", "choose a conversation"), key("enter i", "write a message; enter sends"),
+		return []string{key("↑↓ j k", "choose a conversation"), key("enter i", "write a message; enter sends"), key("tab", "while writing, complete an @name; again for the next match"),
 			key("esc", "stop writing, or clear the filter"), key("/", "filter this conversation"),
 			key("ctrl+f", "search every conversation"), key("K J", "scroll history"),
-			key("L", "log in to the room server whose conversation is open"), ""}
+			key("L", "log in to the room server whose conversation is open"),
+			key("n", "add a channel: #name, a private one with its secret, or a shared link"),
+			key("s r x", "share, rename or leave the channel that's open"), ""}
 	}
 	return nil
 }

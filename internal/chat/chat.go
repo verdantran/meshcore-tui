@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sort"
+	"regexp"
 	"strings"
 	"time"
 
@@ -69,7 +69,19 @@ type Service struct {
 	channels []radio.Channel
 	waiting  map[int64]*outgoing
 	byAck    map[uint32]int64
+	echoes   []echoWatch
 }
+
+// echoWatch is a channel message we sent, listened for as repeaters pass it on.
+type echoWatch struct {
+	id   int64
+	idx  int
+	text string
+	at   time.Time
+}
+
+// EchoWindow is how long after sending a channel message its repeats are counted; a flood is over in seconds.
+const EchoWindow = 2 * time.Minute
 
 const (
 	defaultAckWait = 10 * time.Second
@@ -221,7 +233,9 @@ func (s *Service) Compose(c store.Convo, text string, now time.Time) (store.Mess
 		return store.Message{}, Send{}, err
 	}
 	send.ID = m.ID
-	if !send.Channel {
+	if send.Channel {
+		s.echoes = append(s.echoes, echoWatch{m.ID, send.Idx, text, now})
+	} else {
 		s.waiting[m.ID] = &outgoing{msg: m, to: send.To}
 	}
 	return m, send, nil
@@ -315,7 +329,9 @@ func (s *Service) Title(c store.Convo) string {
 
 // Conversations lists every channel, then direct conversations: those with messages, most recent
 // first, then the remaining chat and room contacts by name, so anyone can be messaged.
-func (s *Service) Conversations() ([]Info, error) {
+// Conversations lists channels, then the direct and room conversations that have messages.
+// open adds a contact's or room's conversation with no messages yet, for one being started from Contacts.
+func (s *Service) Conversations(open store.Convo) ([]Info, error) {
 	sums, err := s.store.Conversations(s.device)
 	if err != nil {
 		return nil, err
@@ -355,7 +371,7 @@ func (s *Service) Conversations() ([]Info, error) {
 	var rest []Info
 	for _, ct := range s.contacts {
 		c := store.ContactConvo(ct.Key)
-		if seen[c] || (ct.Type != radio.TypeChat && ct.Type != radio.TypeRoom) {
+		if seen[c] || c != open || ct.Type != radio.TypeChat && ct.Type != radio.TypeRoom {
 			continue
 		}
 		kind := KindDirect
@@ -364,7 +380,6 @@ func (s *Service) Conversations() ([]Info, error) {
 		}
 		rest = append(rest, Info{Convo: c, Title: ct.Name, Kind: kind})
 	}
-	sort.Slice(rest, func(i, j int) bool { return strings.ToLower(rest[i].Title) < strings.ToLower(rest[j].Title) })
 	return append(append(out, direct...), rest...), nil
 }
 
@@ -373,23 +388,35 @@ func (s *Service) Mentions(text string) bool {
 	if s.self == "" {
 		return false
 	}
-	lower, name := strings.ToLower(text), "@"+strings.ToLower(s.self)
-	for i := strings.Index(lower, name); i >= 0; {
-		end := i + len(name)
-		if end == len(lower) || !isNameRune(rune(lower[end])) {
+	for _, m := range FindMentions(text) {
+		if strings.EqualFold(m.Name, s.self) {
 			return true
 		}
-		next := strings.Index(lower[end:], name)
-		if next < 0 {
-			break
-		}
-		i = end + next
 	}
 	return false
 }
 
-func isNameRune(r rune) bool {
-	return r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_' || r == '-'
+// Mention is an @name in a message, and the bytes [Start, End) it takes in the text.
+type Mention struct {
+	Start, End int
+	Name       string
+}
+
+// The MeshCore apps write @[name], so names can hold spaces; a bare @name is accepted too.
+var mentionRe = regexp.MustCompile(`@\[([^\]\n]+)\]|@([A-Za-z0-9_\-]+)`)
+
+func FindMentions(text string) []Mention {
+	var out []Mention
+	for _, loc := range mentionRe.FindAllStringSubmatchIndex(text, -1) {
+		name := ""
+		if loc[2] >= 0 {
+			name = text[loc[2]:loc[3]]
+		} else {
+			name = text[loc[4]:loc[5]]
+		}
+		out = append(out, Mention{loc[0], loc[1], strings.TrimSpace(name)})
+	}
+	return out
 }
 
 func (s *Service) Self() string { return s.self }
@@ -488,3 +515,25 @@ func (s *Service) ContactByPrefix(p [6]byte) (radio.Contact, bool) { return s.co
 
 // Channels is the radio's channel list, secrets included, as last synced.
 func (s *Service) Channels() []radio.Channel { return append([]radio.Channel(nil), s.channels...) }
+
+// Echo counts a copy of a channel message heard on air, if it's one we sent recently: a repeater has
+// passed it on. It returns which message and how many repeats it now has.
+func (s *Service) Echo(idx int, sender, text string, now time.Time) (id int64, repeats int, ok bool, err error) {
+	if sender != s.self {
+		return 0, 0, false, nil
+	}
+	live := s.echoes[:0]
+	for _, w := range s.echoes {
+		if now.Sub(w.at) <= EchoWindow {
+			live = append(live, w)
+		}
+	}
+	s.echoes = live
+	for i := len(s.echoes) - 1; i >= 0; i-- {
+		if w := s.echoes[i]; w.idx == idx && w.text == text {
+			n, err := s.store.AddRepeat(w.id)
+			return w.id, n, err == nil, err
+		}
+	}
+	return 0, 0, false, nil
+}

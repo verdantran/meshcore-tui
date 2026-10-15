@@ -3,6 +3,7 @@ package ui
 import (
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -688,11 +689,12 @@ func TestLocalConsole(t *testing.T) {
 	m := New(Options{Theme: theme.Neon, Motion: motion.Full, Clock: c.now, Store: st, ExportDir: t.TempDir(),
 		Dial: func(Target) radio.Radio { return rep }, Start: &Target{Kind: "USB", Addr: "/dev/cu.test"}, Env: func(string) string { return "" }})
 	t.Cleanup(func() { rep.Close() })
-	h := &harness{t: t, m: m, s: s, clk: c, results: make(chan tea.Msg, 1024)}
+	// A real console waits for the port to go quiet, so this test needs longer when the machine is busy.
+	h := &harness{t: t, m: m, s: s, clk: c, results: make(chan tea.Msg, 1024), wait: 10 * time.Second}
 	h.start(m.Init())
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 44})
 	h.until("ready", func() bool { return m.ready.Self.Name != "" })
-	h.advance(time.Second)
+	h.toMain()
 	ct := h.contact("Dundry")
 	sess := h.session(ct)
 	h.until("signed in", func() bool { return sess.State == admin.LoggedIn })
@@ -729,6 +731,21 @@ func TestLocalConsole(t *testing.T) {
 	h.idle(sess)
 	if h.m.adm.pane != paneConsole || !strings.Contains(h.screen(), "RX len=42") {
 		t.Errorf("log read into the console:\n%s", h.screen())
+	}
+
+	// A repeater's console has no companion settings or counters of its own.
+	h.key(tea.KeyEscape)
+	h.keys("6")
+	if !strings.Contains(h.screen(), "has no companion settings") || h.m.loadDevice() != nil || h.m.runOp("x", "x", nil, false) != nil {
+		t.Errorf("device on a console:\n%s", h.screen())
+	}
+	h.keys("7")
+	if !strings.Contains(h.screen(), "Admin screen's Status pane") || h.m.pollStats() != nil {
+		t.Errorf("stats on a console:\n%s", h.screen())
+	}
+	h.m.radio = nil
+	if h.m.dev() != nil {
+		t.Error("no radio, no device")
 	}
 }
 
@@ -799,7 +816,7 @@ func TestKeychainAndFleet(t *testing.T) {
 		t.Fatal("after a failure it asks")
 	}
 	h.key(tea.KeyEscape)
-	h.keys("F")
+	h.keys("X")
 	if _, ok := kc.Get(pur.Key); ok || !strings.Contains(h.m.log[len(h.m.log)-1].text, "FORGOTTEN") {
 		t.Error("forget")
 	}
@@ -828,4 +845,82 @@ func TestKeychainAndFleet(t *testing.T) {
 		}
 	}
 	h.m.Update(fleetPollMsg{[32]byte{0xEE}}) // gone from the contacts: nothing happens
+}
+
+// slowKeychain counts lookups; on macOS each one starts a process, so drawing must never ask.
+type slowKeychain struct {
+	admin.MemoryKeychain
+	gets atomic.Int32
+}
+
+func (k *slowKeychain) Get(node [32]byte) (string, bool) {
+	k.gets.Add(1)
+	return k.MemoryKeychain.Get(node)
+}
+
+func TestDrawingNeverAsksTheKeychain(t *testing.T) {
+	kc := &slowKeychain{}
+	h := newHarness(t)
+	h.m.keys = admin.NewCached(kc)
+	h.m.opt.Keychain = h.m.keys
+	kc.Set(h.contact("Dundry").Key, "password")
+	h.keys("5")
+	h.until("the background check", func() bool { return kc.gets.Load() == int32(len(h.m.adminNodes())) })
+	if !strings.Contains(h.screen(), "●") {
+		t.Fatalf("saved password shown:\n%s", h.screen())
+	}
+	before := kc.gets.Load()
+	for range 50 {
+		h.m.View()
+	}
+	if got := kc.gets.Load(); got != before {
+		t.Errorf("drawing asked the keychain %d times", got-before)
+	}
+}
+
+func TestFavouriteFilters(t *testing.T) {
+	h := newHarness(t)
+	h.keys("5")
+	h.keys("F")
+	if !strings.Contains(h.screen(), "No favourite repeaters or room servers") || !strings.Contains(h.screen(), "0 FAVOURITES") {
+		t.Fatalf("no favourites yet:\n%s", h.screen())
+	}
+	h.keys("F")
+	h.choose("Kelston")
+	h.keys("f")
+	h.until("favourite saved", func() bool { return favourite(h.contact("Kelston")) })
+	if h.m.adminNodes()[0].Name != "Kelston" || !strings.Contains(h.screen(), "★Kelston") {
+		t.Errorf("favourites come first:\n%s", h.screen())
+	}
+	h.keys("F")
+	if nodes := h.m.adminNodes(); len(nodes) != 1 || !strings.Contains(h.screen(), "1 FAVOURITES") {
+		t.Errorf("favourites only: %v\n%s", nodes, h.screen())
+	}
+	h.m.opt.Keychain.Set(h.contact("Kelston").Key, "password")
+	h.m.opt.Keychain.Set(h.contact("Dundry").Key, "password")
+	h.keys("P")
+	if !strings.Contains(plainLog(h), "POLLING  1 nodes") {
+		t.Errorf("P polls only the favourites:\n%s", plainLog(h))
+	}
+	h.choose("Kelston")
+	h.keys("f")
+	h.until("unfavourited", func() bool { return !favourite(h.contact("Kelston")) })
+	if !strings.Contains(plainLog(h), "UNFAVOURITED  Kelston") {
+		t.Error("log")
+	}
+
+	// Contacts: F cycles through favourites too.
+	h.keys("2")
+	h.m.contacts.typeFilter = 1
+	if rows := h.m.contactRows(); len(rows) != 0 || !strings.Contains(h.screen(), "type favourites") {
+		t.Errorf("no favourite contacts: %v", rows)
+	}
+	h.m.contacts.typeFilter = 0
+	h.pick("Alice")
+	h.keys("f")
+	h.until("alice", func() bool { return favourite(h.contact("Alice")) })
+	h.m.contacts.typeFilter = 1
+	if rows := h.m.contactRows(); len(rows) != 1 || rows[0].Name != "Alice" {
+		t.Errorf("favourite contacts = %v", rows)
+	}
 }

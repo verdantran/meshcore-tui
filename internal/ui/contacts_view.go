@@ -92,15 +92,15 @@ func (m *Model) contactTable(w, rows int) []string {
 			heard = "never"
 		}
 		if i == c.sel {
-			line := fmt.Sprintf("%s %-*s %-9s %-9s %-*s %-4s %02X", star, nameW, truncate(ct.Name, nameW), ct.Type, heard, routeW, truncate(routeText(ct), routeW), loc, ct.Key[0])
+			line := fmt.Sprintf("%s %s %-9s %-9s %s %-4s %02X", star, col(ct.Name, nameW), ct.Type, heard, col(routeText(ct), routeW), loc, ct.Key[0])
 			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(line, w-1)))
 			continue
 		}
 		out = append(out, " "+th.Fg(th.Yellow, true).Render(star)+" "+
-			th.Fg(th.Text, false).Render(fmt.Sprintf("%-*s", nameW, truncate(ct.Name, nameW)))+" "+
+			th.Fg(th.Text, false).Render(col(ct.Name, nameW))+" "+
 			th.Fg(typeColour(th, ct.Type), false).Render(fmt.Sprintf("%-9s", ct.Type))+" "+
 			th.Fg(th.Dim, false).Render(fmt.Sprintf("%-9s", heard))+" "+
-			th.Fg(th.Muted, false).Render(fmt.Sprintf("%-*s", routeW, truncate(routeText(ct), routeW)))+" "+
+			th.Fg(th.Muted, false).Render(col(routeText(ct), routeW))+" "+
 			th.Fg(th.Dim, false).Render(fmt.Sprintf("%-4s", loc))+" "+
 			th.Fg(th.Muted, false).Render(fmt.Sprintf("%02X", ct.Key[0])))
 	}
@@ -151,7 +151,7 @@ func (m *Model) contactDetail(w int) []string {
 	out = append(out, label("advert path")+adv)
 	out = append(out, label("trace")+m.traceLine(ct))
 	out = append(out, "")
-	keys := "m message · t trace · d discover route · p set route · r reset route · f favourite · e share · x remove · I import · a heard · A auto-add · F type · s sort · / filter"
+	keys := "m message · t trace · d discover route · p set route · r reset route · f favourite · e share · x remove · I import · a heard · A auto-add · F type or favourites · s sort · / filter"
 	for _, l := range strings.Split(ansi.Wrap(keys, w, "·"), "\n") {
 		out = append(out, th.Fg(th.Dim, false).Render(l))
 	}
@@ -209,7 +209,7 @@ func (m *Model) heardLines(w, rows int) []string {
 		if len(out) >= rows {
 			break
 		}
-		line := fmt.Sprintf(" %-24s %-9s %02X  heard %s", truncate(h.c.Name, 24), h.c.Type, h.c.Key[0], ago(m.now.Sub(h.at)))
+		line := fmt.Sprintf(" %s %-9s %02X  heard %s", col(h.c.Name, 24), h.c.Type, h.c.Key[0], ago(m.now.Sub(h.at)))
 		if i == c.heardSel {
 			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(line, w-1)))
 			continue
@@ -299,7 +299,7 @@ func (m *Model) editorLines(w, rows int) []string {
 		if len(byHash[r.Key[0]]) > 1 {
 			note = "  shares its hash with " + strings.Join(without(byHash[r.Key[0]], r.Name), ", ")
 		}
-		line := fmt.Sprintf(" %02X  %-22s %s", r.Key[0], truncate(r.Name, 22), routeText(r))
+		line := fmt.Sprintf(" %02X  %s %s", r.Key[0], col(r.Name, 22), routeText(r))
 		if i == c.editSel {
 			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(line, w-1)))
 			continue
@@ -389,7 +389,7 @@ func (m *Model) pruneLines() []string {
 				heard = ago(m.now.Sub(ct.LastAdvert))
 			}
 		}
-		out = append(out, "  "+th.Fg(th.Text, false).Render(fmt.Sprintf("%-24s", name))+th.Fg(th.Dim, false).Render("heard "+heard))
+		out = append(out, "  "+th.Fg(th.Text, false).Render(col(name, 24))+th.Fg(th.Dim, false).Render("heard "+heard))
 	}
 	return append(out, "", th.Fg(th.Dim, false).Render("y removes them all · any other key cancels · history is kept"))
 }

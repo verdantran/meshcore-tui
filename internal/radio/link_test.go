@@ -284,8 +284,35 @@ func TestRadioErrors(t *testing.T) {
 	f.mu.Lock()
 	f.fail[companion.CmdSyncNextMessage] = true
 	f.mu.Unlock()
+	saved := fetchRetry
+	fetchRetry = time.Millisecond
+	t.Cleanup(func() { fetchRetry = saved })
 	f.push(companion.PushMsgWaitingResponse{}.ToBytes())
 	for lg := next[Log](t, l, nil); !strings.Contains(lg.Text, "COULDN'T FETCH MESSAGES"); lg = next[Log](t, l, nil) {
+	}
+	tries := 0
+	for _, c := range f.commands() {
+		if _, ok := c.(companion.SyncNextMessageCommand); ok {
+			tries++
+		}
+	}
+	if tries < fetchTries {
+		t.Errorf("fetched %d times before giving up", tries)
+	}
+}
+
+func TestLateMessageReply(t *testing.T) {
+	f := newFakeDevice()
+	l := startLink(t, f)
+	next[Ready](t, l, nil)
+	f.push(companion.ContactMsgRecvV3Response{SNR: 4, PubKeyPrefix: [6]byte{0x3A, 0xAA}, PathLen: 0xFF, TxtType: companion.TxtTypePlain, Text: "late"}.ToBytes())
+	f.push(companion.ChannelMsgRecvResponse{ChannelIdx: 1, PathLen: 0xFF, TxtType: companion.TxtTypePlain, Text: "Bob: late too"}.ToBytes())
+	for _, want := range []string{"late", "Bob: late too"} {
+		for in := next[Incoming](t, l, nil); in.Text != want; in = next[Incoming](t, l, nil) {
+		}
+	}
+	if Explain(context.DeadlineExceeded) != "the radio didn't answer in time" || Explain(errors.New("x")) != "x" {
+		t.Error("Explain")
 	}
 }
 

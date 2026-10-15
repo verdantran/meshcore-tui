@@ -77,10 +77,12 @@ type adminModel struct {
 	applied   []admin.Change
 	appliedAt time.Time
 
-	returnTo *[32]byte // a login started from Chats goes back there when it succeeds
-	local    bool      // connected to a repeater's own console over USB
-	remember bool      // save the password being typed once it works
-	saving   map[[32]byte]string
+	returnTo    *[32]byte // a login started from Chats goes back there when it succeeds
+	local       bool      // connected to a repeater's own console over USB
+	keysChecked bool
+	favOnly     bool
+	remember    bool // save the password being typed once it works
+	saving      map[[32]byte]string
 
 	auto     map[[32]byte]bool
 	resultAt map[[32]byte]time.Time
@@ -108,6 +110,19 @@ type cmdTimeoutMsg struct {
 }
 type autoStatusMsg struct{ key [32]byte }
 type fleetPollMsg struct{ key [32]byte }
+type keysCheckedMsg struct{}
+
+// checkKeys asks the keychain about every node once, in the background, so drawing never waits on it.
+func (m *Model) checkKeys() tea.Cmd {
+	m.adm.keysChecked = true
+	keys, nodes := m.keys, m.adminNodes()
+	return func() tea.Msg {
+		for _, c := range nodes {
+			keys.Get(c.Key)
+		}
+		return keysCheckedMsg{}
+	}
+}
 
 func (m *Model) adminConfig() *config.Config {
 	if m.opt.Config != nil {
@@ -144,20 +159,28 @@ func (m *Model) adminNames(p []byte) string {
 	return radio.KeyHex(p)
 }
 
-// adminNodes are the repeaters and room servers in the contact table, by name.
+// adminNodes are the repeaters and room servers in the contact table: favourites first, then by name,
+// and only favourites while that filter is on.
 func (m *Model) adminNodes() []radio.Contact {
 	if m.chat == nil {
 		return nil
 	}
 	var out []radio.Contact
 	for _, c := range m.chat.Contacts() {
-		if c.Type == radio.TypeRepeater || c.Type == radio.TypeRoom {
+		if (c.Type == radio.TypeRepeater || c.Type == radio.TypeRoom) && (!m.adm.favOnly || favourite(c)) {
 			out = append(out, c)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name) })
+	sort.Slice(out, func(i, j int) bool {
+		if fi, fj := favourite(out[i]), favourite(out[j]); fi != fj {
+			return fi
+		}
+		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
+	})
 	return out
 }
+
+func favourite(c radio.Contact) bool { return c.Flags&radio.FlagFavourite != 0 }
 
 func (m *Model) selectedNode() (radio.Contact, bool) {
 	nodes := m.adminNodes()
@@ -292,10 +315,11 @@ func (m *Model) adminMsg(msg tea.Msg) tea.Cmd {
 			if j != nil && j.ID == msg.id {
 				what = strings.ToUpper(j.Kind.String())
 			}
-			m.fail(what + "  " + msg.err.Error())
+			m.fail(what + "  " + radio.Explain(msg.err))
 			return m.startJob(m.admin.Failed(msg.id, msg.err, now))
 		}
-		m.admin.Sent(msg.id, msg.tag)
+		_, next := m.admin.Sent(msg.id, msg.tag, now)
+		return m.startJob(next)
 	case jobTimeoutMsg:
 		j, _ := m.admin.Running()
 		next, waiting := m.admin.TimedOut(msg.id, now)
@@ -308,6 +332,8 @@ func (m *Model) adminMsg(msg tea.Msg) tea.Cmd {
 		return m.sendCommand(m.admin.CommandSent(msg.c, msg.err, now))
 	case cmdTimeoutMsg:
 		return m.sendCommand(m.admin.CommandTimedOut(msg.key, msg.id, now))
+	case keysCheckedMsg:
+		// nothing to do: the redraw that follows shows which nodes have a saved password
 	case autoStatusMsg:
 		sess, ok := m.admin.Find(msg.key)
 		if !ok || !m.adm.auto[msg.key] || sess.State != admin.LoggedIn {
@@ -444,7 +470,7 @@ func (m *Model) nodeListKey(s string) (tea.Cmd, bool) {
 		if ct, ok := m.selectedNode(); ok {
 			return m.logout(ct), true
 		}
-	case "F":
+	case "X":
 		if ct, ok := m.selectedNode(); ok {
 			if _, saved := m.opt.Keychain.Get(ct.Key); saved {
 				m.opt.Keychain.Forget(ct.Key)
@@ -453,6 +479,18 @@ func (m *Model) nodeListKey(s string) (tea.Cmd, bool) {
 		}
 	case "P":
 		return m.pollFleet(), true
+	case "F":
+		a.favOnly, a.sel = !a.favOnly, 0
+	case "f":
+		if ct, ok := m.selectedNode(); ok {
+			updated := ct
+			updated.Flags ^= radio.FlagFavourite
+			what := "FAVOURITE  " + ct.Name
+			if !favourite(updated) {
+				what = "UNFAVOURITED  " + ct.Name
+			}
+			return m.contactOp(what, func(ctx context.Context, r radio.Radio) error { return r.SaveContact(ctx, updated) }), true
+		}
 	default:
 		return nil, false
 	}

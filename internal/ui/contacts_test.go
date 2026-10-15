@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ type harness struct {
 	s       *sim.Sim
 	clk     *clock
 	results chan tea.Msg
+	wait    time.Duration // how long until gives up; 0 means 3s
 }
 
 func newHarness(t *testing.T) *harness {
@@ -38,8 +40,18 @@ func newHarness(t *testing.T) *harness {
 	h.start(m.Init())
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 44})
 	h.until("ready", func() bool { return m.ready.Self.Name != "" })
-	h.advance(time.Second)
+	h.toMain()
 	return h
+}
+
+// toMain lets the boot log's closing pause run out.
+func (h *harness) toMain() {
+	for i := 0; i < 20 && h.m.phase != phaseMain; i++ {
+		h.advance(500 * time.Millisecond)
+	}
+	if h.m.phase != phaseMain {
+		h.t.Fatal("the boot log never handed over to the main screen")
+	}
 }
 
 func (h *harness) start(cmd tea.Cmd) {
@@ -80,7 +92,11 @@ func (h *harness) settle() {
 
 func (h *harness) until(what string, ok func() bool) {
 	h.t.Helper()
-	deadline := time.Now().Add(3 * time.Second)
+	wait := h.wait
+	if wait == 0 {
+		wait = 3 * time.Second
+	}
+	deadline := time.Now().Add(wait)
 	for !ok() {
 		if time.Now().After(deadline) {
 			var tail []string
@@ -267,4 +283,40 @@ func TestContactsMessageJumpsToChat(t *testing.T) {
 		h.m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 		h.screen()
 	}
+}
+
+// Names with emoji or other wide characters take two cells each; the columns after them must still line up.
+func TestColumnsLineUpWithWideNames(t *testing.T) {
+	h := newHarness(t)
+	cs := h.m.chat.Contacts()
+	cs = append(cs,
+		radio.Contact{Key: [32]byte{0xE1}, Name: "📡 Hilltop Relay", Type: radio.TypeRepeater, PathLen: -1},
+		radio.Contact{Key: [32]byte{0xE2}, Name: "東京ノード", Type: radio.TypeChat, PathLen: -1},
+		radio.Contact{Key: [32]byte{0xE3}, Name: "📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡 very long", Type: radio.TypeRepeater, PathLen: -1})
+	h.m.chat.ReplaceContacts(cs)
+	aligned := func(where string, lines []string, marker string) {
+		t.Helper()
+		at := -1
+		for _, l := range lines {
+			plain := ansi.Strip(l)
+			i := strings.Index(plain, marker)
+			if i < 0 {
+				continue
+			}
+			cells := ansi.StringWidth(plain[:i])
+			if at >= 0 && cells != at {
+				t.Errorf("%s: %q starts at cell %d, not %d:\n%s", where, marker, cells, at, plain)
+			}
+			at = cells
+		}
+		if at < 0 {
+			t.Errorf("%s: no %q column", where, marker)
+		}
+	}
+	h.keys("2")
+	h.m.contacts.typeFilter = 3 // repeaters: one wide name, one too long, the rest plain
+	aligned("contacts", strings.Split(h.screen(), "\n"), "Repeater ")
+	h.m.contacts.typeFilter = 0
+	h.keys("5")
+	aligned("admin", strings.Split(h.screen(), "\n"), "signed out")
 }

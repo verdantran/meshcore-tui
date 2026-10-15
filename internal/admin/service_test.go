@@ -74,7 +74,7 @@ func TestBinaryRepliesMatchByTag(t *testing.T) {
 	if j.Data[0] != meshcore.ReqTypeGetNeighbours {
 		t.Fatalf("body = % X", j.Data)
 	}
-	s.Sent(j.ID, 77)
+	s.Sent(j.ID, 77, t0)
 	if sess, _ := s.OnBinary(radio.BinaryReply{Tag: 78}, t0); sess != nil {
 		t.Fatal("a reply with another tag isn't ours")
 	}
@@ -89,13 +89,13 @@ func TestBinaryRepliesMatchByTag(t *testing.T) {
 	}
 
 	j = s.RequestACL(dundry, t0)
-	s.Sent(j.ID, 5)
+	s.Sent(j.ID, 5, t0)
 	s.OnBinary(radio.BinaryReply{Tag: 5, Data: meshcore.BuildAccessListReply([]meshcore.ACLEntry{{Prefix: [6]byte{0xA3}, Permissions: 3}, {Prefix: [6]byte{0x3A}, Permissions: 1}})}, t0)
 	if len(sess.ACL) != 2 || sess.ACL[0].Level != 3 || LevelName(sess.ACL[1].Level) != "read-only" || LevelName(9) != "level 9" {
 		t.Fatalf("acl = %+v", sess.ACL)
 	}
 	j = s.RequestOwner(dundry, t0)
-	s.Sent(j.ID, 6)
+	s.Sent(j.ID, 6, t0)
 	s.OnBinary(radio.BinaryReply{Tag: 6, Data: meshcore.BuildOwnerInfoReply(meshcore.OwnerInfo{FirmwareVersion: "v1.17.1", Name: "Dundry", Owner: "Bristol Mesh"})}, t0)
 	if sess.Owner == nil || sess.Owner.Owner != "Bristol Mesh" {
 		t.Fatalf("owner = %+v", sess.Owner)
@@ -313,5 +313,32 @@ func TestDescribeLPP(t *testing.T) {
 	s := New(nil)
 	if s.random() == ([4]byte{}) && s.random() == ([4]byte{}) {
 		t.Error("request randomness")
+	}
+}
+
+// A repeater's console answers at once, so a reply can arrive before the request's tag is known.
+func TestReplyBeforeItsTag(t *testing.T) {
+	s := newService()
+	j := s.RequestOwner(dundry, t0)
+	s.RequestStatus(dundry, t0)
+	reply := radio.BinaryReply{Tag: 42, Data: meshcore.BuildOwnerInfoReply(meshcore.OwnerInfo{FirmwareVersion: "v1.17.1", Name: "Dundry", Owner: "me"})}
+	if sess, next := s.OnBinary(reply, t0); sess != nil || next != nil {
+		t.Fatal("held until the tag is known")
+	}
+	sess, next := s.Sent(j.ID, 42, t0)
+	if sess == nil || sess.Owner == nil || sess.Owner.Owner != "me" || next == nil || next.Kind != JobStatus {
+		t.Fatalf("matched once the tag arrived: %+v, next %+v", sess, next)
+	}
+	if sess, _ := s.Sent(999, 1, t0); sess != nil {
+		t.Error("a stale Sent is ignored")
+	}
+	s.TimedOut(next.ID, t0)
+	for i := range 20 {
+		j := s.RequestACL(dundry, t0)
+		s.OnBinary(radio.BinaryReply{Tag: uint32(100 + i)}, t0)
+		s.TimedOut(j.ID, t0)
+	}
+	if len(s.early) > 17 {
+		t.Errorf("held replies are bounded: %d", len(s.early))
 	}
 }

@@ -394,3 +394,9 @@ func (r *Repeater) SetAutoAdd(context.Context, radio.AutoAdd) error { return Err
 func (r *Repeater) AdvertPath(context.Context, [32]byte) (radio.AdvertPath, error) {
 	return radio.AdvertPath{}, ErrConsoleOnly
 }
+
+// Device is nil: a repeater's console has no companion settings.
+func (r *Repeater) Device() radio.Device { return nil }
+
+func (r *Repeater) Channels(context.Context) ([]radio.Channel, error) { return nil, ErrConsoleOnly }
+func (r *Repeater) SetChannel(context.Context, radio.Channel) error   { return ErrConsoleOnly }

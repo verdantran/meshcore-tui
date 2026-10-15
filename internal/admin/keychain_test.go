@@ -25,3 +25,42 @@ func TestKeychains(t *testing.T) {
 		}
 	}
 }
+
+type countingKeychain struct {
+	MemoryKeychain
+	gets int
+}
+
+func (k *countingKeychain) Get(node [32]byte) (string, bool) {
+	k.gets++
+	return k.MemoryKeychain.Get(node)
+}
+
+func TestCachedKeychain(t *testing.T) {
+	inner := &countingKeychain{}
+	inner.Set([32]byte{1}, "pw")
+	c := NewCached(inner)
+	if _, known := c.Saved([32]byte{1}); known {
+		t.Error("nothing asked yet")
+	}
+	for range 3 {
+		if pw, ok := c.Get([32]byte{1}); !ok || pw != "pw" {
+			t.Fatal("get")
+		}
+		c.Get([32]byte{2})
+	}
+	if inner.gets != 2 {
+		t.Errorf("the keychain was asked %d times, want once per node", inner.gets)
+	}
+	if saved, known := c.Saved([32]byte{1}); !saved || !known {
+		t.Error("cached")
+	}
+	c.Set([32]byte{2}, "new")
+	if pw, _ := c.Get([32]byte{2}); pw != "new" {
+		t.Error("set updates the cache")
+	}
+	c.Forget([32]byte{1})
+	if _, ok := c.Get([32]byte{1}); ok || inner.gets != 2 {
+		t.Error("forget updates the cache")
+	}
+}
