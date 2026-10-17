@@ -36,8 +36,9 @@ type Options struct {
 	Motion       motion.Level
 	MotionChosen bool // set by flag or config, so a slow terminal doesn't override it
 	Dial         func(Target) radio.Radio
-	Ports        func() []Target // lists serial ports for the connect screen
-	Start        *Target         // skip the connect screen
+	Ports        func() []Target                                     // lists serial ports for the connect screen
+	Scan         func(ctx context.Context, found func(Target)) error // looks for Bluetooth radios until ctx ends; nil without Bluetooth
+	Start        *Target                                             // skip the connect screen
 	Clock        func() time.Time
 	Config       *config.Config // nil in tests; settings changed in the app are saved here
 	Store        *store.Store   // message history; nil disables chats
@@ -241,6 +242,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.w, m.h = msg.Width, msg.Height
 	case frameMsg:
 		m.ticking = false
+	case scanMsg:
+		cmds = append(cmds, m.connect.scanned(msg))
 	case SlowTerminalMsg:
 		if m.level == motion.Full && !m.opt.MotionChosen {
 			m.level = motion.Reduced
@@ -327,7 +330,7 @@ func (m *Model) moving() bool {
 	}
 	switch m.phase {
 	case phaseConnect:
-		return motion.Running(m.connect.openedAt, logoDecodeDur, now) || motion.Running(m.connect.modeAt, wipeDur*2, now)
+		return motion.Running(m.connect.openedAt, logoDecodeDur, now) || motion.Running(m.connect.modeAt, wipeDur*2, now) || m.connect.scanning
 	case phaseBoot:
 		return !m.boot.failed || motion.Running(m.glitch, glitchDur*3, now) || m.boot.typing(m.level, now)
 	}
@@ -519,11 +522,15 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 	}
 	switch m.phase {
 	case phaseConnect:
+		if s == "b" && !m.connect.editing && m.connect.mode == "" && m.opt.Scan != nil {
+			return m.startScan(), false
+		}
 		t, chosen, quit := m.connect.key(s, m.now, m.forget)
 		if quit {
 			return nil, true
 		}
 		if chosen {
+			m.connect.stopScan()
 			return m.dial(t), false
 		}
 		return nil, false

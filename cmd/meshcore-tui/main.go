@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -65,6 +66,12 @@ func ports() []ui.Target {
 	return sortPorts(list)
 }
 
+func scanBLE(ctx context.Context, found func(ui.Target)) error {
+	return radio.ScanBLE(ctx, func(d radio.BLEDevice) {
+		found(ui.Target{Kind: "BLE", Addr: d.Addr, Detail: fmt.Sprintf("%s · %d dBm", d.Name, d.RSSI)})
+	})
+}
+
 func dial(t ui.Target) radio.Radio {
 	switch {
 	case t.Kind == "USB" && t.Mode == ui.ModeRepeater:
@@ -73,6 +80,8 @@ func dial(t ui.Target) radio.Radio {
 		return repeaterserial.NewUSB(t.Addr)
 	case t.Kind == "TCP":
 		return radio.NewTCP(t.Addr)
+	case t.Kind == "BLE":
+		return radio.NewBLE(t.Addr)
 	case t.Mode == ui.ModeRepeater:
 		return simRepeater()
 	}
@@ -94,6 +103,7 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 	fs.SetOutput(stderr)
 	serialPort := fs.String("serial", "", "connect to a USB serial port, e.g. /dev/cu.usbmodem1101, /dev/ttyACM0 or COM3")
 	tcp := fs.String("tcp", "", "connect to a WiFi companion at host[:port] (default port 5000)")
+	ble := fs.String("ble", "", "connect over Bluetooth to a radio's address, as the connect screen's b scan shows it")
 	demo := fs.Bool("demo", false, "run against a simulated radio")
 	repeater := fs.Bool("repeater", false, "with -serial or -demo, open a repeater's own console instead of a companion radio")
 	motionFlag := fs.String("motion", "", "full | reduced | off (default full, or reduced over SSH)")
@@ -140,7 +150,7 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 	if oldConsole(goos, env) {
 		notes = append(notes, "CONSOLE  this looks like the old Windows console, which may not draw the map's braille, some symbols or the mouse. Windows Terminal, free from Microsoft, shows everything.")
 	}
-	opt := ui.Options{Notes: notes, Theme: th, Motion: level, Dial: dial, Ports: ports, Config: cfg, MotionChosen: chosen, Keychain: admin.SystemOr(&admin.FileKeychain{Path: filepath.Join(config.Dir(), "passwords.json")})}
+	opt := ui.Options{Notes: notes, Theme: th, Motion: level, Dial: dial, Ports: ports, Scan: scanBLE, Config: cfg, MotionChosen: chosen, Keychain: admin.SystemOr(&admin.FileKeychain{Path: filepath.Join(config.Dir(), "passwords.json")})}
 	if d, ok := cfg.Device(cfg.Connection.AutoConnect); ok {
 		opt.Start = &ui.Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name, Mode: d.Mode}
 	}
@@ -153,6 +163,8 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 		opt.Start = &ui.Target{Kind: "USB", Addr: *serialPort, Mode: mode}
 	case *tcp != "":
 		opt.Start = &ui.Target{Kind: "TCP", Addr: *tcp}
+	case *ble != "":
+		opt.Start = &ui.Target{Kind: "BLE", Addr: *ble}
 	case *demo:
 		opt.Start = &ui.Target{Kind: "SIM", Addr: "demo", Mode: mode}
 	}

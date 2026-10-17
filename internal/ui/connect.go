@@ -1,12 +1,17 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"meshcore-tui/internal/motion"
 )
+
+const bleScanFor = 10 * time.Second
 
 type connectModel struct {
 	ports    func() []Target
@@ -18,6 +23,78 @@ type connectModel struct {
 	editing  bool
 	input    string
 	openedAt time.Time
+
+	scanning bool
+	stop     context.CancelFunc
+	found    []Target // Bluetooth radios from the latest scan
+	scanErr  string
+}
+
+type scanMsg struct {
+	t    Target
+	err  error
+	done bool
+	next <-chan scanMsg
+}
+
+func waitScan(ch <-chan scanMsg) tea.Cmd {
+	return func() tea.Msg {
+		msg := <-ch
+		msg.next = ch
+		return msg
+	}
+}
+
+// startScan looks for Bluetooth radios for a while, adding each to the list as it's heard.
+func (m *Model) startScan() tea.Cmd {
+	c := &m.connect
+	if c.scanning {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), bleScanFor)
+	c.scanning, c.stop, c.scanErr = true, cancel, ""
+	ch := make(chan scanMsg, 16)
+	scan := m.opt.Scan
+	go func() {
+		err := scan(ctx, func(t Target) {
+			select {
+			case ch <- scanMsg{t: t}:
+			case <-ctx.Done():
+			}
+		})
+		ch <- scanMsg{err: err, done: true}
+	}()
+	return waitScan(ch)
+}
+
+func (c *connectModel) stopScan() {
+	if c.stop != nil {
+		c.stop()
+	}
+}
+
+func (c *connectModel) scanned(msg scanMsg) tea.Cmd {
+	if msg.done {
+		c.scanning = false
+		c.stopScan()
+		if msg.err != nil {
+			c.scanErr = msg.err.Error()
+		}
+		return nil
+	}
+	t := msg.t
+	t.Kind = "BLE"
+	updated := false
+	for i := range c.found {
+		if c.found[i].Addr == t.Addr {
+			c.found[i], updated = t, true
+		}
+	}
+	if !updated {
+		c.found = append(c.found, t)
+	}
+	c.rescan()
+	return waitScan(msg.next)
 }
 
 // newConnect starts in the mode of the device used last.
@@ -55,6 +132,13 @@ func (c *connectModel) rescan() {
 		for _, t := range c.ports() {
 			if !known[t.Kind+t.Addr] {
 				t.Mode = c.mode
+				c.items = append(c.items, t)
+			}
+		}
+	}
+	if c.mode == "" {
+		for _, t := range c.found {
+			if !known[t.Kind+t.Addr] {
 				c.items = append(c.items, t)
 			}
 		}
@@ -150,11 +234,20 @@ func (m *Model) renderConnect() []string {
 		body = append(body, " "+th.Fg(th.Muted, false).Render(line))
 	}
 	body = append(body, "")
+	switch {
+	case c.scanning:
+		body = append(body, th.Fg(th.Cyan, false).Render(truncate(string(motion.RampRune(m.now))+" looking for Bluetooth radios…", inner)), "")
+	case c.scanErr != "":
+		body = append(body, th.Fg(th.Red, false).Render(truncate("BLUETOOTH  "+c.scanErr, inner)), "")
+	}
 	hint := "↑↓ choose · enter connect · m mode · d forget · r rescan · T theme · q quit"
+	if c.mode == "" && m.opt.Scan != nil {
+		hint = "↑↓ choose · enter connect · b Bluetooth · m mode · d forget · r rescan · q quit"
+	}
 	if c.editing {
 		hint = "type a host, then enter · esc cancel"
 	}
-	body = append(body, th.Fg(th.Dim, false).Render(hint))
+	body = append(body, th.Fg(th.Dim, false).Render(truncate(hint, inner)))
 	box := m.panel("SELECT LINK", body, width, len(body)+2, th.Magenta, true)
 	block := append(m.logo(c.openedAt), "")
 	block = append(block, box...)

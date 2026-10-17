@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -200,6 +201,69 @@ func TestChatEdges(t *testing.T) {
 	key(m, tea.KeyEscape)
 	if m.chats.filter != "" {
 		t.Error("esc clears the filter")
+	}
+}
+
+func TestConnectBluetoothScan(t *testing.T) {
+	c := &clock{t: time.Date(2026, 10, 14, 10, 0, 0, 0, time.UTC)}
+	var dialled []Target
+	scans := 0
+	opt := Options{Theme: theme.Neon, Motion: motion.Full, Clock: c.now,
+		Scan: func(ctx context.Context, found func(Target)) error {
+			scans++
+			if scans == 2 {
+				return errors.New("bluetooth is powered off: turn Bluetooth on and try again")
+			}
+			found(Target{Addr: "AA:BB:CC:DD:EE:01", Detail: "MeshCore-k4 · -70 dBm"})
+			found(Target{Addr: "AA:BB:CC:DD:EE:02", Detail: "MeshCore-shed · -88 dBm"})
+			found(Target{Addr: "AA:BB:CC:DD:EE:01", Detail: "MeshCore-k4 · -61 dBm"})
+			return nil
+		},
+		Dial: func(t Target) radio.Radio {
+			dialled = append(dialled, t)
+			return &stubRadio{ch: make(chan radio.Event)}
+		}}
+	m := New(opt)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	has(t, plain(screen(t, m)), "b Bluetooth")
+
+	cmd := m.startScan()
+	if m.startScan() != nil {
+		t.Error("one scan at a time")
+	}
+	has(t, plain(screen(t, m)), "looking for Bluetooth radios")
+	for cmd != nil {
+		cmd = m.connect.scanned(cmd().(scanMsg))
+	}
+	scr := plain(screen(t, m))
+	has(t, scr, "BLE  AA:BB:CC:DD:EE:01", "MeshCore-k4 · -61 dBm", "MeshCore-shed")
+	if strings.Contains(scr, "-70 dBm") || m.connect.scanning {
+		t.Errorf("a radio heard again is updated, and the scan ends:\n%s", scr)
+	}
+
+	for cmd = m.startScan(); cmd != nil; {
+		cmd = m.connect.scanned(cmd().(scanMsg))
+	}
+	has(t, plain(screen(t, m)), "BLUETOOTH  bluetooth is powered off", "MeshCore-shed")
+
+	for m.connect.items[m.connect.sel].Kind != "BLE" {
+		typeKeys(m, "j")
+	}
+	key(m, tea.KeyEnter)
+	if len(dialled) != 1 || dialled[0].Kind != "BLE" || dialled[0].Addr != "AA:BB:CC:DD:EE:01" {
+		t.Errorf("dialled = %+v", dialled)
+	}
+
+	m = New(opt)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	typeKeys(m, "b")
+	if !m.connect.scanning {
+		t.Error("b scans")
+	}
+	m.connect.stopScan()
+	typeKeys(m, "m")
+	if strings.Contains(plain(screen(t, m)), "b Bluetooth") {
+		t.Error("repeater admin mode is USB only")
 	}
 }
 
