@@ -1,10 +1,13 @@
 package ui
 
 import (
+	"math/rand"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/clipperhouse/uax29/v2/graphemes"
+
+	"meshcore-tui/internal/motion"
 )
 
 // asciiFor stands in for each symbol the screens draw, one cell for one cell.
@@ -63,4 +66,21 @@ func brailleASCII(dots rune) byte {
 		return '\''
 	}
 	return '.'
+}
+
+// scrambleRow swaps some of a styled row's characters for glitch glyphs, leaving its escapes and widths alone.
+func scrambleRow(row string, rng *rand.Rand) string {
+	glyphs := []rune(motion.Scramble)
+	var b strings.Builder
+	g := graphemes.FromString(row)
+	g.AnsiEscapeSequences = true
+	for g.Next() {
+		s := g.Value()
+		if s[0] != 0x1b && s != " " && ansi.StringWidth(s) == 1 && rng.Float64() < 0.18 {
+			b.WriteRune(glyphs[rng.Intn(len(glyphs))])
+			continue
+		}
+		b.WriteString(s)
+	}
+	return b.String()
 }

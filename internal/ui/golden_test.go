@@ -173,3 +173,10 @@ func TestGoldenDangerConfirm(t *testing.T) {
 		t.Error("answered, it stops")
 	}
 }
+
+func TestGoldenFailureGlitch(t *testing.T) {
+	m, c := mainScreen(t)
+	t0 := c.t
+	m.fail("LOGIN FAILED  Dundry: wrong password, or not allowed")
+	golden.Check(t, "failure-glitch", frames(t, m, c, t0, 0, glitchDur/2, glitchDur))
+}

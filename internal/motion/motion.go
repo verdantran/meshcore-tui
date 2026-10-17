@@ -96,7 +96,8 @@ func TypeDur(text string, cps float64) time.Duration {
 	return time.Duration(float64(len([]rune(text))) / cps * float64(time.Second))
 }
 
-const scramble = "0123456789ABCDEF░▒▓█▚▞▙▟┼╳╱╲<>/\\#*+=%$"
+// Scramble is the glyphs decode and glitch effects draw from.
+const Scramble = "0123456789ABCDEF░▒▓█▚▞▙▟┼╳╱╲<>/\\#*+=%$"
 
 // DecodeText shows text scrambled into hex and block glyphs, locking in left to right as t goes 0→1.
 func DecodeText(text string, seed int64, t float64) string {
@@ -104,7 +105,7 @@ func DecodeText(text string, seed int64, t float64) string {
 	if t >= 1 {
 		return text
 	}
-	glyphs := []rune(scramble)
+	glyphs := []rune(Scramble)
 	locked := int(EaseOut(t) * float64(len(r)))
 	rng := rand.New(rand.NewSource(seed + int64(t*1000)))
 	out := make([]rune, len(r))
@@ -122,7 +123,7 @@ func DecodeText(text string, seed int64, t float64) string {
 func GlitchText(text string, seed int64, frame int) string {
 	rng := rand.New(rand.NewSource(seed + int64(frame)*7919))
 	r := []rune(text)
-	glyphs := []rune(scramble)
+	glyphs := []rune(Scramble)
 	for i := range r {
 		if r[i] != ' ' && rng.Float64() < 0.18 {
 			r[i] = glyphs[rng.Intn(len(glyphs))]

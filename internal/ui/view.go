@@ -373,7 +373,7 @@ func (m *Model) effects(box []string, w int) []string {
 		rng := rand.New(rand.NewSource(int64(now.Sub(m.glitch) / motion.FrameDur)))
 		for i := range box {
 			if rng.Intn(3) == 0 {
-				box[i] = " " + box[i]
+				box[i] = " " + scrambleRow(box[i], rng)
 			}
 		}
 	}

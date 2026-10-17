@@ -1,0 +1,96 @@
+== 0s ==
+░▒▓█
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+ ┏━╳CHATC ━━━━━━2━━━━━━━━━━━/E━━━━━38━━4━━━░━━#━━#━━━▓━━━━━━2━━━━━━━━━━━━━▓━━━━━━━━━━━F━━━━━━━C━━━▒━
+┃ [PENDING] Message history isn't available: the store couldn't be opened.                         ┃
+ ┃
+┃ SYSTEM LOG                                                                                       ┃
+┃ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4                                           ┃
+ B <10:03/02] ▸ LOGIN F╲I=ED  Du+#ryA wFong p3ssword, or noC allDwed
+ ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+ ┃
+ ┃
+┃                                                                                                  ┃
+ ┃
+┃                                                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ 0 packets heard · 47 contacts · 3 channels · theme neon · motion full
+ [10:03:02] ▸ █
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles e50eab4389f028b9
+== 60ms ==
+ Me$%9▞8▚D>┼  RX ●  TX ●  Heltec V4 · fw v░▒▓█
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+ ┃ [PE00ING] Message history isn\t a9$i╱able: the sto#A couldn't be opeEed.
+┃                                                                                                  ┃
+┃ SYSTEM LOG                                                                                       ┃
+┃ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4                                           ┃
+┃ [10:03:02] ▸ LOGIN FAILED  Dundry: wrong password, or not allowed                                ┃
+ ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+ ┃
+┃                                                                                                  ┃
+ 9
+ ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ 0 packets heard · 47 contacts · 3 channels · theme neon · motion full
+ [10:03:02] ▸ LOGIN FA█
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles be7c4a64e79fe3a6
+== 120ms ==
+ MeshC/░F▚▙┼  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 ·░▒▓█
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ [PENDING] Message history isn't available: the store couldn't be opened.                         ┃
+┃                                                                                                  ┃
+┃ SYSTEM LOG                                                                                       ┃
+┃ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4                                           ┃
+┃ [10:03:02] ▸ LOGIN FAILED  Dundry: wrong password, or not allowed                                ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ 0 packets heard · 47 contacts · 3 channels · theme neon · motion full
+ [10:03:02] ▸ LOGIN FAILED  Du█
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles df1ca6f859736f3d
