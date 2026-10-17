@@ -101,13 +101,13 @@ func (m *Model) contactTable(w, rows int) []string {
 			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(line, w-1)))
 			continue
 		}
-		out = append(out, " "+th.Fg(th.Yellow, true).Render(star)+" "+
+		out = append(out, m.arriving(" "+th.Fg(th.Yellow, true).Render(star)+" "+
 			th.Fg(th.Text, false).Render(col(ct.Name, nameW))+" "+
 			th.Fg(typeColour(th, ct.Type), false).Render(fmt.Sprintf("%-9s", ct.Type))+" "+
 			th.Fg(th.Dim, false).Render(fmt.Sprintf("%-9s", heard))+" "+
 			th.Fg(th.Muted, false).Render(col(routeText(ct), routeW))+" "+
 			th.Fg(th.Dim, false).Render(fmt.Sprintf("%-4s", loc))+" "+
-			th.Fg(th.Muted, false).Render(fmt.Sprintf("%02X", ct.Key[0])))
+			th.Fg(th.Muted, false).Render(fmt.Sprintf("%02X", ct.Key[0])), w, c.arrived[ct.Key]))
 	}
 	return out
 }
@@ -231,7 +231,7 @@ func (m *Model) heardLines(w, rows int) []string {
 			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(line, w-1)))
 			continue
 		}
-		out = append(out, " "+th.Fg(typeColour(th, h.c.Type), false).Render(line))
+		out = append(out, m.arriving(" "+th.Fg(typeColour(th, h.c.Type), false).Render(line), w, c.arrived[h.c.Key]))
 	}
 	return out
 }

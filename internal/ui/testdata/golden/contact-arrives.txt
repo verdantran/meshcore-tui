@@ -1,0 +1,128 @@
+== 0s ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CONTACTS 3 · type all · sort last heard ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃   NAME                     TYPE      HEARD     ROUTE                    LOC  KEY                 ┃
+┃                                                                                                  ┃
+┃ ▌  Alice                    Chat      never     direct A3·1E             —    3A                 ┃
+┃    Dundry                   Repeater  never     flood                    —    A3                 ┃
+┃ ──────────────────────────────────────────────────────────────────────────────────────────────── ┃
+┃ ▌Alice  chat                                                                                     ┃
+┃ key         3AAA010000000000000000000000000000000000000000000000000000000000                     ┃
+┃ last advert 2562047h ago  ·  location    not shared · L places it by hand                        ┃
+┃ route       direct: 2 hops via A3·1E                                                             ┃
+┃ advert path …                                                                                    ┃
+┃ trace       press t to trace direct A3·1E                                                        ┃
+┃ signing key not pinned · K pins this key to Alice, so messages signed as them can be checked     ┃
+┃                                                                                                  ┃
+┃ m message · t trace · d discover route · p set route · r reset route · M route on the map · K    ┃
+┃ pin signing key · f favourite · e share · x remove · I import · a heard · A auto-add · F type or ┃
+┃ favourites · s sort · / filter                                                                   ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ 0 packets heard · 3 contacts · 2 channels · theme neon · motion full
+ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles ec0d5318b67f1eb6
+== 120ms ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CONTACTS 3 · type all · sort last heard ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃   NAME                     TYPE      HEARD     ROUTE                    LOC  KEY                 ┃
+┃                Zed                      Chat      1h ago    flood                    —    B0     ┃
+┃ ▌  Alice                    Chat      never     direct A3·1E             —    3A                 ┃
+┃    Dundry                   Repeater  never     flood                    —    A3                 ┃
+┃ ──────────────────────────────────────────────────────────────────────────────────────────────── ┃
+┃ ▌Alice  chat                                                                                     ┃
+┃ key         3AAA010000000000000000000000000000000000000000000000000000000000                     ┃
+┃ last advert 2562047h ago  ·  location    not shared · L places it by hand                        ┃
+┃ route       direct: 2 hops via A3·1E                                                             ┃
+┃ advert path …                                                                                    ┃
+┃ trace       press t to trace direct A3·1E                                                        ┃
+┃ signing key not pinned · K pins this key to Alice, so messages signed as them can be checked     ┃
+┃                                                                                                  ┃
+┃ m message · t trace · d discover route · p set route · r reset route · M route on the map · K    ┃
+┃ pin signing key · f favourite · e share · x remove · I import · a heard · A auto-add · F type or ┃
+┃ favourites · s sort · / filter                                                                   ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ 0 packets heard · 3 contacts · 2 channels · theme neon · motion full
+ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles 7663aac0da98f515
+== 300ms ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CONTACTS 3 · type all · sort last heard ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃   NAME                     TYPE      HEARD     ROUTE                    LOC  KEY                 ┃
+┃    Zed                      Chat      1h ago    flood                    —    B0                 ┃
+┃ ▌  Alice                    Chat      never     direct A3·1E             —    3A                 ┃
+┃    Dundry                   Repeater  never     flood                    —    A3                 ┃
+┃ ──────────────────────────────────────────────────────────────────────────────────────────────── ┃
+┃ ▌Alice  chat                                                                                     ┃
+┃ key         3AAA010000000000000000000000000000000000000000000000000000000000                     ┃
+┃ last advert 2562047h ago  ·  location    not shared · L places it by hand                        ┃
+┃ route       direct: 2 hops via A3·1E                                                             ┃
+┃ advert path …                                                                                    ┃
+┃ trace       press t to trace direct A3·1E                                                        ┃
+┃ signing key not pinned · K pins this key to Alice, so messages signed as them can be checked     ┃
+┃                                                                                                  ┃
+┃ m message · t trace · d discover route · p set route · r reset route · M route on the map · K    ┃
+┃ pin signing key · f favourite · e share · x remove · I import · a heard · A auto-add · F type or ┃
+┃ favourites · s sort · / filter                                                                   ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ 0 packets heard · 3 contacts · 2 channels · theme neon · motion full
+ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles fc5d3d2988865149
+== 600ms ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CONTACTS 3 · type all · sort last heard ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃   NAME                     TYPE      HEARD     ROUTE                    LOC  KEY                 ┃
+┃    Zed                      Chat      1h ago    flood                    —    B0                 ┃
+┃ ▌  Alice                    Chat      never     direct A3·1E             —    3A                 ┃
+┃    Dundry                   Repeater  never     flood                    —    A3                 ┃
+┃ ──────────────────────────────────────────────────────────────────────────────────────────────── ┃
+┃ ▌Alice  chat                                                                                     ┃
+┃ key         3AAA010000000000000000000000000000000000000000000000000000000000                     ┃
+┃ last advert 2562047h ago  ·  location    not shared · L places it by hand                        ┃
+┃ route       direct: 2 hops via A3·1E                                                             ┃
+┃ advert path …                                                                                    ┃
+┃ trace       press t to trace direct A3·1E                                                        ┃
+┃ signing key not pinned · K pins this key to Alice, so messages signed as them can be checked     ┃
+┃                                                                                                  ┃
+┃ m message · t trace · d discover route · p set route · r reset route · M route on the map · K    ┃
+┃ pin signing key · f favourite · e share · x remove · I import · a heard · A auto-add · F type or ┃
+┃ favourites · s sort · / filter                                                                   ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ 0 packets heard · 3 contacts · 2 channels · theme neon · motion full
+ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles 2cc9096f29f2da48

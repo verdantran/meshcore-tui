@@ -200,6 +200,11 @@ func (m *Model) chatEvent(e radio.Event) tea.Cmd {
 	case radio.ChannelData:
 		m.onChannelData(e)
 	case radio.ContactUpdated:
+		known := false
+		for _, ct := range m.chat.Contacts() {
+			known = known || ct.Key == e.Contact.Key
+		}
+		m.contacts.arrived[e.Contact.Key] = entrance{at: m.now, slide: !known}
 		m.chat.ContactUpdated(e.Contact)
 		m.refreshChats()
 	case radio.Acked:

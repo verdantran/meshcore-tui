@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"meshcore-tui/internal/motion"
 	"meshcore-tui/internal/radio"
@@ -74,6 +75,7 @@ type contactsModel struct {
 	traces      map[uint32]*traceRun
 	lastTrace   map[[32]byte]uint32
 	discovering map[[32]byte]time.Time
+	arrived     map[[32]byte]entrance // rows new or freshly advertised, for their entrance
 	found       map[[32]byte]radio.PathFound
 
 	overlay   overlay
@@ -90,7 +92,7 @@ type contactsModel struct {
 
 func newContacts() contactsModel {
 	return contactsModel{advert: map[[32]byte]radio.AdvertPath{}, traces: map[uint32]*traceRun{},
-		lastTrace: map[[32]byte]uint32{}, discovering: map[[32]byte]time.Time{}, found: map[[32]byte]radio.PathFound{}}
+		lastTrace: map[[32]byte]uint32{}, discovering: map[[32]byte]time.Time{}, arrived: map[[32]byte]entrance{}, found: map[[32]byte]radio.PathFound{}}
 }
 
 // Messages from radio calls made on the Contacts screen.
@@ -292,10 +294,12 @@ func (m *Model) contactsEvent(e radio.Event) tea.Cmd {
 		for i, h := range c.heard {
 			if h.c.Key == e.Contact.Key {
 				c.heard[i] = heardNode{e.Contact, m.now}
+				c.arrived[e.Contact.Key] = entrance{at: m.now}
 				return nil
 			}
 		}
 		c.heard = append(c.heard, heardNode{e.Contact, m.now})
+		c.arrived[e.Contact.Key] = entrance{at: m.now, slide: true}
 	case radio.ContactRemoved:
 		if m.chat != nil {
 			m.chat.RemoveContact(e.Key)
@@ -732,7 +736,36 @@ func (m *Model) contactsAnimating() bool {
 			return true
 		}
 	}
+	for _, a := range m.contacts.arrived {
+		if motion.Running(a.at, arriveRowDur, m.now) {
+			return m.visible(1)
+		}
+	}
 	return len(m.contacts.discovering) > 0
+}
+
+const arriveRowDur = 600 * time.Millisecond
+
+// entrance is when a row came: a new one slides in, one freshly advertised only lights up.
+type entrance struct {
+	at    time.Time
+	slide bool
+}
+
+// arriving draws a row that's just come as plain text on a raised background fading away, sliding in
+// from the right first if it's new.
+func (m *Model) arriving(row string, w int, a entrance) string {
+	th := m.th
+	if !m.level.Allows(motion.Flash) || !motion.Running(a.at, arriveRowDur, m.now) {
+		return row
+	}
+	p := motion.Progress(a.at, arriveRowDur, m.now)
+	text := fit(ansi.Strip(row), w)
+	if a.slide && m.level.Allows(motion.Wipe) {
+		in := motion.EaseOut(min(p/0.4, 1))
+		text = fit(strings.Repeat(" ", int((1-in)*float64(w)+0.5))+text, w)
+	}
+	return th.Block(th.Text, th.Raised.Lerp(th.Bg, motion.EaseOut(p))).Bold(false).Render(text)
 }
 
 // placeContact puts a node on the map by hand from "lat, lon", or takes it off again when in is empty.

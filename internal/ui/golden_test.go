@@ -195,3 +195,16 @@ func TestGoldenUnreadPops(t *testing.T) {
 	}
 	golden.Check(t, "unread-pops", frames(t, m, c, t0, 0, popDur/2, popDur*5/6, popDur))
 }
+
+func TestGoldenContactArrives(t *testing.T) {
+	m, c, _ := newChatModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	typeKeys(m, "2j") // the new row lands above the selection, where it isn't drawn as selected
+	tick(m, c, time.Second)
+	t0 := c.t
+	send(m, c, 0, radio.ContactUpdated{Contact: radio.Contact{Key: [32]byte{0xB0, 0xB1}, Name: "Zed", Type: radio.TypeChat, PathLen: -1, LastAdvert: t0.Add(-time.Hour)}})
+	if !m.contactsAnimating() {
+		t.Fatal("the new row comes in")
+	}
+	golden.Check(t, "contact-arrives", frames(t, m, c, t0, 0, arriveRowDur/5, arriveRowDur/2, arriveRowDur))
+}
