@@ -581,6 +581,15 @@ func (t *tap) Send(cmd []byte) error {
 }
 
 func (t *tap) SetResponseHandler(h func(companion.Response)) {
+	if s, ok := t.inner.(interface {
+		SetFrameHandler(func(companion.Response, []byte))
+	}); ok {
+		s.SetFrameHandler(func(r companion.Response, raw []byte) {
+			t.emit(ResponseFrame(time.Now(), raw))
+			h(r)
+		})
+		return
+	}
 	t.inner.SetResponseHandler(func(r companion.Response) {
 		t.emit(Frame{At: time.Now(), Dir: FromRadio, Code: r.Code, Name: ResponseName(r.Code)})
 		h(r)

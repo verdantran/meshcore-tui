@@ -184,6 +184,33 @@ func TestSecretsNeverReachTheFramesPanel(t *testing.T) {
 			t.Errorf("%s: the test should carry a secret", f.Name)
 		}
 	}
+	for _, c := range []struct {
+		raw        []byte
+		start, end int
+	}{
+		{companion.PrivateKeyResponse{PrivateKey: key}.ToBytes(), 1, 65},
+		{companion.ChannelInfoResponse{ChannelIdx: 2, Name: "Family", Secret: [16]byte{7, 7}}.ToBytes(), 34, 50},
+		{companion.ContactMsgRecvV3Response{TxtType: companion.TxtTypeCLIData, Text: "password now: hunter2"}.ToBytes(), 16, 37},
+		{companion.ContactMsgRecvResponse{TxtType: companion.TxtTypeCLIData, Text: "password now: hunter2"}.ToBytes(), 13, 34},
+	} {
+		f := ResponseFrame(time.Now(), c.raw)
+		if f.Dir != FromRadio || f.Hidden != [2]int{c.start, c.end} {
+			t.Errorf("%s: hidden %v, want [%d %d]", f.Name, f.Hidden, c.start, c.end)
+		}
+		for i := c.start; i < c.end; i++ {
+			if f.Bytes[i] != 0 {
+				t.Errorf("%s: byte %d kept", f.Name, i)
+				break
+			}
+		}
+		if c.raw[c.start] == 0 && c.raw[c.end-1] == 0 {
+			t.Errorf("%s: the test should carry a secret", f.Name)
+		}
+	}
+	dm := companion.ContactMsgRecvV3Response{TxtType: companion.TxtTypePlain, Text: "hello"}.ToBytes()
+	if f := ResponseFrame(time.Now(), dm); f.Hidden != [2]int{} || f.Bytes[len(f.Bytes)-1] != 'o' {
+		t.Error("an ordinary reply is shown as it is")
+	}
 	plain := companion.SendTxtMsgCommand{TxtType: companion.TxtTypePlain, Text: "hello"}.ToBytes()
 	if f := CommandFrame(time.Now(), plain); f.Hidden != [2]int{} || f.Bytes[len(f.Bytes)-1] != 'o' {
 		t.Error("an ordinary message is shown as it is")

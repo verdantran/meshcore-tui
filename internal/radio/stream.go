@@ -36,17 +36,18 @@ type stream struct {
 	mu        sync.Mutex
 	conn      io.ReadWriteCloser
 	onResp    func(companion.Response)
+	onFrame   func(companion.Response, []byte) // in place of onResp, with the frame's bytes
 	onErr     func(error)
 	onDrop    func()
 	onRestore func()
 
 	write   sync.Mutex
-	inbound chan companion.Response
+	inbound chan received
 }
 
 func newStream(dial func(context.Context) (io.ReadWriteCloser, error)) *stream {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &stream{dial: dial, ctx: ctx, cancel: cancel, inbound: make(chan companion.Response, 256)}
+	return &stream{dial: dial, ctx: ctx, cancel: cancel, inbound: make(chan received, 256)}
 }
 
 func serialStream(port string) *stream {
@@ -87,9 +88,12 @@ func (c pacedConn) Read(b []byte) (int, error) {
 }
 
 func (s *stream) SetResponseHandler(h func(companion.Response)) { s.set(func() { s.onResp = h }) }
-func (s *stream) SetErrorHandler(h func(error))                 { s.set(func() { s.onErr = h }) }
-func (s *stream) SetDisconnectHandler(h func())                 { s.set(func() { s.onDrop = h }) }
-func (s *stream) SetReconnectHandler(h func())                  { s.set(func() { s.onRestore = h }) }
+
+// SetFrameHandler is SetResponseHandler with each response's frame as it arrived, from its code on.
+func (s *stream) SetFrameHandler(h func(companion.Response, []byte)) { s.set(func() { s.onFrame = h }) }
+func (s *stream) SetErrorHandler(h func(error))                      { s.set(func() { s.onErr = h }) }
+func (s *stream) SetDisconnectHandler(h func())                      { s.set(func() { s.onDrop = h }) }
+func (s *stream) SetReconnectHandler(h func())                       { s.set(func() { s.onRestore = h }) }
 
 func (s *stream) set(f func()) {
 	s.mu.Lock()
@@ -159,10 +163,13 @@ func (s *stream) dispatch() {
 			return
 		case r := <-s.inbound:
 			s.mu.Lock()
-			h := s.onResp
+			h, hf := s.onResp, s.onFrame
 			s.mu.Unlock()
-			if h != nil {
-				h(r)
+			switch {
+			case hf != nil:
+				hf(r.resp, r.raw)
+			case h != nil:
+				h(r.resp)
 			}
 		}
 	}
@@ -246,14 +253,19 @@ func (s *stream) redial() io.ReadWriteCloser {
 // frameReader finds the radio's frames in a byte stream: '>', a little-endian length, then that many bytes.
 // A header is believed only if its length is one the firmware can send and the frame parses or ends where
 // another begins; otherwise the reader moves on a byte, so a garbled stretch costs a frame or two at most.
+type received struct {
+	resp companion.Response
+	raw  []byte
+}
+
 type frameReader struct {
 	buf     []byte
 	partial time.Time
 }
 
-func (f *frameReader) feed(b []byte, now time.Time) []companion.Response {
+func (f *frameReader) feed(b []byte, now time.Time) []received {
 	f.buf = append(f.buf, b...)
-	var out []companion.Response
+	var out []received
 	for {
 		i := bytes.IndexByte(f.buf, companion.FrameTypeIncoming)
 		if i < 0 {
@@ -280,7 +292,8 @@ func (f *frameReader) feed(b []byte, now time.Time) []companion.Response {
 			continue
 		}
 		end := companion.FrameHeaderSize + n
-		r, err := companion.ParseResponse(bytes.Clone(f.buf[3:end]))
+		raw := bytes.Clone(f.buf[3:end])
+		r, err := companion.ParseResponse(raw)
 		if err != nil {
 			// A real frame the SDK can't parse still ends where the next one starts.
 			if len(f.buf) > end && f.buf[end] != companion.FrameTypeIncoming {
@@ -288,7 +301,7 @@ func (f *frameReader) feed(b []byte, now time.Time) []companion.Response {
 				continue
 			}
 		} else {
-			out = append(out, r)
+			out = append(out, received{r, raw})
 		}
 		f.buf, f.partial = f.buf[end:], time.Time{}
 	}

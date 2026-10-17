@@ -16,10 +16,10 @@ func frameOf(payload []byte) []byte {
 	return f
 }
 
-func codes(rs []companion.Response) []byte {
+func codes(rs []received) []byte {
 	var out []byte
 	for _, r := range rs {
-		out = append(out, r.Code)
+		out = append(out, r.resp.Code)
 	}
 	return out
 }
@@ -168,6 +168,40 @@ func TestStreamRedials(t *testing.T) {
 	s.Close()
 	if err := s.Send([]byte{companion.CmdAppStart}); err != errNotConnected {
 		t.Errorf("send after close = %v", err)
+	}
+}
+
+func TestTapShowsResponseBytes(t *testing.T) {
+	srv := newRadioServer(t)
+	var mu sync.Mutex
+	var frames []Frame
+	tp := &tap{inner: tcpStream(srv.ln.Addr().String()), emit: func(e Event) {
+		if f, ok := e.(Frame); ok {
+			mu.Lock()
+			frames = append(frames, f)
+			mu.Unlock()
+		}
+	}}
+	got := make(chan companion.Response, 1)
+	tp.SetResponseHandler(func(r companion.Response) { got <- r })
+	tp.SetErrorHandler(func(error) {})
+	if err := tp.Connect(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer tp.Close()
+	waitFor(t, "a connection", func() bool { return srv.count() == 1 })
+	key := companion.PrivateKeyResponse{PrivateKey: [64]byte{0xDE, 0xAD}}.ToBytes()
+	srv.latest().Write(frameOf(key))
+	if r := <-got; r.Code != companion.RespPrivateKey {
+		t.Fatalf("handed on %x", r.Code)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(frames) != 1 || frames[0].Dir != FromRadio || len(frames[0].Bytes) != len(key) || frames[0].Bytes[0] != companion.RespPrivateKey {
+		t.Fatalf("frames = %+v", frames)
+	}
+	if frames[0].Bytes[1] != 0 || frames[0].Hidden != [2]int{1, 65} {
+		t.Error("the key stays hidden")
 	}
 }
 

@@ -392,7 +392,7 @@ type Frame struct {
 	Dir   Dir
 	Code  byte
 	Name  string
-	Bytes []byte // command bytes; responses arrive parsed, so these are empty for FromRadio
+	Bytes []byte // empty for a response from a transport that only hands over parsed ones
 	// Hidden is the [start, end) of Bytes that carried a secret; those bytes are zeroed and shown as ··.
 	Hidden [2]int
 }
@@ -407,6 +407,39 @@ func CommandFrame(at time.Time, cmd []byte) Frame {
 		f.Hidden = [2]int{start, end}
 	}
 	return f
+}
+
+// ResponseFrame records a response for the frames panel, with any secret in it zeroed out first.
+func ResponseFrame(at time.Time, raw []byte) Frame {
+	f := Frame{At: at, Dir: FromRadio, Code: raw[0], Name: ResponseName(raw[0]), Bytes: append([]byte(nil), raw...)}
+	start, end := responseSecret(raw)
+	end = min(end, len(raw))
+	if start < end {
+		clear(f.Bytes[start:end])
+		f.Hidden = [2]int{start, end}
+	}
+	return f
+}
+
+// responseSecret is where a response carries a private key, channel secret or console reply.
+func responseSecret(raw []byte) (int, int) {
+	cli := func(typeAt, textAt int) (int, int) {
+		if len(raw) > typeAt && raw[typeAt] == companion.TxtTypeCLIData {
+			return textAt, len(raw) // a reply like "password now: …" echoes what was set
+		}
+		return 0, 0
+	}
+	switch raw[0] {
+	case companion.RespPrivateKey:
+		return 1, len(raw)
+	case companion.RespChannelInfo:
+		return 34, 50 // after the slot and the name
+	case companion.RespContactMsgRecv:
+		return cli(8, 13)
+	case companion.RespContactMsgRecvV3:
+		return cli(11, 16)
+	}
+	return 0, 0
 }
 
 // secretBytes is where a command carries a private key, PIN, password, channel secret or console text.
