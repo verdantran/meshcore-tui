@@ -145,12 +145,31 @@ func TestGoldenComposeNearLimit(t *testing.T) {
 	if !m.pulsing() {
 		t.Fatal("near the limit, the counter pulses")
 	}
-	t0 := time.Unix(0, (c.t.UnixNano()/int64(pulsePeriod)+1)*int64(pulsePeriod)) // at the pulse's brightest
+	t0 := pulseStart(c.t)
 	near := frames(t, m, c, t0, 0, pulsePeriod/2)
 	m.chats.input.set(strings.Repeat("a", limit+2))
 	golden.Check(t, "compose-near-limit", append(near, frames(t, m, c, t0, pulsePeriod, pulsePeriod*3/2)...))
 	m.chats.input.set("hi")
 	if m.pulsing() {
 		t.Error("well inside the limit, nothing pulses")
+	}
+}
+
+// pulseStart is the next moment a pulse is at its brightest, for frames that line up with it.
+func pulseStart(t time.Time) time.Time {
+	return time.Unix(0, (t.UnixNano()/int64(pulsePeriod)+1)*int64(pulsePeriod))
+}
+
+func TestGoldenDangerConfirm(t *testing.T) {
+	m, c, _ := newChatModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	typeKeys(m, "2x")
+	if !m.dangerWaiting(1) || !m.pulsing() {
+		t.Fatal("removing a contact asks first, with a pulsing border")
+	}
+	golden.Check(t, "danger-confirm", frames(t, m, c, pulseStart(c.t), 0, pulsePeriod/2))
+	typeKeys(m, "n")
+	if m.dangerWaiting(1) {
+		t.Error("answered, it stops")
 	}
 }

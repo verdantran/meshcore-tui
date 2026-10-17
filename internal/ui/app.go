@@ -328,8 +328,27 @@ func (m *Model) pulsing() bool {
 	if !m.level.Allows(motion.Flash) || m.phase != phaseMain {
 		return false
 	}
+	for _, tab := range []int{1, 4, 5} {
+		if m.visible(tab) && m.dangerWaiting(tab) {
+			return true
+		}
+	}
 	used, limit := m.composeLoad()
 	return m.visible(0) && m.chats.writing && limit > 0 && used*10 >= limit*9
+}
+
+// dangerWaiting reports a screen asking before something that can't be undone: a reboot, an erase,
+// a radio change, removing a contact.
+func (m *Model) dangerWaiting(tab int) bool {
+	switch tab {
+	case 1:
+		return m.contacts.overlay == removeOverlay
+	case 4:
+		return m.adm.prompt == promptConfirm
+	case 5:
+		return m.device.prompt == devConfirm
+	}
+	return false
 }
 
 // moving reports animation that needs the full frame rate.

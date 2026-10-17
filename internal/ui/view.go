@@ -314,6 +314,12 @@ func (m *Model) screenBox(tab, w, h int, focused bool) []string {
 	if glitching || m.linked != linkUp {
 		accent = th.Red
 	}
+	if m.dangerWaiting(tab) {
+		accent = th.Red
+		if m.level.Allows(motion.Flash) {
+			accent = th.Red.Lerp(th.Bg, 0.6*motion.Pulse(now, pulsePeriod))
+		}
+	}
 	if !focused {
 		accent = th.Muted
 	}
