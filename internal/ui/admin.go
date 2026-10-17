@@ -299,7 +299,7 @@ func (m *Model) adminEvent(e radio.Event) tea.Cmd {
 			if err := m.opt.Keychain.Set(sess.Key, pw); err != nil {
 				m.addLog(now, "PASSWORD NOT SAVED  "+err.Error(), radio.ToneWarn)
 			} else {
-				m.addLog(now, "PASSWORD SAVED  for "+sess.Name+" in the system keychain", radio.ToneOK)
+				m.addLog(now, "PASSWORD SAVED  for "+sess.Name+" in "+m.opt.Keychain.Where(), radio.ToneOK)
 			}
 		}
 		m.addLog(now, fmt.Sprintf("[ OK ] %s  %s", strings.ToUpper(admin.LevelName(sess.Level)), sess.Name), radio.ToneOK)

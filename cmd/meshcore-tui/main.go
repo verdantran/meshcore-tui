@@ -134,7 +134,7 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 		level = l
 	}
 
-	opt := ui.Options{Theme: th, Motion: level, Dial: dial, Ports: ports, Config: cfg, Keychain: admin.OSKeychain{}}
+	opt := ui.Options{Theme: th, Motion: level, Dial: dial, Ports: ports, Config: cfg, Keychain: admin.SystemOr(&admin.FileKeychain{Path: filepath.Join(config.Dir(), "passwords.json")})}
 	if d, ok := cfg.Device(cfg.Connection.AutoConnect); ok {
 		opt.Start = &ui.Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name, Mode: d.Mode}
 	}

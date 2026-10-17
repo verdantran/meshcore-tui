@@ -282,10 +282,22 @@ type Battery struct {
 	MilliVolts uint16
 }
 
-// Percent is a rough single-cell Li-ion estimate.
+// liIonCurve is a single 18650-type cell's voltage at 100%, 90% … 0%, under a mesh radio's light load
+// (Meshtastic's OCV table).
+var liIonCurve = [...]float64{4190, 4050, 3990, 3890, 3800, 3720, 3630, 3530, 3420, 3300, 3100}
+
+// Percent reads the charge off liIonCurve, interpolating between its points.
 func (b Battery) Percent() int {
-	v := float64(b.MilliVolts) / 1000
-	return int(min(max((v-3.3)/(4.2-3.3)*100, 0), 100) + 0.5)
+	mv := float64(b.MilliVolts)
+	if mv >= liIonCurve[0] {
+		return 100
+	}
+	for i := 1; i < len(liIonCurve); i++ {
+		if hi, lo := liIonCurve[i-1], liIonCurve[i]; mv >= lo {
+			return int(100 - 10*float64(i) + 10*(mv-lo)/(hi-lo) + 0.5)
+		}
+	}
+	return 0
 }
 
 // Packet is a raw on-air packet the radio heard (PUSH_CODE_LOG_RX_DATA).

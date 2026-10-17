@@ -382,7 +382,7 @@ func TestNamesAndHelpers(t *testing.T) {
 	if (SelfInfo{FreqKHz: 869525, BwHz: 250000, SF: 11}).Params() != "869.525 SF11 BW250" {
 		t.Error("params should drop a trailing .0")
 	}
-	for mv, want := range map[uint16]int{3300: 0, 4200: 100, 3750: 50, 2000: 0, 4500: 100} {
+	for mv, want := range map[uint16]int{4190: 100, 4500: 100, 4020: 85, 3800: 60, 3700: 48, 3600: 37, 3300: 10, 3100: 0, 2000: 0} {
 		if got := (Battery{mv}).Percent(); got != want {
 			t.Errorf("Percent(%d) = %d, want %d", mv, got, want)
 		}

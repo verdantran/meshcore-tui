@@ -263,7 +263,7 @@ func TestShellEventsAndKeys(t *testing.T) {
 	send(m, c, 0, radio.Battery{MilliVolts: 3800})
 	send(m, c, 0, radio.Transmit{What: "SEND_SELF_ADVERT"})
 	tick(m, c, time.Second)
-	has(t, plain(screen(t, m)), "LINKED", "3.80V ███░░▌ 56%")
+	has(t, plain(screen(t, m)), "LINKED", "3.80V ███░░▌ 60%")
 	m.linked = linkDown
 	has(t, plain(screen(t, m)), "DOWN")
 	m.linked = linkUp

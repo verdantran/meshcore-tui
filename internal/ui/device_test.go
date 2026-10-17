@@ -67,7 +67,7 @@ func TestDeviceScreen(t *testing.T) {
 	h.keys("6")
 	h.until("settings", func() bool { return h.m.device.loaded })
 	scr := h.screen()
-	for _, want := range []string{"DEVICE · MeshCore-k4 · Heltec V4", "Battery 4.02 V ████░▌ 80%", "412 of 1536 KB", "EU/UK narrow (the current default)",
+	for _, want := range []string{"DEVICE · MeshCore-k4 · Heltec V4", "Battery 4.02 V ████░▌ 85%", "412 of 1536 KB", "EU/UK narrow (the current default)",
 		"869.618 MHz", "contacts given permission", "bristol"} {
 		if !strings.Contains(scr, want) {
 			t.Errorf("device screen lacks %q:\n%s", want, scr)
@@ -476,11 +476,11 @@ func TestBatteryIconsEverywhere(t *testing.T) {
 	h.keys("5")
 	_, sess := h.login("Dundry", "password")
 	h.idle(sess)
-	if !strings.Contains(h.screen(), "Battery 4.08 V ████░▌ 86%") {
+	if !strings.Contains(h.screen(), "Battery 4.08 V █████▌ 92%") {
 		t.Errorf("repeater status:\n%s", h.screen())
 	}
 	h.key(tea.KeyEscape)
-	if !strings.Contains(h.screen(), "4.08 V ████░▌ 86%  12d 4h") {
+	if !strings.Contains(h.screen(), "4.08 V █████▌ 92%  12d 4h") {
 		t.Errorf("fleet list:\n%s", h.screen())
 	}
 }

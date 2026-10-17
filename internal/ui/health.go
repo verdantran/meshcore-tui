@@ -348,7 +348,7 @@ func measure(v float64, unit string) string {
 		}
 		return fmt.Sprintf("%.0f%%", v)
 	case "V":
-		return fmt.Sprintf("%.2f V", v)
+		return fmt.Sprintf("%.2f V %d%%", v, radio.Battery{MilliVolts: uint16(math.Round(v * 1000))}.Percent())
 	}
 	return fmt.Sprintf("%.0f %s", v, unit)
 }
