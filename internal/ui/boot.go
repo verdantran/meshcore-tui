@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -145,8 +146,8 @@ func (m *Model) renderBoot() []string {
 			textStyle = th.Fg(th.Red, false)
 		}
 		label := textStyle.Render(text)
-		if pct, cut, ok := batteryPercent(l, typed, text); ok {
-			label = textStyle.Render(text[:cut+1]) + batteryIcon(th, pct, m.plainPaint) + textStyle.Render(" "+text[cut+1:])
+		if pct, cut, ok := m.batteryPercent(l, typed, text); ok {
+			label = textStyle.Render(text[:cut+1]) + batteryIcon(th, pct, m.plainPaint) + textStyle.Render(fmt.Sprintf(" %d%%", pct))
 		}
 		gap := inner - visibleWidth(label) - visibleWidth(tag)
 		dots := ""
@@ -221,7 +222,8 @@ func (m *Model) logo(opened time.Time) []string {
 }
 
 // batteryPercent finds the percentage at the end of a typed POWER line, so the icon can go just before it.
-func batteryPercent(l bootLine, typed bool, text string) (pct, at int, ok bool) {
+// The radio worked it out as Li-ion; it's read again from the voltage for the battery set for this radio.
+func (m *Model) batteryPercent(l bootLine, typed bool, text string) (pct, at int, ok bool) {
 	if l.key != "power" || !typed || l.state != radio.StepOK {
 		return 0, 0, false
 	}
@@ -231,6 +233,10 @@ func batteryPercent(l bootLine, typed bool, text string) (pct, at int, ok bool) 
 	}
 	if _, err := fmt.Sscanf(text[at+1:], "%d%%", &pct); err != nil {
 		return 0, 0, false
+	}
+	var v float64
+	if _, err := fmt.Sscanf(l.detail, "%f V", &v); err == nil {
+		pct = radio.Battery{MilliVolts: uint16(math.Round(v * 1000))}.PercentOf(m.chemistry(m.ready.Self.PubKey))
 	}
 	return pct, at, true
 }

@@ -52,7 +52,8 @@ type Config struct {
 		WatchEvery   int      `toml:"watch_poll_m"`  // minutes between polls of a watched node over the air
 		LocalEvery   int      `toml:"watch_local_s"` // seconds between polls of a node on USB
 	} `toml:"admin"`
-	Devices []Device `toml:"devices"`
+	Devices   []Device          `toml:"devices"`
+	Batteries map[string]string `toml:"batteries"` // battery chemistry by public key (hex), for its charge curve
 
 	path string
 }
@@ -152,6 +153,18 @@ func (c *Config) SetWatch(key string, on bool) {
 	if on {
 		c.Admin.Watch = append(c.Admin.Watch, key)
 	}
+}
+
+// SetBattery records a node's battery chemistry; li-ion, the default, isn't stored.
+func (c *Config) SetBattery(key, chemistry string) {
+	if chemistry == "li-ion" {
+		delete(c.Batteries, key)
+		return
+	}
+	if c.Batteries == nil {
+		c.Batteries = map[string]string{}
+	}
+	c.Batteries[key] = chemistry
 }
 
 func (c *Config) Forget(kind, addr string) {

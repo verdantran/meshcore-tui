@@ -2,9 +2,12 @@ package admin
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
+
+	"meshcore-tui/internal/radio"
 )
 
 // Alerts are what the fleet view flags for a node.
@@ -32,15 +35,21 @@ func (a Alerts) String() string {
 
 // Thresholds come from the [admin] config section.
 type Thresholds struct {
-	BatteryVolts float64
+	BatteryVolts float64 // a Li-ion cell's voltage; other chemistries alert at the same charge
 	Stale        time.Duration
+	Chemistry    func(node [32]byte) radio.Chemistry // nil is Li-ion for every node
 }
 
 // Check flags a node; newest is the newest firmware seen on any node.
 func Check(sess *Session, lastAdvert time.Time, newest string, th Thresholds, now time.Time) Alerts {
 	var a Alerts
-	if p, ok := sess.Latest(); ok && th.BatteryVolts > 0 && float64(p.Stats.BattMilliVolts)/1000 < th.BatteryVolts {
-		a.LowBattery = true
+	if p, ok := sess.Latest(); ok && th.BatteryVolts > 0 {
+		chem := radio.LiIon
+		if th.Chemistry != nil {
+			chem = th.Chemistry(sess.Key)
+		}
+		low := radio.Battery{MilliVolts: uint16(math.Round(th.BatteryVolts * 1000))}.Percent()
+		a.LowBattery = radio.Battery{MilliVolts: p.Stats.BattMilliVolts}.PercentOf(chem) < low
 	}
 	if !lastAdvert.IsZero() && th.Stale > 0 && now.Sub(lastAdvert) > th.Stale {
 		a.Silent = now.Sub(lastAdvert)

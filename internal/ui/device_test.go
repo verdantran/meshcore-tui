@@ -462,13 +462,13 @@ func TestBatteryIconsEverywhere(t *testing.T) {
 	m, c := newTestModel(t, motion.Full, 100, 30)
 	send(m, c, 0, radio.BootStep{Key: "power", Label: "POWER", Detail: "3.61 V · 34%", State: radio.StepOK})
 	send(m, c, 2*time.Second, radio.BootStep{Key: "x", Label: "X", Detail: "no percentage", State: radio.StepOK})
-	if got := plain(screen(t, m)); !strings.Contains(got, "3.61 V · ██░░░▌ 34%") {
+	if got := plain(screen(t, m)); !strings.Contains(got, "3.61 V · ██░░░▌ 38%") {
 		t.Errorf("boot POWER line:\n%s", got)
 	}
-	if _, _, ok := batteryPercent(bootLine{key: "power", state: radio.StepOK}, true, "nospace"); ok {
+	if _, _, ok := m.batteryPercent(bootLine{key: "power", state: radio.StepOK}, true, "nospace"); ok {
 		t.Error("no percentage to find")
 	}
-	if _, _, ok := batteryPercent(bootLine{key: "power", state: radio.StepOK}, true, "3.6 V · lots"); ok {
+	if _, _, ok := m.batteryPercent(bootLine{key: "power", state: radio.StepOK}, true, "3.6 V · lots"); ok {
 		t.Error("not a number")
 	}
 
@@ -482,6 +482,27 @@ func TestBatteryIconsEverywhere(t *testing.T) {
 	h.key(tea.KeyEscape)
 	if !strings.Contains(h.screen(), "4.08 V █████▌ 92%  12d 4h") {
 		t.Errorf("fleet list:\n%s", h.screen())
+	}
+	h.keys("B")
+	if scr := h.screen(); !strings.Contains(scr, "4.08 V ████░▌ 82%") || !strings.Contains(scr, "BATTERY  Dundry · LiPo") {
+		t.Errorf("B sets it to LiPo:\n%s", scr)
+	}
+	h.keys("B")
+	if !strings.Contains(h.screen(), "4.08 V █████▌ 100%") {
+		t.Errorf("then LiFePO4:\n%s", h.screen())
+	}
+}
+
+func TestDeviceBatteryType(t *testing.T) {
+	h := newHarness(t)
+	h.keys("6")
+	h.until("settings", func() bool { return h.m.device.loaded })
+	if scr := h.screen(); !strings.Contains(scr, "Battery type") || !strings.Contains(scr, "Li-ion (18650)") {
+		t.Fatalf("no battery type row:\n%s", scr)
+	}
+	h.key(tea.KeyEnter)
+	if scr := h.screen(); !strings.Contains(scr, "4.02V ████░▌ 74%") || !strings.Contains(scr, "Battery 4.02 V ████░▌ 74%") {
+		t.Errorf("LiPo, in the header and on the screen:\n%s", scr)
 	}
 }
 

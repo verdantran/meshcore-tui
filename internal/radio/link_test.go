@@ -387,6 +387,14 @@ func TestNamesAndHelpers(t *testing.T) {
 			t.Errorf("Percent(%d) = %d, want %d", mv, got, want)
 		}
 	}
+	for c, want := range map[Chemistry]int{LiIon: 60, LiPo: 33, LiFePO4: 100, "unknown": 60} {
+		if got := (Battery{3800}).PercentOf(c); got != want {
+			t.Errorf("%s at 3.8 V = %d%%, want %d%%", c, got, want)
+		}
+	}
+	if (Battery{3300}).PercentOf(LiFePO4) != 73 || LiIon.Next() != LiPo || LiFePO4.Next() != LiIon || Chemistry("").Next() != LiIon {
+		t.Error("LiFePO4 curve, or cycling chemistries")
+	}
 	for typ, want := range map[ContactType]string{TypeChat: "Chat", TypeRepeater: "Repeater", TypeRoom: "Room", TypeSensor: "Sensor", 9: "Unknown"} {
 		if typ.String() != want {
 			t.Errorf("%d = %s", typ, typ.String())

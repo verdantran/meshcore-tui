@@ -17,6 +17,9 @@ func TestRoundTripAndRemember(t *testing.T) {
 		t.Fatalf("defaults not applied: %+v", c)
 	}
 	c.UI.Theme = "ice"
+	c.SetBattery("A3", "lifepo4")
+	c.SetBattery("5F", "lipo")
+	c.SetBattery("5F", "li-ion")
 	at := time.Date(2026, 10, 13, 10, 0, 0, 0, time.UTC)
 	c.Remember(Device{Name: "MeshCore-k4", Kind: "USB", Addr: "/dev/cu.a", LastUsed: at})
 	c.Remember(Device{Name: "Shed", Kind: "TCP", Addr: "10.0.0.4:5000", LastUsed: at})
@@ -28,6 +31,9 @@ func TestRoundTripAndRemember(t *testing.T) {
 	back, err := Load(path)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(back.Batteries) != 1 || back.Batteries["A3"] != "lifepo4" {
+		t.Errorf("batteries = %v, want only A3's, since li-ion is the default", back.Batteries)
 	}
 	if back.UI.Theme != "ice" {
 		t.Errorf("theme = %q", back.UI.Theme)

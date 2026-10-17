@@ -117,7 +117,7 @@ func (m *Model) devRowLine(r devRow, sel bool, labelW, w int) string {
 func (m *Model) deviceStatus(w int) string {
 	th, dm := m.th, &m.device
 	b := dm.storage.Battery
-	parts := th.Fg(th.Dim, false).Render("Battery ") + m.batteryText(b, true)
+	parts := th.Fg(th.Dim, false).Render("Battery ") + m.batteryText(m.ready.Self.PubKey, b, true)
 	if dm.storage.TotalKB > 0 {
 		pct := float64(dm.storage.UsedKB) / float64(dm.storage.TotalKB)
 		bar := int(pct*10 + 0.5)

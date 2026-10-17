@@ -176,7 +176,7 @@ func (m *Model) radioStatLines(w int) []string {
 	up := max(s.Uptime.Seconds(), 1)
 	out := []string{head,
 		label("Uptime") + val(uptime(uint32(s.Uptime.Seconds()))) + label("   Queue") + val(fmt.Sprint(s.Queue)),
-		label("Battery") + m.batteryText(s.Battery, true) + " " + m.spark(batt, sparkW, last.at),
+		label("Battery") + m.batteryText(m.ready.Self.PubKey, s.Battery, true) + " " + m.spark(batt, sparkW, last.at),
 		label("Noise floor") + val(fmt.Sprintf("%d dBm ", s.NoiseFloor)) + m.spark(noise, sparkW, last.at),
 		label("Last packet") + val(fmt.Sprintf("RSSI %d · SNR ", s.LastRSSI)) + th.Fg(th.SNR(s.LastSNR), true).Render(fmt.Sprintf("%+.1f", s.LastSNR)),
 		label("Airtime") + val(fmt.Sprintf("tx %.1f%% · rx %.1f%% of uptime", s.TxAir.Seconds()/up*100, s.RxAir.Seconds()/up*100)),

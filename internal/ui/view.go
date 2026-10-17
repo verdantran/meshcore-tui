@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"math/rand"
+	"slices"
 	"strings"
 	"time"
 
@@ -194,6 +195,7 @@ func (m *Model) header() string {
 	if batt.MilliVolts == 0 {
 		batt = r.Battery
 	}
+	pct := batt.PercentOf(m.chemistry(r.Self.PubKey))
 	state := seg(" ● LINKED", th.Green, true)
 	switch m.linked {
 	case linkLost:
@@ -203,7 +205,7 @@ func (m *Model) header() string {
 	}
 	// Details in order of importance; the least important drop first when the terminal is narrow.
 	details := []string{
-		seg(fmt.Sprintf("%.2fV ", float64(batt.MilliVolts)/1000), th.Cyan, true) + batteryIcon(th, batt.Percent(), seg) + seg(fmt.Sprintf(" %d%%", batt.Percent()), th.Cyan, true),
+		seg(fmt.Sprintf("%.2fV ", float64(batt.MilliVolts)/1000), th.Cyan, true) + batteryIcon(th, pct, seg) + seg(fmt.Sprintf(" %d%%", pct), th.Cyan, true),
 		seg(r.Self.Params(), th.Cyan, true),
 		seg(r.Device.Model, th.Muted, false),
 		seg("fw "+r.Device.Firmware, th.Muted, false),
@@ -494,10 +496,27 @@ func (m *Model) plainPaint(s string, c theme.RGB, bold bool) string {
 }
 
 // batteryText is "4.11 V ████░▌ 87%", always 18 cells wide so it lines up in columns.
-func (m *Model) batteryText(b radio.Battery, bold bool) string {
-	th := m.th
-	return th.Fg(th.Text, bold).Render(fmt.Sprintf("%.2f V ", float64(b.MilliVolts)/1000)) + batteryIcon(th, b.Percent(), m.plainPaint) +
-		th.Fg(th.Text, bold).Render(fmt.Sprintf(" %-4s", fmt.Sprintf("%d%%", b.Percent())))
+func (m *Model) batteryText(node [32]byte, b radio.Battery, bold bool) string {
+	th, pct := m.th, b.PercentOf(m.chemistry(node))
+	return th.Fg(th.Text, bold).Render(fmt.Sprintf("%.2f V ", float64(b.MilliVolts)/1000)) + batteryIcon(th, pct, m.plainPaint) +
+		th.Fg(th.Text, bold).Render(fmt.Sprintf(" %-4s", fmt.Sprintf("%d%%", pct)))
+}
+
+func (m *Model) chemistry(node [32]byte) radio.Chemistry {
+	if c := radio.Chemistry(m.adminConfig().Batteries[radio.KeyHex(node[:])]); slices.Contains(radio.Chemistries, c) {
+		return c
+	}
+	return radio.LiIon
+}
+
+// cycleBattery moves a node on to the next battery chemistry, which sets the curve its percentage is read from.
+func (m *Model) cycleBattery(node [32]byte, name string) {
+	c := m.chemistry(node).Next()
+	m.adminConfig().SetBattery(radio.KeyHex(node[:]), string(c))
+	if m.opt.Config != nil {
+		m.saveConfig()
+	}
+	m.addLog(m.now, "BATTERY  "+name+" · "+c.String(), radio.ToneInfo)
 }
 
 // col fits s to exactly w cells, cut with … or padded. Names often hold emoji, which take two cells,

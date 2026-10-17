@@ -153,7 +153,7 @@ func (m *Model) autoEvery() time.Duration {
 
 func (m *Model) thresholds() admin.Thresholds {
 	c := m.adminConfig().Admin
-	return admin.Thresholds{BatteryVolts: c.BatteryAlert, Stale: time.Duration(c.StaleAfter) * time.Hour}
+	return admin.Thresholds{BatteryVolts: c.BatteryAlert, Stale: time.Duration(c.StaleAfter) * time.Hour, Chemistry: m.chemistry}
 }
 
 func (m *Model) alerts(c radio.Contact) admin.Alerts {
@@ -467,6 +467,9 @@ func (m *Model) adminKey(s string) (tea.Cmd, bool) {
 			m.toggleWatch(ct)
 		}
 		return nil, true
+	case "B":
+		m.cycleBattery(ct.Key, ct.Name)
+		return nil, true
 	}
 	if a.pane == paneHealth {
 		if cmd, ok := m.healthKey(s, ct, sess); ok {
@@ -541,6 +544,10 @@ func (m *Model) nodeListKey(s string) (tea.Cmd, bool) {
 	case "w":
 		if ct, ok := m.selectedNode(); ok {
 			m.toggleWatch(ct)
+		}
+	case "B":
+		if ct, ok := m.selectedNode(); ok {
+			m.cycleBattery(ct.Key, ct.Name)
 		}
 	case "H":
 		if ct, ok := m.selectedNode(); ok {

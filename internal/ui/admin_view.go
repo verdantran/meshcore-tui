@@ -195,7 +195,7 @@ func (m *Model) nodeList(w, rows int) []string {
 		if has {
 			if p, ok := sess.Latest(); ok {
 				st := statsOf(p)
-				batt = m.batteryText(radio.Battery{MilliVolts: st.BattMilliVolts}, false)
+				batt = m.batteryText(c.Key, radio.Battery{MilliVolts: st.BattMilliVolts}, false)
 				up, noise, polled = uptime(st.UpTimeSecs), fmt.Sprint(st.NoiseFloor), ago(now.Sub(p.At))
 			}
 		}
@@ -216,7 +216,7 @@ func (m *Model) nodeList(w, rows int) []string {
 		if hist := m.historyOf(c.Key); len(hist) > 0 && (!has || hist[len(hist)-1].At.After(lastStatus(sess))) {
 			p := hist[len(hist)-1]
 			st := statsOf(p)
-			batt = m.batteryText(radio.Battery{MilliVolts: st.BattMilliVolts}, false)
+			batt = m.batteryText(c.Key, radio.Battery{MilliVolts: st.BattMilliVolts}, false)
 			up, noise, polled = uptime(st.UpTimeSecs), fmt.Sprint(st.NoiseFloor), ago(now.Sub(p.At))
 		}
 		line := marker + star + watch + th.Fg(th.Text, i == m.adm.sel).Render(col(c.Name, nameW)) + " " +
@@ -400,7 +400,7 @@ func (m *Model) statusLines(ct radio.Contact, sess *admin.Session, w int) []stri
 	}
 	out := []string{
 		label("Uptime") + val(fmt.Sprintf("%-10s", uptime(cur.UpTimeSecs))) + label("Battery") +
-			m.batteryText(radio.Battery{MilliVolts: uint16(roll(float64(old.BattMilliVolts), float64(cur.BattMilliVolts)))}, true) + " " +
+			m.batteryText(ct.Key, radio.Battery{MilliVolts: uint16(roll(float64(old.BattMilliVolts), float64(cur.BattMilliVolts)))}, true) + " " +
 			m.spark(batt, min(24, w/4), latest.At) +
 			"   " + label("Queue") + val(fmt.Sprint(cur.TxQueueLen)),
 		label("Noise floor") + val(fmt.Sprintf("%-6.0f", roll(float64(old.NoiseFloor), float64(cur.NoiseFloor)))) +

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/OwlShack/meshcore-go/companion"
+	"slices"
 	"strings"
 	"time"
 )
@@ -282,18 +283,56 @@ type Battery struct {
 	MilliVolts uint16
 }
 
-// liIonCurve is a single 18650-type cell's voltage at 100%, 90% … 0%, under a mesh radio's light load
-// (Meshtastic's OCV table).
-var liIonCurve = [...]float64{4190, 4050, 3990, 3890, 3800, 3720, 3630, 3530, 3420, 3300, 3100}
+// Chemistry picks the discharge curve a battery's percentage is read from.
+type Chemistry string
 
-// Percent reads the charge off liIonCurve, interpolating between its points.
-func (b Battery) Percent() int {
+const (
+	LiIon   Chemistry = "li-ion"
+	LiPo    Chemistry = "lipo"
+	LiFePO4 Chemistry = "lifepo4"
+)
+
+var Chemistries = []Chemistry{LiIon, LiPo, LiFePO4}
+
+func (c Chemistry) String() string {
+	switch c {
+	case LiPo:
+		return "LiPo"
+	case LiFePO4:
+		return "LiFePO4"
+	}
+	return "Li-ion (18650)"
+}
+
+// Next is the chemistry after c, for cycling through them.
+func (c Chemistry) Next() Chemistry {
+	i := slices.Index(Chemistries, c)
+	return Chemistries[(i+1)%len(Chemistries)]
+}
+
+// curves give a single cell's millivolts at 100%, 90% … 0%. Li-ion and LiFePO4 are Meshtastic's
+// tables, taken under a mesh radio's light load; LiPo is a typical pouch cell's at rest.
+var curves = map[Chemistry][11]float64{
+	LiIon:   {4190, 4050, 3990, 3890, 3800, 3720, 3630, 3530, 3420, 3300, 3100},
+	LiPo:    {4200, 4130, 4060, 3990, 3930, 3870, 3820, 3790, 3770, 3730, 3500},
+	LiFePO4: {3400, 3350, 3320, 3290, 3270, 3260, 3250, 3230, 3200, 3120, 3000},
+}
+
+// Percent is the charge of a Li-ion cell.
+func (b Battery) Percent() int { return b.PercentOf(LiIon) }
+
+// PercentOf reads the charge off c's curve, interpolating between its points.
+func (b Battery) PercentOf(c Chemistry) int {
+	curve, ok := curves[c]
+	if !ok {
+		curve = curves[LiIon]
+	}
 	mv := float64(b.MilliVolts)
-	if mv >= liIonCurve[0] {
+	if mv >= curve[0] {
 		return 100
 	}
-	for i := 1; i < len(liIonCurve); i++ {
-		if hi, lo := liIonCurve[i-1], liIonCurve[i]; mv >= lo {
+	for i := 1; i < len(curve); i++ {
+		if hi, lo := curve[i-1], curve[i]; mv >= lo {
 			return int(100 - 10*float64(i) + 10*(mv-lo)/(hi-lo) + 0.5)
 		}
 	}

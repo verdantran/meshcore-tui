@@ -300,8 +300,8 @@ func (m *Model) healthLines(ct radio.Contact, sess *admin.Session, w, rows int) 
 			right := ""
 			if r == len(chart)-1 {
 				left = th.Fg(th.Muted, true).Render(fmt.Sprintf("%-*s", labelW, strings.ToUpper(s.Name))) +
-					th.Fg(th.Text, true).Render(fmt.Sprintf("%-*s", valueW, measure(s.Latest, s.Unit)))
-				right = th.Fg(th.Dim, false).Render("  avg " + measure(s.Avg, s.Unit))
+					th.Fg(th.Text, true).Render(fmt.Sprintf("%-*s", valueW, m.healthMeasure(ct.Key, s.Latest, s.Unit)))
+				right = th.Fg(th.Dim, false).Render("  avg " + m.healthMeasure(ct.Key, s.Avg, s.Unit))
 			}
 			out = append(out, clip(left+line+right, w))
 		}
@@ -335,6 +335,14 @@ func seriesRange(s admin.Series) (float64, float64) {
 	return lo, hi
 }
 
+// healthMeasure is measure with a battery's percentage beside its voltage.
+func (m *Model) healthMeasure(node [32]byte, v float64, unit string) string {
+	if unit != "V" || math.IsNaN(v) {
+		return measure(v, unit)
+	}
+	return fmt.Sprintf("%s %d%%", measure(v, unit), radio.Battery{MilliVolts: uint16(math.Round(v * 1000))}.PercentOf(m.chemistry(node)))
+}
+
 func measure(v float64, unit string) string {
 	if math.IsNaN(v) {
 		return "—"
@@ -348,7 +356,7 @@ func measure(v float64, unit string) string {
 		}
 		return fmt.Sprintf("%.0f%%", v)
 	case "V":
-		return fmt.Sprintf("%.2f V %d%%", v, radio.Battery{MilliVolts: uint16(math.Round(v * 1000))}.Percent())
+		return fmt.Sprintf("%.2f V", v)
 	}
 	return fmt.Sprintf("%.0f %s", v, unit)
 }

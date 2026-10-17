@@ -149,7 +149,7 @@ func TestHealthRangesAndCharts(t *testing.T) {
 			t.Errorf("measure %v = %q", v, got)
 		}
 	}
-	if measure(4.1, "V") != "4.10 V 94%" || measure(-112, "dBm") != "-112 dBm" {
+	if measure(4.1, "V") != "4.10 V" || measure(-112, "dBm") != "-112 dBm" {
 		t.Error("levels")
 	}
 	if every(10*time.Minute) != "10m" || every(90*time.Second) != "90s" {

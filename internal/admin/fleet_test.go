@@ -24,6 +24,16 @@ func TestFleetAlerts(t *testing.T) {
 	if !got.LowBattery || got.Silent < 30*time.Hour || !got.OldFirmware || got.String() != "LOW BATTERY · SILENT 30h · OLD FIRMWARE" {
 		t.Errorf("alerts = %+v %q", got, got)
 	}
+	th.Chemistry = func([32]byte) radio.Chemistry { return radio.LiFePO4 }
+	a.Status[0].Stats.BattMilliVolts = 3300
+	if Check(a, t0, s.Newest(), th, t0).LowBattery {
+		t.Error("a LiFePO4 cell at 3.3 V is three-quarters full")
+	}
+	a.Status[0].Stats.BattMilliVolts = 3050
+	if !Check(a, t0, s.Newest(), th, t0).LowBattery {
+		t.Error("a LiFePO4 cell at 3.05 V is nearly flat")
+	}
+	th.Chemistry = nil
 	if got := Check(b, t0, s.Newest(), th, t0); got.Any() || got.String() != "" {
 		t.Errorf("healthy = %+v", got)
 	}

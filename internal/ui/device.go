@@ -263,6 +263,9 @@ func (m *Model) deviceRows() []devRow {
 	o := s.Other
 	loc := fmt.Sprintf("%.5f, %.5f", s.Self.Lat, s.Self.Lon)
 	rows := []devRow{
+		{id: "battery", group: "Battery", label: "Battery type", value: m.chemistry(m.ready.Self.PubKey).String(), kind: rowToggle,
+			hint:  "Sets the curve its charge is read from. Kept here, not on the radio.",
+			press: func(m *Model) tea.Cmd { m.cycleBattery(m.ready.Self.PubKey, m.ready.Self.Name); return nil }},
 		{id: "name", group: "Identity", label: "Name", value: s.Self.Name, kind: rowEdit, initial: s.Self.Name,
 			hint: "What other nodes see in your adverts.",
 			apply: func(in string) (devOp, error) {
