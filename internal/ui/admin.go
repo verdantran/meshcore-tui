@@ -93,6 +93,8 @@ type adminModel struct {
 
 	kept       map[[32]byte][]admin.StatusPoint // watched nodes' status, from the store
 	week       bool                             // the health charts show seven days instead of one
+	picking    bool                             // a cursor is on the health charts, at bucket pick
+	pick       int                              // -1 until placed, on the newest poll
 	lastTry    map[[32]byte]time.Time           // the last time the watch polled each node
 	noPassword map[[32]byte]bool                // watched, but there's no way to log in to poll it
 	background map[int]bool                     // jobs the watch started, which fail quietly
@@ -444,6 +446,9 @@ func (m *Model) adminKey(s string) (tea.Cmd, bool) {
 		a.opened = false
 		return nil, false
 	}
+	if a.pane == paneHealth && a.picking && m.healthPickKey(s) {
+		return nil, true
+	}
 	switch s {
 	case "left":
 		return m.setPane((a.pane + adminPane(len(paneNames)) - 1) % adminPane(len(paneNames))), true
@@ -586,7 +591,7 @@ func (m *Model) logout(ct radio.Contact) tea.Cmd {
 func (m *Model) setPane(p adminPane) tea.Cmd {
 	a := &m.adm
 	if p != a.pane {
-		a.pane, a.paneAt = p, m.now
+		a.pane, a.paneAt, a.picking = p, m.now, false
 	}
 	ct, sess, ok := m.openNode()
 	if !ok || sess.State != admin.LoggedIn {

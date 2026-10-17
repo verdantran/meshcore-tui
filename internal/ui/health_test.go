@@ -76,6 +76,33 @@ func TestWatchOverTheAir(t *testing.T) {
 		}
 	}
 
+	// enter puts a cursor on the newest poll; ← → step through time without leaving Health.
+	h.key(tea.KeyEnter)
+	scr = h.screen()
+	newest := h.m.adm.pick
+	if !h.m.adm.picking || !strings.Contains(scr, "▲ 10:") || !strings.Contains(scr, "step through time") {
+		t.Fatalf("a cursor on the charts:\n%s", scr)
+	}
+	h.key(tea.KeyLeft)
+	if h.m.adm.pane != paneHealth || h.m.adm.pick != newest-1 {
+		t.Errorf("← steps back: pane %v, pick %d from %d", h.m.adm.pane, h.m.adm.pick, newest)
+	}
+	if scr := h.screen(); !strings.Contains(strings.Split(scr, "RECEIVED")[1][:30], "—") {
+		t.Errorf("a moment without a poll has no value:\n%s", scr)
+	}
+	h.keys("G")
+	h.screen()
+	end := h.m.adm.pick
+	h.key(tea.KeyRight)
+	h.screen()
+	if end < newest || h.m.adm.pick != end {
+		t.Errorf("the cursor stays on the charts: %d, then %d", end, h.m.adm.pick)
+	}
+	h.key(tea.KeyEscape)
+	if h.m.adm.picking || !h.m.adm.opened || h.m.adm.pane != paneHealth {
+		t.Error("esc puts the cursor away first")
+	}
+
 	// A watch poll that gets no answer is noted quietly.
 	h.m.adm.background[999] = true
 	h.m.watchMissed(999, "no answer")
@@ -194,7 +221,7 @@ func TestHealthGradesAndLines(t *testing.T) {
 		t.Error("pale green, strong green, amber, red")
 	}
 	red := func(float64) theme.RGB { return th.Red }
-	rows := m.lineChart([]float64{0, 1, math.NaN(), 2, 3}, 0, 3, 6, 2, red, 1)
+	rows := m.lineChart([]float64{0, 1, math.NaN(), 2, 3}, 0, 3, 6, 2, red, 1, -1)
 	got := plain(rows)
 	if len(rows) != 2 || !strings.ContainsFunc(got, func(r rune) bool { return r > 0x2800 && r <= 0x28FF }) || !strings.Contains(got, "·") {
 		t.Errorf("a line with a gap:\n%s", got)
@@ -202,7 +229,7 @@ func TestHealthGradesAndLines(t *testing.T) {
 	if !strings.Contains(strings.Join(rows, ""), fmt.Sprintf("38;2;%d;%d;%d", th.Red.R, th.Red.G, th.Red.B)) {
 		t.Error("cells take their value's colour")
 	}
-	if got := plain(m.lineChart([]float64{1, 2, 3}, 0, 3, 3, 1, red, 0)); strings.TrimSpace(got) != "" {
+	if got := plain(m.lineChart([]float64{1, 2, 3}, 0, 3, 3, 1, red, 0, -1)); strings.TrimSpace(got) != "" {
 		t.Errorf("nothing is drawn before the reveal: %q", got)
 	}
 }

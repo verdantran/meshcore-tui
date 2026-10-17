@@ -740,6 +740,7 @@ func (m *Model) screenKeys() []string {
 			key("B", "battery type: Li-ion, LiPo, LiFePO4, or none when wired, for reading its charge"),
 			key("health", fmt.Sprintf("the node is polled every %s while connected and each poll is kept", every(m.watchEvery()))),
 			key("r", "on Health, 24 hours or 7 days · on Log, read the log and sum it up"),
+			key("enter", "on Health, a cursor on the charts: ← → step through time to read each value then"),
 			key("console", "type commands as on the serial console; esc on an empty line leaves it"), ""}
 	}
 	if m.tab == 4 {
@@ -749,6 +750,7 @@ func (m *Model) screenKeys() []string {
 			key("f F", "mark a favourite · show favourites only, which P then polls"), key("X", "forget a saved password"),
 			key("w", fmt.Sprintf("watch a node: its status is polled every %s and kept, for the Health screen", every(m.watchEvery()))),
 			key("H", "open a node's kept history without logging in"),
+			key("enter", "on Health, a cursor on the charts: ← → step through time to read each value then"),
 			key("B", "battery type: Li-ion, LiPo, LiFePO4, or none when wired, for reading its charge"),
 			key("console", "type commands as on the node's serial console; tab completes, ↑↓ recall"), ""}
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"meshcore-tui/internal/admin"
 	"meshcore-tui/internal/motion"
@@ -27,6 +28,7 @@ func (m *Model) repeaterMode() bool { return m.adm.local }
 
 // closeNode goes back to the node list, which a repeater on USB doesn't have.
 func (m *Model) closeNode() {
+	m.adm.picking = false
 	if !m.adm.local {
 		m.adm.opened = false
 	}
@@ -206,6 +208,8 @@ func (m *Model) watchMissed(id int, why string) {
 func (m *Model) healthKey(s string, ct radio.Contact, sess *admin.Session) (tea.Cmd, bool) {
 	a := &m.adm
 	switch s {
+	case "enter":
+		a.picking, a.pick = true, -1
 	case "r":
 		a.week, a.paneAt = !a.week, m.now
 	case "C":
@@ -225,6 +229,46 @@ func (m *Model) healthKey(s string, ct radio.Contact, sess *admin.Session) (tea.
 		return nil, false
 	}
 	return nil, true
+}
+
+// healthPickKey moves the cursor on the health charts; the drawing keeps it inside them.
+func (m *Model) healthPickKey(s string) bool {
+	a := &m.adm
+	switch s {
+	case "left", "h":
+		a.pick = max(a.pick-1, 0)
+	case "right", "l":
+		a.pick++
+	case "home", "g":
+		a.pick = 0
+	case "end", "G":
+		a.pick = 1 << 20
+	case "enter", "esc":
+		a.picking = false
+	default:
+		return false
+	}
+	return true
+}
+
+// healthPicked is the bucket under the cursor, or -1: placed on the newest poll at first, and kept on the charts.
+func (m *Model) healthPicked(h admin.Health, buckets int) int {
+	a := &m.adm
+	if !a.picking {
+		return -1
+	}
+	if a.pick < 0 {
+		a.pick = 0
+		for _, s := range h.Series {
+			for i, v := range s.Values {
+				if !math.IsNaN(v) && i > a.pick {
+					a.pick = i
+				}
+			}
+		}
+	}
+	a.pick = min(a.pick, buckets-1)
+	return a.pick
 }
 
 // healthSeries measures a node over the chosen window; over USB there's no duplicate count to show.
@@ -288,26 +332,51 @@ func (m *Model) healthLines(ct radio.Contact, sess *admin.Session, w, rows int) 
 	if m.level.Allows(motion.Wipe) {
 		reveal = motion.EaseOut(motion.Progress(a.paneAt, healthReveal, m.now))
 	}
+	pick := m.healthPicked(h, chartW)
 	for _, s := range h.Series {
-		if len(out)+tall > rows-2 {
+		if len(out)+tall > rows-3 {
 			break
 		}
 		colour := func(v float64) theme.RGB { return m.gradeColour(m.healthGrade(ct.Key, s.Name, v)) }
 		lo, hi := seriesRange(s)
-		chart := m.lineChart(s.Values, lo, hi, chartW, tall, colour, reveal)
+		chart := m.lineChart(s.Values, lo, hi, chartW, tall, colour, reveal, pick)
+		shown := s.Latest
+		if pick >= 0 {
+			shown = math.NaN()
+			if pick < len(s.Values) {
+				shown = s.Values[pick]
+			}
+		}
 		for r, line := range chart {
 			left := strings.Repeat(" ", labelW+valueW)
 			right := ""
 			if r == len(chart)-1 {
 				left = th.Fg(th.Muted, true).Render(fmt.Sprintf("%-*s", labelW, strings.ToUpper(s.Name))) +
-					th.Fg(colour(s.Latest), true).Render(fmt.Sprintf("%-*s", valueW, m.healthMeasure(ct.Key, s.Latest, s.Unit)))
+					th.Fg(colour(shown), true).Render(fmt.Sprintf("%-*s", valueW, m.healthMeasure(ct.Key, shown, s.Unit)))
 				right = th.Fg(th.Dim, false).Render("  avg " + m.healthMeasure(ct.Key, s.Avg, s.Unit))
 			}
 			out = append(out, clip(left+line+right, w))
 		}
 	}
 	out = append(out, strings.Repeat(" ", labelW+valueW)+th.Fg(th.Dim, false).Render(axis(chartW, a.week)))
+	if pick >= 0 {
+		at := h.From.Add(time.Duration((float64(pick) + 0.5) * float64(h.To.Sub(h.From)) / float64(chartW)))
+		when := at.Format("15:04")
+		if a.week {
+			when = at.Format("Mon 15:04")
+		}
+		when += " · " + ago(m.now.Sub(at))
+		mark := th.Fg(th.Text, true).Render("▲ " + when)
+		lead := labelW + valueW + pick
+		if lead+visibleWidth(mark) > w {
+			mark, lead = th.Fg(th.Text, true).Render(when+" ▲"), lead-visibleWidth(when)-1
+		}
+		out = append(out, clip(strings.Repeat(" ", max(lead, 0))+mark, w))
+	}
 	note := plural(h.Polls, "poll") + " in this window"
+	if pick >= 0 {
+		note = "← → step through time · enter or esc stops"
+	}
 	switch h.Reboots {
 	case 0:
 	case 1:
@@ -415,7 +484,7 @@ var brailleBit = [4][2]rune{{0x01, 0x08}, {0x02, 0x10}, {0x04, 0x20}, {0x40, 0x8
 
 // lineChart draws values as a braille line rows tall, each cell in its value's colour; gaps show as
 // dots, the newest value is bright, and only the revealed part is drawn.
-func (m *Model) lineChart(vals []float64, lo, hi float64, w, rows int, colour func(float64) theme.RGB, reveal float64) []string {
+func (m *Model) lineChart(vals []float64, lo, hi float64, w, rows int, colour func(float64) theme.RGB, reveal float64, cursor int) []string {
 	th := m.th
 	dotsH := rows * 4
 	at := func(v float64) int {
@@ -462,19 +531,28 @@ func (m *Model) lineChart(vals []float64, lo, hi float64, w, rows int, colour fu
 		var b strings.Builder
 		for i := range w {
 			v := val(i)
+			at := func(st lipgloss.Style) lipgloss.Style {
+				if i != cursor {
+					return st
+				}
+				if th.Mono {
+					return st.Reverse(true)
+				}
+				return st.Background(th.Line.Color())
+			}
 			switch {
 			case i >= shown:
 				b.WriteString(" ")
 			case cells[r][i] != 0:
 				style := th.Fg(colour(v), false)
-				if i == last {
+				if i == last || i == cursor {
 					style = th.Fg(th.Text, true)
 				}
-				b.WriteString(style.Render(string(0x2800 + cells[r][i])))
+				b.WriteString(at(style).Render(string(0x2800 + cells[r][i])))
 			case math.IsNaN(v) && r == rows-1:
-				b.WriteString(th.Fg(th.Line, false).Render("·"))
+				b.WriteString(at(th.Fg(th.Line, false)).Render("·"))
 			default:
-				b.WriteString(" ")
+				b.WriteString(at(lipgloss.NewStyle()).Render(" "))
 			}
 		}
 		out[r] = b.String()
