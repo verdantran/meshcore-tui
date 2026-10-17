@@ -632,17 +632,16 @@ func (m *Model) convoPane(w, rows int) []string {
 	}
 
 	// Compose line, always at the bottom.
-	limit := 0
-	if m.chat != nil {
-		limit = m.chat.MaxBytes(cur.Convo)
-	}
-	used := len(c.input.text)
+	used, limit := m.composeLoad()
 	counterCol := th.Dim
 	switch {
 	case used > limit:
 		counterCol = th.Red
 	case used*10 >= limit*9:
 		counterCol = th.Yellow
+	}
+	if counterCol != th.Dim && m.level.Allows(motion.Flash) {
+		counterCol = counterCol.Lerp(th.Bg, 0.55*motion.Pulse(m.now, pulsePeriod))
 	}
 	counter := th.Fg(counterCol, used*10 >= limit*9).Render(fmt.Sprintf("%d/%d", used, limit))
 	if hint := m.mentionHint(); hint != "" {
@@ -1017,4 +1016,13 @@ func (m *Model) mentionHint() string {
 		return fmt.Sprintf("tab: %d of %d names ", mc.i+1, len(mc.matches))
 	}
 	return ""
+}
+
+// composeLoad is the bytes typed against what the conversation takes.
+func (m *Model) composeLoad() (used, limit int) {
+	cur, ok := m.selectedConvo()
+	if ok && m.chat != nil {
+		limit = m.chat.MaxBytes(cur.Convo)
+	}
+	return len(m.chats.input.text), limit
 }

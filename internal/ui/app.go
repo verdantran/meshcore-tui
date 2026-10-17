@@ -312,14 +312,25 @@ func (m *Model) ensureTick() tea.Cmd {
 	m.ticking = true
 	every := motion.FrameDur
 	if !m.moving() {
-		every = beaconFrame // only the map's beacon is pulsing, and it's slow enough not to need 30 a second
+		every = beaconFrame // only the beacon or a pulse is running, slow enough not to need 30 a second
 	}
 	return tea.Tick(every, func(t time.Time) tea.Msg { return frameMsg(t) })
 }
 
 const beaconFrame = time.Second / 12
 
-func (m *Model) animating() bool { return m.moving() || m.mapBeaconOn() }
+func (m *Model) animating() bool { return m.moving() || m.mapBeaconOn() || m.pulsing() }
+
+// pulsePeriod is the slow glow of something waiting on you; it runs on the beacon's slower frame clock.
+const pulsePeriod = 1200 * time.Millisecond
+
+func (m *Model) pulsing() bool {
+	if !m.level.Allows(motion.Flash) || m.phase != phaseMain {
+		return false
+	}
+	used, limit := m.composeLoad()
+	return m.visible(0) && m.chats.writing && limit > 0 && used*10 >= limit*9
+}
 
 // moving reports animation that needs the full frame rate.
 func (m *Model) moving() bool {

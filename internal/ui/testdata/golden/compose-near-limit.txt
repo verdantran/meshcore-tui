@@ -1,0 +1,128 @@
+== 0s ==
+ MeshCore-%*  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LI░▒▓█
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ CHANNELS                 │ ▌Alice  direct · 2 hops A3·1E · M shows it                            ┃
+┃  # Public                │                                                                       ┃
+┃  # bristol               │                                                                       ┃
+┃                          │                                                                       ┃
+┃ DIRECT                   │                                                                       ┃
+┃ ▌ ● Alice                │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │ No messages yet. Press enter to write the first one.                  ┃
+┃                          │ ▸ …aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  157/160 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
+ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles d33c3589a5d3bb29
+== 600ms ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ CHANNELS                 │ ▌Alice  direct · 2 hops A3·1E · M shows it                            ┃
+┃  # Public                │                                                                       ┃
+┃  # bristol               │                                                                       ┃
+┃                          │                                                                       ┃
+┃ DIRECT                   │                                                                       ┃
+┃ ▌ ● Alice                │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │ No messages yet. Press enter to write the first one.                  ┃
+┃                          │ ▸ …aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  157/160 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
+ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles a2e9494f5ee286c1
+== 1.2s ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ CHANNELS                 │ ▌Alice  direct · 2 hops A3·1E · M shows it                            ┃
+┃  # Public                │                                                                       ┃
+┃  # bristol               │                                                                       ┃
+┃                          │                                                                       ┃
+┃ DIRECT                   │                                                                       ┃
+┃ ▌ ● Alice                │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │ No messages yet. Press enter to write the first one.                  ┃
+┃                          │ ▸ …aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  162/160 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
+ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles e2c58481b2577227
+== 1.8s ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ CHANNELS                 │ ▌Alice  direct · 2 hops A3·1E · M shows it                            ┃
+┃  # Public                │                                                                       ┃
+┃  # bristol               │                                                                       ┃
+┃                          │                                                                       ┃
+┃ DIRECT                   │                                                                       ┃
+┃ ▌ ● Alice                │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │ No messages yet. Press enter to write the first one.                  ┃
+┃                          │ ▸ …aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  162/160 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
+ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles 3eb229ca3766db6a

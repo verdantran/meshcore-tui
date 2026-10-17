@@ -74,6 +74,11 @@ func Running(start time.Time, dur time.Duration, now time.Time) bool {
 
 func EaseOut(t float64) float64 { return 1 - math.Pow(1-t, 3) }
 
+// Pulse rises from 0 to 1 and back once a period, smoothly, for something waiting on you.
+func Pulse(now time.Time, period time.Duration) float64 {
+	return 0.5 - 0.5*math.Cos(2*math.Pi*float64(now.UnixNano()%int64(period))/float64(period))
+}
+
 // Typewriter returns the prefix of text revealed after typing at cps characters a second.
 func Typewriter(text string, start time.Time, cps float64, now time.Time) (string, bool) {
 	r := []rune(text)
