@@ -28,6 +28,7 @@ type World struct {
 	Places  []Place        `json:"places"`
 
 	landBox, borderBox []Box
+	landLL, borderLL   [][]LatLon
 }
 
 var (
@@ -47,10 +48,10 @@ func LoadWorld() *World {
 			panic(err)
 		}
 		for _, r := range w.Land {
-			w.landBox = append(w.landBox, ringBox(r))
+			w.landBox, w.landLL = append(w.landBox, ringBox(r)), append(w.landLL, toLL(r))
 		}
 		for _, l := range w.Borders {
-			w.borderBox = append(w.borderBox, ringBox(l))
+			w.borderBox, w.borderLL = append(w.borderBox, ringBox(l)), append(w.borderLL, toLL(l))
 		}
 		world = &w
 	})

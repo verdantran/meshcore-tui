@@ -138,6 +138,7 @@ type mapModel struct {
 	note       string
 	noteBad    bool
 
+	drawCost time.Duration // a full redraw, averaged; too slow for a frame and moves jump instead of gliding
 	cacheKey string
 	cache    *mapview.Canvas
 	rows     []string // the cached map as terminal rows; a frame re-renders only the rows animations touch
@@ -544,10 +545,27 @@ func (m *Model) mapEvent(e radio.Event) {
 	}
 }
 
+func (m *Model) mapGliding() bool {
+	mv := &m.mapv
+	return m.level.Allows(motion.Wipe) && mv.drawCost <= motion.FrameDur && motion.Running(mv.movedAt, mapGlide, m.now)
+}
+
+// mapDraw draws the static map, keeping track of how long that takes on this machine.
+func (m *Model) mapDraw(in mapview.Input, v mapview.View, w, h int, pal mapview.Palette) *mapview.Canvas {
+	start := time.Now()
+	c := mapview.Draw(in, v, w, h, pal)
+	took, mv := time.Since(start), &m.mapv
+	if mv.drawCost == 0 {
+		mv.drawCost = took
+	}
+	mv.drawCost = (3*mv.drawCost + took) / 4
+	return c
+}
+
 // mapCurrent is the view part way through a glide.
 func (m *Model) mapCurrent() mapview.View {
 	mv := &m.mapv
-	if !m.level.Allows(motion.Wipe) || !motion.Running(mv.movedAt, mapGlide, m.now) {
+	if !m.mapGliding() {
 		return mv.view
 	}
 	return mapview.Between(mv.from, mv.view, motion.EaseOut(motion.Progress(mv.movedAt, mapGlide, m.now)))
@@ -634,7 +652,7 @@ func (m *Model) mapAnimating() bool {
 	if !m.visible(2) || mv.world == nil {
 		return mv.loading && m.visible(2)
 	}
-	if mv.fetching || motion.Running(mv.movedAt, mapGlide, m.now) && m.level.Allows(motion.Wipe) || m.pathPlaying() {
+	if mv.fetching || m.mapGliding() || m.pathPlaying() {
 		return true
 	}
 	if motion.Running(mv.eventAt, motion.TypeDur(mv.event, logCPS), m.now) && m.level.Allows(motion.Typing) {
@@ -711,7 +729,7 @@ func (m *Model) renderMap(w, h int) []string {
 	key := fmt.Sprintf("%.6f|%.6f|%.4f|%d|%d|%v|%v|%p|%d|%s", v.Center.Lat, v.Center.Lon, v.Zoom, w, mapH, th, mv.layers,
 		mv.detail, len(nodes), routeKey(routes, m.now)) + fmt.Sprint(flows)
 	if key != mv.cacheKey || mv.cache == nil {
-		mv.cache = mapview.Draw(mapview.Input{World: mv.world, Detail: mv.detail, Nodes: nodes, Routes: routes, Flows: flows,
+		mv.cache = m.mapDraw(mapview.Input{World: mv.world, Detail: mv.detail, Nodes: nodes, Routes: routes, Flows: flows,
 			Layers: mv.layers, Now: m.now}, v, w, mapH, pal)
 		credit := "Natural Earth"
 		if mv.detail != nil && v.Zoom >= 7 && mv.detail.Covers(v.Center) {

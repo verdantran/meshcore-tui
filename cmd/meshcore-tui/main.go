@@ -126,7 +126,8 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 	if *motionFlag != "" {
 		motionName = *motionFlag
 	}
-	if motionName != "" {
+	chosen := motionName != ""
+	if chosen {
 		l, ok := motion.ParseLevel(motionName)
 		if !ok {
 			return ui.Options{}, fmt.Errorf("unknown motion level %q; choose full, reduced or off", motionName)
@@ -134,7 +135,7 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 		level = l
 	}
 
-	opt := ui.Options{Theme: th, Motion: level, Dial: dial, Ports: ports, Config: cfg, Keychain: admin.SystemOr(&admin.FileKeychain{Path: filepath.Join(config.Dir(), "passwords.json")})}
+	opt := ui.Options{Theme: th, Motion: level, Dial: dial, Ports: ports, Config: cfg, MotionChosen: chosen, Keychain: admin.SystemOr(&admin.FileKeychain{Path: filepath.Join(config.Dir(), "passwords.json")})}
 	if d, ok := cfg.Device(cfg.Connection.AutoConnect); ok {
 		opt.Start = &ui.Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name, Mode: d.Mode}
 	}
@@ -179,7 +180,10 @@ func run(args []string, env func(string) string, stderr io.Writer) int {
 	}
 	defer db.Close()
 	opt.Store = db
-	if _, err := tea.NewProgram(ui.New(opt)).Run(); err != nil {
+	out := &timedOutput{File: os.Stdout}
+	p := tea.NewProgram(ui.New(opt), tea.WithOutput(out))
+	out.slow = func() { p.Send(ui.SlowTerminalMsg{}) }
+	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}

@@ -32,14 +32,15 @@ type Target struct {
 const ModeRepeater = "repeater"
 
 type Options struct {
-	Theme  theme.Theme
-	Motion motion.Level
-	Dial   func(Target) radio.Radio
-	Ports  func() []Target // lists serial ports for the connect screen
-	Start  *Target         // skip the connect screen
-	Clock  func() time.Time
-	Config *config.Config // nil in tests; settings changed in the app are saved here
-	Store  *store.Store   // message history; nil disables chats
+	Theme        theme.Theme
+	Motion       motion.Level
+	MotionChosen bool // set by flag or config, so a slow terminal doesn't override it
+	Dial         func(Target) radio.Radio
+	Ports        func() []Target // lists serial ports for the connect screen
+	Start        *Target         // skip the connect screen
+	Clock        func() time.Time
+	Config       *config.Config // nil in tests; settings changed in the app are saved here
+	Store        *store.Store   // message history; nil disables chats
 
 	Env       func(string) string // environment lookups for notification detection; nil uses the process's
 	ExportDir string              // where :export writes; empty uses the data directory
@@ -225,6 +226,9 @@ func (m *Model) shutdown() {
 	}
 }
 
+// SlowTerminalMsg says writing frames to the terminal is taking longer than drawing them should (SPEC §6.2).
+type SlowTerminalMsg struct{}
+
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.now = m.opt.Clock()
 	var cmds []tea.Cmd
@@ -233,6 +237,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.w, m.h = msg.Width, msg.Height
 	case frameMsg:
 		m.ticking = false
+	case SlowTerminalMsg:
+		if m.level == motion.Full && !m.opt.MotionChosen {
+			m.level = motion.Reduced
+			m.addLog(m.now, "MOTION  reduced: the terminal is slow to draw to · v changes it", radio.ToneInfo)
+		}
 	case eventMsg:
 		cmds = append(cmds, m.apply(msg.e))
 		if m.radio != nil {

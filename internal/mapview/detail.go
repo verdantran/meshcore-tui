@@ -31,18 +31,20 @@ type Tile [2]int
 // TilesFor lists the tiles covering a box, which may run past ±180.
 func TilesFor(b Box) []Tile {
 	n := 1 << DetailZoom
-	tx := func(lon float64) int { return int(math.Floor((lon + 180) / 360 * float64(n))) }
-	ty := func(lat float64) int {
-		_, y := worldXY(LatLon{lat, 0}, DetailZoom)
-		return int(math.Floor(y / 256))
-	}
 	var out []Tile
-	for x := tx(b[0]); x <= tx(b[2]); x++ {
-		for y := ty(b[3]); y <= ty(b[1]); y++ {
+	for x := tileX(b[0]); x <= tileX(b[2]); x++ {
+		for y := tileY(b[3]); y <= tileY(b[1]); y++ {
 			out = append(out, Tile{((x % n) + n) % n, y})
 		}
 	}
 	return out
+}
+
+func tileX(lon float64) int { return int(math.Floor((lon + 180) / 360 * (1 << DetailZoom))) }
+
+func tileY(lat float64) int {
+	_, y := worldXY(LatLon{lat, 0}, DetailZoom)
+	return int(math.Floor(y / 256))
 }
 
 func (t Tile) box() Box {
@@ -61,6 +63,22 @@ type Detail struct {
 
 	have  map[Tile]bool
 	boxes []Box
+	// The same shapes as LatLons with their extents, so drawing skips what's off screen.
+	sea, islands []shape
+	lines        map[string][]shape
+}
+
+type shape struct {
+	pts []LatLon
+	box Box
+}
+
+func shapes(rings [][][2]float64) []shape {
+	out := make([]shape, len(rings))
+	for i, r := range rings {
+		out[i] = shape{toLL(r), ringBox(r)}
+	}
+	return out
 }
 
 func (d *Detail) index() {
@@ -69,6 +87,10 @@ func (d *Detail) index() {
 		d.have[t] = true
 		d.boxes = append(d.boxes, t.box())
 	}
+	d.sea, d.islands, d.lines = shapes(d.Sea), shapes(d.Islands), map[string][]shape{}
+	for kind, ls := range d.Lines {
+		d.lines[kind] = shapes(ls)
+	}
 }
 
 // Covers reports whether street detail exists for a point.
@@ -76,12 +98,8 @@ func (d *Detail) Covers(p LatLon) bool {
 	if d == nil {
 		return false
 	}
-	for _, b := range d.boxes {
-		if b.Contains(p) {
-			return true
-		}
-	}
-	return false
+	n := 1 << DetailZoom
+	return d.have[Tile{((tileX(p.Lon) % n) + n) % n, tileY(p.Lat)}]
 }
 
 // Missing lists the tiles a box needs that the detail doesn't have yet.

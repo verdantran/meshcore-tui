@@ -10,7 +10,6 @@ import (
 
 	"meshcore-tui/internal/chat"
 	"meshcore-tui/internal/mapview"
-	"meshcore-tui/internal/motion"
 	"meshcore-tui/internal/radio"
 	"meshcore-tui/internal/store"
 )
@@ -114,7 +113,7 @@ func (m *Model) renderPath(w, mapH int) []string {
 	}
 	if p.play {
 		p.play, p.playAt = false, m.now
-		if motion.Running(mv.movedAt, mapGlide, m.now) {
+		if m.mapGliding() {
 			p.playAt = mv.movedAt.Add(mapGlide)
 		}
 	}
@@ -125,7 +124,7 @@ func (m *Model) renderPath(w, mapH int) []string {
 	key := fmt.Sprintf("path|%.6f|%.6f|%.4f|%d|%d|%v|%v|%p|%d|%s", v.Center.Lat, v.Center.Lon, v.Zoom, w, mapH, th, layers,
 		mv.detail, len(nodes), routeKey([]mapview.Route{r}, m.now))
 	if key != mv.cacheKey || mv.cache == nil {
-		mv.cache = mapview.Draw(mapview.Input{World: mv.world, Detail: mv.detail, Nodes: nodes, Routes: []mapview.Route{r},
+		mv.cache = m.mapDraw(mapview.Input{World: mv.world, Detail: mv.detail, Nodes: nodes, Routes: []mapview.Route{r},
 			Layers: layers, Now: m.now}, v, w, mapH, pal)
 		credit := "Natural Earth"
 		if mv.detail != nil && v.Zoom >= 7 && mv.detail.Covers(v.Center) {

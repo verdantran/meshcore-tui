@@ -108,6 +108,14 @@ func TestMapScreen(t *testing.T) {
 	if !h.m.mapAnimating() || !motion.Running(mv.movedAt, mapGlide, h.m.now) {
 		t.Error("moves glide")
 	}
+	cost := mv.drawCost
+	mv.drawCost = time.Second
+	h.keys("h")
+	if h.m.mapGliding() || h.m.mapCurrent() != mv.view {
+		t.Error("a map too slow to draw a frame in time jumps instead of gliding")
+	}
+	mv.drawCost = cost
+	h.keys("l")
 	h.keys("++")
 	if mv.view.Zoom != start.Zoom+1 {
 		t.Errorf("zoom = %v", mv.view.Zoom)

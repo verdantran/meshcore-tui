@@ -211,13 +211,17 @@ func buildScene(in Input, v View, pal Palette) scene {
 	}
 	view := v.Bounds().Grow(0.1)
 	s.detailOn = in.Detail != nil && v.Zoom >= detailFrom
+	inView := func(shapes []shape) [][]LatLon {
+		var out [][]LatLon
+		for _, sh := range shapes {
+			if sh.box.Overlaps(view) {
+				out = append(out, sh.pts)
+			}
+		}
+		return out
+	}
 	if s.detailOn {
-		for _, r := range in.Detail.Sea {
-			s.sea = append(s.sea, toLL(r))
-		}
-		for _, r := range in.Detail.Islands {
-			s.isles = append(s.isles, toLL(r))
-		}
+		s.sea, s.isles = inView(in.Detail.sea), inView(in.Detail.islands)
 	}
 
 	// The base map's coastline, minus the cuts Natural Earth makes along 180° and anything detail replaces.
@@ -226,7 +230,7 @@ func buildScene(in Input, v View, pal Palette) scene {
 		if !w.landBox[i].Overlaps(view) {
 			continue
 		}
-		s.land = append(s.land, toLL(r))
+		s.land = append(s.land, w.landLL[i])
 		var run []LatLon
 		flush := func() {
 			if len(run) > 1 {
@@ -248,15 +252,15 @@ func buildScene(in Input, v View, pal Palette) scene {
 		}
 		flush()
 	}
-	for i, b := range w.Borders {
+	for i := range w.Borders {
 		if w.borderBox[i].Overlaps(view) {
-			s.lines = append(s.lines, sLine{pts: toLL(b), col: fade(pal.Border), prio: prioBorder, dash: true})
+			s.lines = append(s.lines, sLine{pts: w.borderLL[i], col: fade(pal.Border), prio: prioBorder, dash: true})
 		}
 	}
 	if s.detailOn {
 		add := func(kind string, col theme.RGB, prio int) {
-			for _, pts := range in.Detail.Lines[kind] {
-				s.lines = append(s.lines, sLine{pts: toLL(pts), col: fade(col), prio: prio})
+			for _, pts := range inView(in.Detail.lines[kind]) {
+				s.lines = append(s.lines, sLine{pts: pts, col: fade(col), prio: prio})
 			}
 		}
 		add("coast", pal.Coast, prioCoast)

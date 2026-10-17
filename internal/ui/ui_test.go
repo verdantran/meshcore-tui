@@ -397,3 +397,13 @@ func TestHeaderLampsLightUp(t *testing.T) {
 		}
 	}
 }
+
+func TestSlowTerminalReducesMotion(t *testing.T) {
+	for _, chosen := range []bool{false, true} {
+		m := New(Options{Theme: theme.Neon, Motion: motion.Full, MotionChosen: chosen})
+		m.Update(SlowTerminalMsg{})
+		if want := map[bool]motion.Level{false: motion.Reduced, true: motion.Full}[chosen]; m.level != want {
+			t.Errorf("chosen %v: motion %v, want %v", chosen, m.level, want)
+		}
+	}
+}
