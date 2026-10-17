@@ -105,6 +105,7 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 	tcp := fs.String("tcp", "", "connect to a WiFi companion at host[:port] (default port 5000)")
 	ble := fs.String("ble", "", "connect over Bluetooth to a radio's address, as the connect screen's b scan shows it")
 	demo := fs.Bool("demo", false, "run against a simulated radio")
+	asciiOnly := fs.Bool("ascii", false, "draw in plain ASCII, for terminals without braille or box drawing")
 	repeater := fs.Bool("repeater", false, "with -serial or -demo, open a repeater's own console instead of a companion radio")
 	motionFlag := fs.String("motion", "", "full | reduced | off (default full, or reduced over SSH)")
 	themeFlag := fs.String("theme", "", strings.Join(theme.Names(), " | "))
@@ -148,9 +149,9 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 
 	var notes []string
 	if oldConsole(goos, env) {
-		notes = append(notes, "CONSOLE  this looks like the old Windows console, which may not draw the map's braille, some symbols or the mouse. Windows Terminal, free from Microsoft, shows everything.")
+		notes = append(notes, "CONSOLE  this looks like the old Windows console, which may not draw the map's braille, some symbols or the mouse. Windows Terminal, free from Microsoft, shows everything; --ascii draws in plain ASCII instead.")
 	}
-	opt := ui.Options{Notes: notes, Theme: th, Motion: level, Dial: dial, Ports: ports, Scan: scanBLE, Config: cfg, MotionChosen: chosen, Keychain: admin.SystemOr(&admin.FileKeychain{Path: filepath.Join(config.Dir(), "passwords.json")})}
+	opt := ui.Options{ASCII: *asciiOnly || cfg.UI.ASCII, Notes: notes, Theme: th, Motion: level, Dial: dial, Ports: ports, Scan: scanBLE, Config: cfg, MotionChosen: chosen, Keychain: admin.SystemOr(&admin.FileKeychain{Path: filepath.Join(config.Dir(), "passwords.json")})}
 	if d, ok := cfg.Device(cfg.Connection.AutoConnect); ok {
 		opt.Start = &ui.Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name, Mode: d.Mode}
 	}

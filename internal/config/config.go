@@ -29,6 +29,7 @@ type Config struct {
 		PacketTicker bool   `toml:"packet_ticker"`
 		Mouse        bool   `toml:"mouse"`  // clicks pick screens and panes; off leaves the mouse to the terminal, for selecting text
 		Layout       string `toml:"layout"` // split panes, e.g. "right 50 (*chats, packets)"; empty is one screen
+		ASCII        bool   `toml:"ascii"`  // plain ASCII for terminals without braille or box drawing
 	} `toml:"ui"`
 	Connection struct {
 		AutoConnect   string `toml:"auto_connect"` // a saved device's name

@@ -49,6 +49,7 @@ type Options struct {
 	MapDir    string              // street detail and its download; empty uses the data directory
 	MapIndex  string              // where the street detail's tile list is; empty uses OpenFreeMap
 	Notes     []string            // warnings from startup, put in the event log
+	ASCII     bool                // plain ASCII in place of braille, box drawing and symbols
 }
 
 type phase int

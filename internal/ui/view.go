@@ -31,7 +31,11 @@ func (m *Model) View() tea.View {
 	for i := range lines {
 		lines[i] = fit(lines[i], m.w)
 	}
-	v := tea.NewView(strings.Join(lines, "\n"))
+	frame := strings.Join(lines, "\n")
+	if m.opt.ASCII {
+		frame = toASCII(frame)
+	}
+	v := tea.NewView(frame)
 	v.AltScreen = true
 	v.ReportFocus = true
 	if m.mouseOn {

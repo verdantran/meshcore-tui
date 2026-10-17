@@ -8,6 +8,7 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/OwlShack/meshcore-go v1.9.0
 	github.com/charmbracelet/x/ansi v0.11.9
+	github.com/clipperhouse/uax29/v2 v2.7.0
 	github.com/rivo/uniseg v0.4.7
 	github.com/zalando/go-keyring v0.2.8
 	go.bug.st/serial v1.8.0
@@ -24,7 +25,6 @@ require (
 	github.com/charmbracelet/x/termios v0.1.1 // indirect
 	github.com/charmbracelet/x/windows v0.2.2 // indirect
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
-	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
