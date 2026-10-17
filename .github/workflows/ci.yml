@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Formatting
+        if: matrix.os == 'ubuntu-latest'
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - run: go test ./...
+
+  build:
+    strategy:
+      matrix:
+        include:
+          - { runs-on: ubuntu-latest, goos: linux, goarch: amd64, cgo: "0" }
+          - { runs-on: ubuntu-latest, goos: linux, goarch: arm64, cgo: "0" }
+          - { runs-on: ubuntu-latest, goos: windows, goarch: amd64, cgo: "0" }
+          - { runs-on: ubuntu-latest, goos: windows, goarch: arm64, cgo: "0" }
+          # Listing serial ports on macOS goes through IOKit, so its builds need cgo and a Mac.
+          - { runs-on: macos-latest, goos: darwin, goarch: arm64, cgo: "1" }
+          - { runs-on: macos-latest, goos: darwin, goarch: amd64, cgo: "1" }
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: ${{ matrix.cgo }}
+        run: go build -trimpath -ldflags="-s -w" -o meshcore-tui-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/meshcore-tui

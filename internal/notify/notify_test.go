@@ -2,6 +2,7 @@ package notify
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -74,6 +75,16 @@ func TestDesktopAndPlatforms(t *testing.T) {
 	lookPath = func(string) (string, error) { return "", errNotFound }
 	if Detect(env(nil)) != BellOnly {
 		t.Error("Linux without notify-send falls back to the bell")
+	}
+
+	goos = "windows"
+	lookPath = func(string) (string, error) { return `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, nil }
+	if Detect(env(nil)) != OS {
+		t.Error("Windows raises toasts through PowerShell")
+	}
+	Desktop("Bob's node", "it's\nup")
+	if last := calls[len(calls)-1]; last[0] != "powershell.exe" || !strings.Contains(last[4], "CreateTextNode('Bob''s node')") || !strings.Contains(last[4], "CreateTextNode('it''s up')") {
+		t.Errorf("toast call = %q", last)
 	}
 
 	goos = "plan9"

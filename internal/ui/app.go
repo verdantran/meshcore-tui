@@ -47,6 +47,7 @@ type Options struct {
 	Keychain  admin.Keychain      // node passwords; nil keeps them only while the program runs
 	MapDir    string              // street detail and its download; empty uses the data directory
 	MapIndex  string              // where the street detail's tile list is; empty uses OpenFreeMap
+	Notes     []string            // warnings from startup, put in the event log
 }
 
 type phase int
@@ -177,6 +178,9 @@ func New(opt Options) *Model {
 	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand(), notifyCommand(), traceCommand(), channelCommand(), mapCommand())
 	m.connect = newConnect(opt.Ports, m.savedTargets)
 	m.ticker = newTicker()
+	for _, n := range opt.Notes {
+		m.addLog(m.now, n, radio.ToneWarn)
+	}
 	return m
 }
 

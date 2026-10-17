@@ -407,3 +407,10 @@ func TestSlowTerminalReducesMotion(t *testing.T) {
 		}
 	}
 }
+
+func TestStartupNotes(t *testing.T) {
+	m := New(Options{Theme: theme.Neon, Notes: []string{"CONSOLE  try Windows Terminal"}})
+	if len(m.log) != 1 || m.log[0].text != "CONSOLE  try Windows Terminal" {
+		t.Errorf("log = %+v", m.log)
+	}
+}

@@ -14,7 +14,7 @@ type Method string
 const (
 	Off      Method = "off"
 	Terminal Method = "terminal" // OSC 9, or OSC 99 on kitty
-	OS       Method = "os"       // osascript or notify-send
+	OS       Method = "os"       // osascript, notify-send, or a PowerShell toast
 	BellOnly Method = "bell"
 )
 
@@ -37,6 +37,10 @@ func Detect(env func(string) string) Method {
 		return OS
 	case "linux":
 		if _, err := lookPath("notify-send"); err == nil {
+			return OS
+		}
+	case "windows":
+		if _, err := lookPath("powershell.exe"); err == nil {
 			return OS
 		}
 	}
@@ -99,9 +103,25 @@ func Desktop(title, body string) error {
 		return run("osascript", "-e", `display notification `+appleQuote(body)+` with title `+appleQuote(title))
 	case "linux":
 		return run("notify-send", "--app-name=meshcore-tui", clean(title), clean(body))
+	case "windows":
+		return run("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", toastScript(title, body))
 	}
 	return nil
 }
+
+// toastScript raises a Windows toast. It's sent as PowerShell's own, since Windows only shows toasts
+// from an app it knows.
+func toastScript(title, body string) string {
+	return `$n = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
+$x = $n::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+$t = $x.GetElementsByTagName('text')
+$t.Item(0).AppendChild($x.CreateTextNode(` + psQuote(title) + `)) > $null
+$t.Item(1).AppendChild($x.CreateTextNode(` + psQuote(body) + `)) > $null
+$n::CreateToastNotifier('{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe').Show([Windows.UI.Notifications.ToastNotification]::new($x))`
+}
+
+// psQuote is a single-quoted PowerShell string, in which only a quote needs escaping, by doubling it.
+func psQuote(s string) string { return "'" + strings.ReplaceAll(clean(s), "'", "''") + "'" }
 
 func appleQuote(s string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(clean(s)) + `"`

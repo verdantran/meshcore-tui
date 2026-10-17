@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"time"
 
@@ -78,21 +79,27 @@ func Default() *Config {
 	return c
 }
 
-// Dir follows XDG on every platform, so the path in the docs is the path on disk.
+var goos = runtime.GOOS
+
+// Dir follows XDG on macOS and Linux, so the path in the docs is the path on disk. Windows keeps
+// settings in AppData\Roaming and data in AppData\Local, as its own apps do; XDG still overrides both.
 func Dir() string {
-	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
-		return filepath.Join(d, "meshcore-tui")
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "meshcore-tui")
+	return dir("XDG_CONFIG_HOME", "APPDATA", ".config")
 }
 
 func DataDir() string {
-	if d := os.Getenv("XDG_DATA_HOME"); d != "" {
+	return dir("XDG_DATA_HOME", "LOCALAPPDATA", filepath.Join(".local", "share"))
+}
+
+func dir(xdg, windows, underHome string) string {
+	if d := os.Getenv(xdg); d != "" {
+		return filepath.Join(d, "meshcore-tui")
+	}
+	if d := os.Getenv(windows); goos == "windows" && d != "" {
 		return filepath.Join(d, "meshcore-tui")
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".local", "share", "meshcore-tui")
+	return filepath.Join(home, underHome, "meshcore-tui")
 }
 
 // Load reads the config at path, or returns defaults if there isn't one yet.

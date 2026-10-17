@@ -99,6 +99,21 @@ func TestSetupEnvironment(t *testing.T) {
 	}
 }
 
+func TestOldWindowsConsole(t *testing.T) {
+	none := env(nil)
+	if !oldConsole("windows", none) || oldConsole("darwin", none) || oldConsole("windows", env(map[string]string{"WT_SESSION": "x"})) {
+		t.Error("only the bare Windows console is flagged")
+	}
+	saved := goos
+	t.Cleanup(func() { goos = saved })
+	goos = "windows"
+	var errs bytes.Buffer
+	opt, _ := setup([]string{"--config", filepath.Join(t.TempDir(), "config.toml")}, none, &errs)
+	if len(opt.Notes) != 1 || !strings.Contains(opt.Notes[0], "Windows Terminal") {
+		t.Errorf("notes = %q", opt.Notes)
+	}
+}
+
 func TestSetupErrors(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 	var errs bytes.Buffer

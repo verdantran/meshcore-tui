@@ -3,6 +3,7 @@ package admin
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/zalando/go-keyring"
@@ -33,7 +34,8 @@ func TestFileKeychainIsPrivateAndLasts(t *testing.T) {
 	if err := (&FileKeychain{Path: path}).Set([32]byte{0xA3}, "hunter2"); err != nil {
 		t.Fatal(err)
 	}
-	if fi, err := os.Stat(path); err != nil || fi.Mode().Perm() != 0o600 {
+	// Windows has no permission bits: the file is private there because it's under the user's own profile.
+	if fi, err := os.Stat(path); err != nil || runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
 		t.Fatalf("mode %v %v, want 0600", fi.Mode().Perm(), err)
 	}
 	if pw, ok := (&FileKeychain{Path: path}).Get([32]byte{0xA3}); !ok || pw != "hunter2" {

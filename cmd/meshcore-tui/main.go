@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -91,7 +92,7 @@ var errUsage = errors.New("usage")
 func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options, error) {
 	fs := flag.NewFlagSet("meshcore-tui", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	serialPort := fs.String("serial", "", "connect to a USB serial port, e.g. /dev/cu.usbmodem1101")
+	serialPort := fs.String("serial", "", "connect to a USB serial port, e.g. /dev/cu.usbmodem1101, /dev/ttyACM0 or COM3")
 	tcp := fs.String("tcp", "", "connect to a WiFi companion at host[:port] (default port 5000)")
 	demo := fs.Bool("demo", false, "run against a simulated radio")
 	repeater := fs.Bool("repeater", false, "with -serial or -demo, open a repeater's own console instead of a companion radio")
@@ -135,7 +136,11 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 		level = l
 	}
 
-	opt := ui.Options{Theme: th, Motion: level, Dial: dial, Ports: ports, Config: cfg, MotionChosen: chosen, Keychain: admin.SystemOr(&admin.FileKeychain{Path: filepath.Join(config.Dir(), "passwords.json")})}
+	var notes []string
+	if oldConsole(goos, env) {
+		notes = append(notes, "CONSOLE  this looks like the old Windows console, which may not draw the map's braille, some symbols or the mouse. Windows Terminal, free from Microsoft, shows everything.")
+	}
+	opt := ui.Options{Notes: notes, Theme: th, Motion: level, Dial: dial, Ports: ports, Config: cfg, MotionChosen: chosen, Keychain: admin.SystemOr(&admin.FileKeychain{Path: filepath.Join(config.Dir(), "passwords.json")})}
 	if d, ok := cfg.Device(cfg.Connection.AutoConnect); ok {
 		opt.Start = &ui.Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name, Mode: d.Mode}
 	}
@@ -188,6 +193,21 @@ func run(args []string, env func(string) string, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+var goos = runtime.GOOS
+
+// oldConsole reports the Windows console host, which sets none of the variables newer terminals do.
+func oldConsole(goos string, env func(string) string) bool {
+	if goos != "windows" {
+		return false
+	}
+	for _, k := range []string{"WT_SESSION", "TERM_PROGRAM", "TERM", "ALACRITTY_WINDOW_ID", "ConEmuANSI", "SSH_CONNECTION"} {
+		if env(k) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func main() { os.Exit(run(os.Args[1:], os.Getenv, os.Stderr)) }

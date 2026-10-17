@@ -48,15 +48,28 @@ func TestRoundTripAndRemember(t *testing.T) {
 }
 
 func TestPathsAndFailures(t *testing.T) {
+	saved := goos
+	t.Cleanup(func() { goos = saved })
+	goos = "linux"
 	t.Setenv("XDG_CONFIG_HOME", "/x/config")
 	t.Setenv("XDG_DATA_HOME", "/x/data")
-	if Dir() != "/x/config/meshcore-tui" || DataDir() != "/x/data/meshcore-tui" {
+	if Dir() != filepath.Join("/x/config", "meshcore-tui") || DataDir() != filepath.Join("/x/data", "meshcore-tui") {
 		t.Errorf("XDG paths: %s %s", Dir(), DataDir())
+	}
+	goos = "windows"
+	t.Setenv("APPDATA", `C:\Users\me\AppData\Roaming`)
+	t.Setenv("LOCALAPPDATA", `C:\Users\me\AppData\Local`)
+	if Dir() != filepath.Join("/x/config", "meshcore-tui") {
+		t.Errorf("XDG wins on Windows too: %s", Dir())
 	}
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("XDG_DATA_HOME", "")
-	t.Setenv("HOME", "/home/me")
-	if Dir() != "/home/me/.config/meshcore-tui" || DataDir() != "/home/me/.local/share/meshcore-tui" {
+	if Dir() != filepath.Join(`C:\Users\me\AppData\Roaming`, "meshcore-tui") || DataDir() != filepath.Join(`C:\Users\me\AppData\Local`, "meshcore-tui") {
+		t.Errorf("Windows paths: %s %s", Dir(), DataDir())
+	}
+	goos = "linux"
+	home, _ := os.UserHomeDir()
+	if Dir() != filepath.Join(home, ".config", "meshcore-tui") || DataDir() != filepath.Join(home, ".local", "share", "meshcore-tui") {
 		t.Errorf("home paths: %s %s", Dir(), DataDir())
 	}
 
