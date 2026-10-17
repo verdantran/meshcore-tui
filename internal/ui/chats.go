@@ -51,10 +51,11 @@ type chatsModel struct {
 
 	signedMsgs map[string]store.Message // the message each signature heard was for, by channel and timestamp
 
-	arrived map[int64]time.Time // incoming messages, for the decode and the bar flash
-	acked   map[int64]time.Time // for the ✓ pop
-	echoed  map[int64]time.Time // a channel message's latest repeat, for its flash
-	failed  map[int64]time.Time // for the glitch
+	arrived map[int64]time.Time       // incoming messages, for the decode and the bar flash
+	acked   map[int64]time.Time       // for the ✓ pop
+	echoed  map[int64]time.Time       // a channel message's latest repeat, for its flash
+	failed  map[int64]time.Time       // for the glitch
+	popped  map[store.Convo]time.Time // when a conversation's unread count went up, for its badge's pop
 	unread  int
 
 	draft store.Convo // a conversation started from Contacts, listed until it's left without a message
@@ -69,7 +70,7 @@ type chatsModel struct {
 
 func newChats() chatsModel {
 	return chatsModel{arrived: map[int64]time.Time{}, acked: map[int64]time.Time{}, failed: map[int64]time.Time{}, echoed: map[int64]time.Time{},
-		routed: map[int64]time.Time{}, signedMsgs: map[string]store.Message{}}
+		routed: map[int64]time.Time{}, signedMsgs: map[string]store.Message{}, popped: map[store.Convo]time.Time{}}
 }
 
 type sendResultMsg struct {
@@ -105,6 +106,15 @@ func (m *Model) refreshChats() {
 	if err != nil {
 		m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 		return
+	}
+	was := map[store.Convo]int{}
+	for _, info := range c.infos {
+		was[info.Convo] = info.Unread
+	}
+	for _, info := range infos {
+		if info.Unread > was[info.Convo] {
+			c.popped[info.Convo] = m.now
+		}
 	}
 	c.infos, c.sel = infos, min(c.sel, max(len(infos)-1, 0))
 	for i, info := range infos {
@@ -504,6 +514,11 @@ func (m *Model) chatsAnimating() bool {
 			return true
 		}
 	}
+	for _, t := range m.chats.popped {
+		if motion.Running(t, popDur, now) {
+			return true
+		}
+	}
 	if m.visible(0) {
 		for _, msg := range m.chats.msgs {
 			channel := strings.HasPrefix(string(msg.Convo), "ch:")
@@ -567,7 +582,7 @@ func (m *Model) convoList(w, rows int) []string {
 		}
 		badge := ""
 		if info.Unread > 0 {
-			badge = th.Block(th.Bg, th.Magenta).Render(fmt.Sprintf(" %d ", info.Unread))
+			badge = m.unreadBadge(info)
 		}
 		if info.Mention {
 			badge = th.Fg(th.Magenta, true).Render("@") + badge
@@ -1025,4 +1040,22 @@ func (m *Model) composeLoad() (used, limit int) {
 		limit = m.chat.MaxBytes(cur.Convo)
 	}
 	return len(m.chats.input.text), limit
+}
+
+// unreadBadge is a conversation's unread count; a new message makes it pop, ▪ then ■ then the number,
+// at the width it ends at so the name beside it holds still.
+func (m *Model) unreadBadge(info chat.Info) string {
+	th := m.th
+	text := fmt.Sprintf(" %d ", info.Unread)
+	at := m.chats.popped[info.Convo]
+	if !m.level.Allows(motion.Flash) || !motion.Running(at, popDur, m.now) {
+		return th.Block(th.Bg, th.Magenta).Render(text)
+	}
+	switch p := motion.Progress(at, popDur, m.now); {
+	case p < 1.0/3:
+		return th.Fg(th.Magenta, true).Render(fit(" ▪", len(text)))
+	case p < 2.0/3:
+		return th.Fg(th.Magenta, true).Render(fit(" ■", len(text)))
+	}
+	return th.Block(th.Bg, th.Magenta.Lerp(th.Text, 0.4)).Render(text)
 }

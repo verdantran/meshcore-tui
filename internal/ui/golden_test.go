@@ -180,3 +180,18 @@ func TestGoldenFailureGlitch(t *testing.T) {
 	m.fail("LOGIN FAILED  Dundry: wrong password, or not allowed")
 	golden.Check(t, "failure-glitch", frames(t, m, c, t0, 0, glitchDur/2, glitchDur))
 }
+
+func TestGoldenUnreadPops(t *testing.T) {
+	m, c, _ := newChatModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	selectConvo(t, m, "Public")
+	tick(m, c, time.Second)
+	t0 := c.t
+	var from [6]byte
+	copy(from[:], aliceKey[:6])
+	send(m, c, 0, radio.Incoming{At: t0, From: from, Hops: -1, SentAt: t0, Text: "are you about?"})
+	if !m.chatsAnimating() {
+		t.Fatal("the new badge pops")
+	}
+	golden.Check(t, "unread-pops", frames(t, m, c, t0, 0, popDur/2, popDur*5/6, popDur))
+}
