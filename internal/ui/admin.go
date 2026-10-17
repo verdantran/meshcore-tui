@@ -67,13 +67,13 @@ type adminModel struct {
 	paneAt time.Time
 
 	prompt  adminPrompt
-	input   string
+	input   lineEdit
 	confirm confirmAction
 	pickSel int
 
 	setSel, aclSel, regSel, nbSel int
 
-	console string
+	console lineEdit
 	history []string
 	histAt  int
 
@@ -475,7 +475,7 @@ func (m *Model) adminKey(s string) (tea.Cmd, bool) {
 	}
 	if sess.State != admin.LoggedIn {
 		if s == "enter" {
-			a.prompt, a.input = promptPassword, ""
+			a.prompt, a.input = promptPassword, lineEdit{}
 			return nil, true
 		}
 		return nil, false
@@ -521,7 +521,7 @@ func (m *Model) nodeListKey(s string) (tea.Cmd, bool) {
 			if pw, ok := m.opt.Keychain.Get(ct.Key); ok && sess.State != admin.LoginFailed {
 				return m.startJob(m.admin.Login(ct, pw, m.now)), true
 			}
-			a.prompt, a.input, a.remember = promptPassword, "", false
+			a.prompt, a.input, a.remember = promptPassword, lineEdit{}, false
 			return nil, true
 		}
 		return m.setPane(a.pane), true
@@ -658,7 +658,7 @@ func (m *Model) statusKey(s string, ct radio.Contact, sess *admin.Session) (tea.
 }
 
 func (m *Model) askConfirm(c confirmAction) {
-	m.adm.prompt, m.adm.input, m.adm.confirm = promptConfirm, "", c
+	m.adm.prompt, m.adm.input, m.adm.confirm = promptConfirm, lineEdit{}, c
 }
 
 // settingRows is the schema for the open node, minus keys it has said it doesn't have.
@@ -714,7 +714,7 @@ func (m *Model) settingsKey(s string, ct radio.Contact, sess *admin.Session) (te
 			i := slices.Index(st.Options, cur)
 			m.stage(ct, st, st.Options[(i+1)%len(st.Options)])
 		default:
-			a.prompt, a.input = promptEdit, cur
+			a.prompt, a.input = promptEdit, newLine(cur)
 		}
 	default:
 		return nil, false
@@ -848,7 +848,7 @@ func (m *Model) regionsKey(s string, ct radio.Contact, sess *admin.Session) (tea
 	r := sess.Regions[a.regSel]
 	switch s {
 	case "n":
-		a.prompt, a.input = promptRegion, ""
+		a.prompt, a.input = promptRegion, lineEdit{}
 		return nil, true
 	case "h":
 		return refresh("region home " + r.Name), true
@@ -916,15 +916,15 @@ func (m *Model) consoleKey(s string, ct radio.Contact, sess *admin.Session) (tea
 	a := &m.adm
 	switch s {
 	case "esc":
-		if a.console == "" && a.local {
+		if a.console.text == "" && a.local {
 			return m.setPane(paneStatus), true
 		}
-		if a.console == "" {
+		if a.console.text == "" {
 			a.opened = false
 		}
-		a.console = ""
+		a.console = lineEdit{}
 	case "enter":
-		cmd := strings.TrimSpace(a.console)
+		cmd := strings.TrimSpace(a.console.text)
 		if cmd == "" {
 			return nil, true
 		}
@@ -933,7 +933,7 @@ func (m *Model) consoleKey(s string, ct radio.Contact, sess *admin.Session) (tea
 			return nil, true
 		}
 		a.history = append(a.history, cmd)
-		a.histAt, a.console = len(a.history), ""
+		a.histAt, a.console = len(a.history), lineEdit{}
 		if why := dangerous(cmd); why != "" {
 			m.askConfirm(confirmAction{title: strings.ToUpper(cmd) + " ON " + strings.ToUpper(ct.Name), warning: why, commands: []string{cmd}})
 			return nil, true
@@ -942,25 +942,19 @@ func (m *Model) consoleKey(s string, ct radio.Contact, sess *admin.Session) (tea
 	case "up":
 		if a.histAt > 0 {
 			a.histAt--
-			a.console = a.history[a.histAt]
+			a.console.set(a.history[a.histAt])
 		}
 	case "down":
 		if a.histAt < len(a.history)-1 {
 			a.histAt++
-			a.console = a.history[a.histAt]
+			a.console.set(a.history[a.histAt])
 		} else {
-			a.histAt, a.console = len(a.history), ""
+			a.histAt, a.console = len(a.history), lineEdit{}
 		}
 	case "tab":
-		a.console = completeConsole(a.console, sess.Type)
-	case "backspace":
-		a.console = dropLast(a.console)
-	case "space":
-		a.console += " "
+		a.console.set(completeConsole(a.console.text, sess.Type))
 	default:
-		if len([]rune(s)) == 1 {
-			a.console += s
-		}
+		a.console.key(s)
 	}
 	return nil, true
 }
@@ -1031,16 +1025,7 @@ func (m *Model) adminPromptKey(s string) tea.Cmd {
 		return nil
 	}
 	typing := func() {
-		switch s {
-		case "backspace":
-			a.input = dropLast(a.input)
-		case "space":
-			a.input += " "
-		default:
-			if len([]rune(s)) == 1 {
-				a.input += s
-			}
-		}
+		a.input.key(s)
 	}
 	switch a.prompt {
 	case promptPassword:
@@ -1056,16 +1041,16 @@ func (m *Model) adminPromptKey(s string) tea.Cmd {
 		a.prompt = noPrompt
 		delete(a.visited, ct.Key)
 		if a.remember {
-			a.saving[ct.Key] = a.input
+			a.saving[ct.Key] = a.input.text
 		}
-		return m.startJob(m.admin.Login(ct, a.input, m.now))
+		return m.startJob(m.admin.Login(ct, a.input.text, m.now))
 	case promptEdit:
 		if s != "enter" {
 			typing()
 			return nil
 		}
 		st := m.settingRows(sess)[a.setSel]
-		if m.stage(ct, st, strings.TrimSpace(a.input)) {
+		if m.stage(ct, st, strings.TrimSpace(a.input.text)) {
 			a.prompt = noPrompt
 		}
 	case promptRegion:
@@ -1074,7 +1059,7 @@ func (m *Model) adminPromptKey(s string) tea.Cmd {
 			return nil
 		}
 		a.prompt = noPrompt
-		name := strings.TrimSpace(a.input)
+		name := strings.TrimSpace(a.input.text)
 		if name == "" || strings.Contains(name, " ") {
 			m.fail("REGIONS  a region name is one word")
 			return nil
@@ -1106,7 +1091,7 @@ func (m *Model) adminPromptKey(s string) tea.Cmd {
 			typing()
 			return nil
 		}
-		if !strings.EqualFold(strings.TrimSpace(a.input), ct.Name) {
+		if !strings.EqualFold(strings.TrimSpace(a.input.text), ct.Name) {
 			m.fail("NOT CONFIRMED  type the node's name exactly to go ahead")
 			return nil
 		}
@@ -1210,7 +1195,7 @@ func (m *Model) loginFromChats(ct radio.Contact) {
 		}
 	}
 	m.adm.open, m.adm.opened, m.adm.pane = ct.Key, true, paneStatus
-	m.adm.prompt, m.adm.input = promptPassword, ""
+	m.adm.prompt, m.adm.input = promptPassword, lineEdit{}
 	key := ct.Key
 	m.adm.returnTo = &key
 }

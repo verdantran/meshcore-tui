@@ -236,3 +236,65 @@ func TestNarrowPacketList(t *testing.T) {
 		t.Errorf("compact list shows the messages:\n%s", scr)
 	}
 }
+
+func TestClicks(t *testing.T) {
+	h := newHarness(t)
+	if h.m.View().MouseMode != tea.MouseModeCellMotion {
+		t.Fatal("clicks are reported")
+	}
+	click := func(x, y int) {
+		_, cmd := h.m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+		h.start(cmd)
+		h.settle()
+	}
+	clickLabel := func(label string) {
+		t.Helper()
+		row := strings.Split(plain(screen(t, h.m)), "\n")[1]
+		i := strings.Index(row, label)
+		if i < 0 {
+			t.Fatalf("no %q in %q", label, row)
+		}
+		click(visibleWidth(row[:i])+len(label)-1, 1) // its last letter
+	}
+	clickLabel("3 MAP")
+	if h.m.tab != 2 {
+		t.Fatalf("clicked MAP, tab %d", h.m.tab)
+	}
+	clickLabel("2 CONTACTS")
+	if h.m.tab != 1 {
+		t.Fatalf("clicked CONTACTS, tab %d", h.m.tab)
+	}
+	click(0, 1)
+	click(h.m.w-1, 1)
+	if h.m.tab != 1 {
+		t.Error("clicks off the labels do nothing")
+	}
+
+	// In split panes a click focuses the pane it lands in.
+	h.keys("1")
+	h.pane("v")
+	if h.m.tab != 3 {
+		t.Fatalf("split: tab %d", h.m.tab)
+	}
+	click(2, 10)
+	if h.m.tab != 0 || h.m.lay.focus.tab != 0 {
+		t.Errorf("clicked the left pane: tab %d", h.m.tab)
+	}
+	click(h.m.w-2, 10)
+	if h.m.tab != 3 {
+		t.Errorf("clicked the right pane: tab %d", h.m.tab)
+	}
+
+	// Only the left button picks.
+	h.m.Update(tea.MouseClickMsg{X: 2, Y: 10, Button: tea.MouseRight})
+	if h.m.tab != 3 {
+		t.Error("right click")
+	}
+
+	h.keys(":")
+	h.m.Update(tea.PasteMsg{Content: "mouse off"})
+	h.key(tea.KeyEnter)
+	if h.m.View().MouseMode != tea.MouseModeNone {
+		t.Error(":mouse off leaves the mouse to the terminal")
+	}
+}

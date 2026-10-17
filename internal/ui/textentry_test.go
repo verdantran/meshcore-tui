@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"meshcore-tui/internal/radio"
 )
@@ -19,19 +20,19 @@ func TestPasteAndEmoji(t *testing.T) {
 	_, cmd := h.m.Update(tea.PasteMsg{Content: "hello\nthere q"})
 	h.start(cmd)
 	h.settle()
-	if !c.writing || c.input != "hello there q" || h.m.tab != 0 {
-		t.Fatalf("pasted = %q, writing %v", c.input, c.writing)
+	if !c.writing || c.input.text != "hello there q" || h.m.tab != 0 {
+		t.Fatalf("pasted = %q, writing %v", c.input.text, c.writing)
 	}
 
 	// An emoji made of several characters, typed as one key, goes in whole; backspace takes it out whole.
 	for _, emoji := range []string{"❤️", "👍🏽", "🇬🇧", "👨‍👩‍👧"} {
 		h.m.Update(tea.KeyPressMsg{Text: emoji})
-		if !strings.HasSuffix(c.input, emoji) {
-			t.Errorf("%s typed: %q", emoji, c.input)
+		if !strings.HasSuffix(c.input.text, emoji) {
+			t.Errorf("%s typed: %q", emoji, c.input.text)
 		}
 		h.key(tea.KeyBackspace)
-		if c.input != "hello there q" {
-			t.Errorf("backspace after %s: %q", emoji, c.input)
+		if c.input.text != "hello there q" {
+			t.Errorf("backspace after %s: %q", emoji, c.input.text)
 		}
 	}
 	h.key(tea.KeyEscape)
@@ -47,8 +48,8 @@ func TestPasteAndEmoji(t *testing.T) {
 	// It goes into other fields too: the palette, here.
 	h.keys(":")
 	h.m.Update(tea.PasteMsg{Content: "theme ice"})
-	if h.m.pal.input != "theme ice" {
-		t.Errorf("palette = %q", h.m.pal.input)
+	if h.m.pal.input.text != "theme ice" {
+		t.Errorf("palette = %q", h.m.pal.input.text)
 	}
 	h.key(tea.KeyEscape)
 	if dropLast("") != "" || dropLast("é") != "" || dropLast("ab") != "a" {
@@ -72,8 +73,8 @@ func TestMentionsAndColours(t *testing.T) {
 	h.key(tea.KeyEnter)
 	h.keys("@sat")
 	h.key(tea.KeyTab)
-	if h.m.chats.input != "@[🛰 Satellite] " {
-		t.Errorf("mention = %q", h.m.chats.input)
+	if h.m.chats.input.text != "@[🛰 Satellite] " {
+		t.Errorf("mention = %q", h.m.chats.input.text)
 	}
 	h.key(tea.KeyEscape)
 
@@ -123,5 +124,80 @@ func TestPickedRowAndCopy(t *testing.T) {
 	}
 	if pathText([]byte{0x77, 0x5F}, 1) != "77·5F" || pathText(nil, 1) != "" {
 		t.Error("short paths are shown whole")
+	}
+}
+
+func TestLineEditCursor(t *testing.T) {
+	h := newHarness(t)
+	h.openConvo("Public")
+	c := &h.m.chats
+	h.key(tea.KeyEnter)
+	h.keys("helo")
+	h.key(tea.KeyLeft)
+	h.keys("l")
+	if c.input.text != "hello" {
+		t.Fatalf("insert at the cursor: %q", c.input.text)
+	}
+	h.key(tea.KeyHome)
+	h.keys(">")
+	h.key(tea.KeyEnd)
+	h.keys("!")
+	if c.input.text != ">hello!" {
+		t.Fatalf("home and end: %q", c.input.text)
+	}
+	h.key(tea.KeyLeft)
+	h.key(tea.KeyBackspace)
+	h.key(tea.KeyDelete)
+	if c.input.text != ">hell" {
+		t.Errorf("backspace and delete: %q", c.input.text)
+	}
+
+	// A completion mid-line replaces only the @name before the cursor.
+	c.input = newLine("hi @Car there")
+	c.input.pos = len("hi @Car")
+	c.mention = nil
+	h.key(tea.KeyTab)
+	if c.input.text != "hi @[Carol] there" || c.input.before() != "hi @[Carol]" {
+		t.Errorf("mid-line mention: %q", c.input.text)
+	}
+
+	e := newLine("a👨‍👩‍👧b")
+	e.key("left")
+	e.key("left")
+	if e.before() != "a" {
+		t.Errorf("an emoji is one step: %q", e.before())
+	}
+	e.key("delete")
+	if e.text != "ab" {
+		t.Errorf("and one delete: %q", e.text)
+	}
+	e = newLine("one two  three")
+	e.key("alt+left")
+	if e.before() != "one two  " {
+		t.Errorf("word left: %q", e.before())
+	}
+	e.key("alt+backspace")
+	if e.text != "one three" {
+		t.Errorf("word delete: %q", e.text)
+	}
+	e.key("ctrl+u")
+	e.key("ctrl+e")
+	e.key("alt+left")
+	e.key("ctrl+k")
+	if e.text != "" {
+		t.Errorf("kill to the start, then the end: %q", e.text)
+	}
+
+	// A long line scrolls to keep the cursor in view, at either end.
+	long := newLine(strings.Repeat("abcdefghij", 10))
+	if got := ansi.Strip(long.render(h.m.th, 20, false)); visibleWidth(got) > 20 || !strings.HasPrefix(got, "…") {
+		t.Errorf("end of a long line: %q", got)
+	}
+	long.key("home")
+	if got := ansi.Strip(long.render(h.m.th, 20, false)); visibleWidth(got) > 20 || !strings.HasPrefix(got, "abc") {
+		t.Errorf("start of a long line: %q", got)
+	}
+	if got := ansi.Strip(newLine("secret").render(h.m.th, 20, true)); strings.Contains(got, "secret") {
+		t.Errorf("masked: %q", got)
 	}
 }

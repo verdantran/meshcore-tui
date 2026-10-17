@@ -1,5 +1,7 @@
 /meshcore-tui
+/meshcore-tui-*
 /dist/
+*.test
 
 # Design prototypes stay out of the repo.
 /prototypes/

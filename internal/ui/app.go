@@ -113,6 +113,7 @@ type Model struct {
 	help          bool
 	quitting      bool
 	tickerOn      bool
+	mouseOn       bool
 	extraCommands []command
 }
 
@@ -148,11 +149,11 @@ func New(opt Options) *Model {
 	if opt.Clock == nil {
 		opt.Clock = time.Now
 	}
-	m := &Model{opt: opt, th: opt.Theme, themeTo: opt.Theme, level: opt.Motion, now: opt.Clock(), tickerOn: true}
+	m := &Model{opt: opt, th: opt.Theme, themeTo: opt.Theme, level: opt.Motion, now: opt.Clock(), tickerOn: true, mouseOn: true}
 	m.lay, m.tab = m.savedLayout()
 	retries, flood := 3, true
 	if opt.Config != nil {
-		m.tickerOn = opt.Config.UI.PacketTicker
+		m.tickerOn, m.mouseOn = opt.Config.UI.PacketTicker, opt.Config.UI.Mouse
 		retries, flood = opt.Config.Messages.DMRetries, opt.Config.Messages.FloodFallback
 	}
 	if opt.Store != nil {
@@ -264,6 +265,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.chatTimeout(msg))
 	case tea.PasteMsg:
 		cmds = append(cmds, m.paste(msg.Content))
+	case tea.MouseClickMsg:
+		cmds = append(cmds, m.click(tea.Mouse(msg)))
 	case tea.KeyPressMsg:
 		if utf8.RuneCountInString(msg.Text) > 1 && m.typing() {
 			cmds = append(cmds, m.typeText(msg.Text)) // an emoji made of several characters
@@ -291,14 +294,14 @@ func (m *Model) ensureTick() tea.Cmd {
 	m.ticking = true
 	every := motion.FrameDur
 	if !m.moving() {
-		every = sweepFrame // only the map's radar sweep is turning, and it's slow enough not to need 30 a second
+		every = beaconFrame // only the map's beacon is pulsing, and it's slow enough not to need 30 a second
 	}
 	return tea.Tick(every, func(t time.Time) tea.Msg { return frameMsg(t) })
 }
 
-const sweepFrame = time.Second / 12
+const beaconFrame = time.Second / 12
 
-func (m *Model) animating() bool { return m.moving() || m.mapSweeping() }
+func (m *Model) animating() bool { return m.moving() || m.mapBeaconOn() }
 
 // moving reports animation that needs the full frame rate.
 func (m *Model) moving() bool {
@@ -766,6 +769,7 @@ func (m *Model) screenKeys() []string {
 	}
 	if m.tab == 0 {
 		return []string{key("↑↓ j k", "choose a conversation"), key("enter i", "write a message; enter sends"), key("tab", "while writing, complete an @name; again for the next match"),
+			key("← → home end", "while typing, move the cursor; alt+← → by word · alt+backspace deletes a word · ctrl+u ctrl+k to the start or end"),
 			key("esc", "stop writing, or clear the filter"), key("/", "filter this conversation"),
 			key("ctrl+f", "search every conversation"), key("K J", "scroll history"),
 			key("→", "pick a message: ↑↓ move, r replies to it (naming them in a channel), M shows its route, y copies it, ← goes back"),
@@ -773,6 +777,7 @@ func (m *Model) screenKeys() []string {
 			key("S", "sign your messages on the open channel, or stop; ctrl+s while writing flips it for one message"),
 			key("p P", "on a picked signed message, pin its key to the sender's name · replace a pin"),
 			key("M", "show on the map the route of the newest message received in view"),
+			key("R", "send your newest failed message again; on a picked one, R or enter sends that one"),
 			key("L", "log in to the room server whose conversation is open"),
 			key("n", "add a channel: #name, a private one with its secret, or a shared link"),
 			key("s r x", "share, rename or leave the channel that's open"), ""}

@@ -246,8 +246,8 @@ func TestPalette(t *testing.T) {
 	}
 	typeKeys(m, "th")
 	key(m, tea.KeyTab)
-	if m.pal.input != "theme " {
-		t.Fatalf("tab completed to %q", m.pal.input)
+	if m.pal.input.text != "theme " {
+		t.Fatalf("tab completed to %q", m.pal.input.text)
 	}
 	typeKeys(m, "ic")
 	key(m, tea.KeyTab)
@@ -270,8 +270,8 @@ func TestPalette(t *testing.T) {
 
 	typeKeys(m, ":")
 	key(m, tea.KeyUp)
-	if m.pal.input != "bogus" {
-		t.Fatalf("history up gave %q", m.pal.input)
+	if m.pal.input.text != "bogus" {
+		t.Fatalf("history up gave %q", m.pal.input.text)
 	}
 	got := plain(screen(t, m))
 	if !strings.Contains(got, "mc▸ bogus") {

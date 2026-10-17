@@ -62,6 +62,16 @@ func commands() []command {
 				return nil
 			},
 			complete: func(*Model) []string { return []string{"on", "off"} }},
+		{name: "mouse", args: "on|off", help: "let clicks pick screens and panes, or leave the mouse to the terminal for selecting text",
+			run: func(m *Model, a []string) error {
+				m.mouseOn = len(a) == 0 && !m.mouseOn || len(a) > 0 && a[0] == "on"
+				if m.opt.Config != nil {
+					m.opt.Config.UI.Mouse = m.mouseOn
+					m.saveConfig()
+				}
+				return nil
+			},
+			complete: func(*Model) []string { return []string{"on", "off"} }},
 		{name: "close", help: "close the focused pane", run: func(m *Model, _ []string) error { return m.closePane() }},
 		{name: "frames", help: "show or hide the protocol frames pane", run: func(m *Model, _ []string) error { m.debug = !m.debug; return nil }},
 		{name: "help", help: "list keys and commands", run: func(m *Model, _ []string) error { m.help = true; return nil }},
@@ -83,13 +93,13 @@ func (m *Model) commandSet() []command {
 
 type palette struct {
 	open    bool
-	input   string
+	input   lineEdit
 	history []string
 	hist    int // index into history while browsing; len(history) when not
 }
 
 func (m *Model) openPalette() {
-	m.pal.open, m.pal.input, m.pal.hist = true, "", len(m.pal.history)
+	m.pal.open, m.pal.input, m.pal.hist = true, lineEdit{}, len(m.pal.history)
 }
 
 func (m *Model) paletteKey(s string) {
@@ -98,35 +108,29 @@ func (m *Model) paletteKey(s string) {
 	case "esc":
 		p.open = false
 	case "enter":
-		line := strings.TrimSpace(p.input)
+		line := strings.TrimSpace(p.input.text)
 		p.open = false
 		if line == "" {
 			return
 		}
 		p.history = append(p.history, line)
 		m.runCommand(line)
-	case "backspace":
-		p.input = dropLast(p.input)
 	case "tab":
-		p.input = m.completeInput(p.input)
+		p.input.set(m.completeInput(p.input.text))
 	case "up":
 		if p.hist > 0 {
 			p.hist--
-			p.input = p.history[p.hist]
+			p.input.set(p.history[p.hist])
 		}
 	case "down":
 		if p.hist < len(p.history)-1 {
 			p.hist++
-			p.input = p.history[p.hist]
+			p.input.set(p.history[p.hist])
 		} else {
-			p.hist, p.input = len(p.history), ""
+			p.hist, p.input = len(p.history), lineEdit{}
 		}
-	case "space":
-		p.input += " "
 	default:
-		if len([]rune(s)) == 1 {
-			p.input += s
-		}
+		p.input.key(s)
 	}
 }
 
@@ -197,7 +201,7 @@ func (m *Model) completeInput(in string) string {
 
 // suggestions lists what tab would complete to, for the dim hint beside the prompt.
 func (m *Model) suggestions() []string {
-	in := m.pal.input
+	in := m.pal.input.text
 	fields := strings.Fields(in)
 	var out []string
 	if len(fields) <= 1 && !strings.HasSuffix(in, " ") {
@@ -226,7 +230,7 @@ func (m *Model) suggestions() []string {
 
 func (m *Model) paletteLine() string {
 	th := m.th
-	prompt := th.Fg(th.Magenta, true).Render(" mc▸ ") + th.Fg(th.Text, false).Render(m.pal.input) + th.Fg(th.Text, true).Render("█")
+	prompt := th.Fg(th.Magenta, true).Render(" mc▸ ") + m.pal.input.render(th, m.w-6, false)
 	hint := strings.Join(m.suggestions(), "  ")
 	return prompt + "  " + th.Fg(th.Dim, false).Render(truncate(hint, max(m.w-visibleWidth(prompt)-3, 0)))
 }
@@ -240,7 +244,8 @@ func (m *Model) helpLines() []string {
 	lines := []string{th.Fg(th.Muted, true).Render("KEYS")}
 	lines = append(lines, m.screenKeys()...)
 	lines = append(lines,
-		key("1-7", "switch screen"), key("tab", "next screen"), key(":", "command palette"), "",
+		key("1-7", "switch screen"), key("tab", "next screen"), key(":", "command palette"),
+		key("click", "a screen's name in the tab bar goes to it; a click in a pane focuses it"), "",
 		th.Fg(th.Muted, true).Render("PANES"),
 		key("ctrl+w v", "split right"), key("ctrl+w s", "split down"), key("ctrl+w ←↑↓→", "move between panes; h j k l and w too"),
 		key("ctrl+w q", "close the pane"), key("ctrl+w < >", "narrower · wider"), key("ctrl+w - +", "shorter · taller"),
@@ -272,7 +277,7 @@ func msgCommand() command {
 			for i, info := range m.chats.infos {
 				if slug(info.Title) == want {
 					m.chats.sel = i
-					m.chats.input = strings.Join(a[1:], " ")
+					m.chats.input.set(strings.Join(a[1:], " "))
 					m.refreshChats()
 					m.queued = m.composeSend()
 					return nil
@@ -282,7 +287,7 @@ func msgCommand() command {
 			for _, ct := range m.chat.Contacts() {
 				if slug(ct.Name) == want && ct.Type == radio.TypeChat {
 					m.openDraft(store.ContactConvo(ct.Key))
-					m.chats.input = strings.Join(a[1:], " ")
+					m.chats.input.set(strings.Join(a[1:], " "))
 					m.refreshChats()
 					m.queued = m.composeSend()
 					return nil

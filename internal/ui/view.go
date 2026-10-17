@@ -33,6 +33,9 @@ func (m *Model) View() tea.View {
 	v := tea.NewView(strings.Join(lines, "\n"))
 	v.AltScreen = true
 	v.ReportFocus = true
+	if m.mouseOn {
+		v.MouseMode = tea.MouseModeCellMotion
+	}
 	if !m.th.Mono {
 		v.BackgroundColor = m.th.Bg.Color()
 	}
@@ -125,6 +128,14 @@ func (m *Model) panel(title string, body []string, w, h int, accent theme.RGB, f
 const footerRows = 4
 
 func (m *Model) bodyHeight() int { return max(m.h-2-footerRows, 3) }
+
+// mainHeight is what's left of the body for the screens once the frames pane takes its share.
+func (m *Model) mainHeight(h int) int {
+	if m.debug {
+		return h - max(h*2/5, 6)
+	}
+	return h
+}
 
 func (m *Model) renderMain() []string {
 	var out []string
@@ -237,8 +248,10 @@ func (m *Model) tabs() string {
 			parts = append(parts, th.Fg(th.Dim, false).Render(label))
 		}
 	}
-	return " " + strings.Join(parts, th.Fg(th.Line, false).Render(" ╱ "))
+	return " " + strings.Join(parts, th.Fg(th.Line, false).Render(tabGap))
 }
+
+const tabGap = " ╱ "
 
 // repeaterTabs lists a repeater's screens, which are its admin panes.
 func (m *Model) repeaterTabs() string {
@@ -255,7 +268,7 @@ func (m *Model) repeaterTabs() string {
 		}
 		parts = append(parts, th.Fg(th.Dim, false).Render(fmt.Sprintf("%d %s", i+1, label)))
 	}
-	return " " + strings.Join(parts, th.Fg(th.Line, false).Render(" ╱ "))
+	return " " + strings.Join(parts, th.Fg(th.Line, false).Render(tabGap))
 }
 
 var pending = map[int]string{
@@ -266,12 +279,10 @@ var pending = map[int]string{
 
 func (m *Model) body(w, h int) []string {
 	th := m.th
-	mainH := h
+	mainH := m.mainHeight(h)
 	var debug []string
 	if m.debug {
-		dh := max(h*2/5, 6)
-		mainH = h - dh
-		debug = m.panel("FRAMES", m.frameLines(dh-2, w-4), w, dh, th.Cyan, false)
+		debug = m.panel("FRAMES", m.frameLines(h-mainH-2, w-4), w, h-mainH, th.Cyan, false)
 	}
 
 	if m.help {

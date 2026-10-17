@@ -80,7 +80,7 @@ type deviceModel struct {
 	err      error
 	sel      int
 	prompt   devPrompt
-	input    string
+	input    lineEdit
 	pick     int
 	confirm  devConfirmation
 	key      string
@@ -428,14 +428,14 @@ func (m *Model) deviceRows() []devRow {
 			}},
 		devRow{id: "reboot", group: "Security", label: "Reboot the radio", value: "", kind: rowAction,
 			press: func(m *Model) tea.Cmd {
-				m.device.prompt, m.device.input, m.device.confirm = devConfirm, "", devConfirmation{title: "REBOOT THE RADIO",
+				m.device.prompt, m.device.input, m.device.confirm = devConfirm, lineEdit{}, devConfirmation{title: "REBOOT THE RADIO",
 					warning: "The link drops for a few seconds and reconnects by itself.", id: "reboot", what: "REBOOTING",
 					op: func(ctx context.Context, d radio.Device) error { return d.Reboot(ctx) }}
 				return nil
 			}},
 		devRow{id: "reset", group: "Security", label: "Factory reset", value: "", kind: rowAction,
 			press: func(m *Model) tea.Cmd {
-				m.device.prompt, m.device.input, m.device.confirm = devConfirm, "", devConfirmation{title: "FACTORY RESET",
+				m.device.prompt, m.device.input, m.device.confirm = devConfirm, lineEdit{}, devConfirmation{title: "FACTORY RESET",
 					warning: "Erases every contact, channel and setting, and makes a new identity. Export the private key first if you want to keep it.",
 					word:    "reset", id: "reset", what: "FACTORY RESET",
 					op: func(ctx context.Context, d radio.Device) error { return d.FactoryReset(ctx) }}
@@ -516,7 +516,7 @@ func (m *Model) deviceKey(s string) (tea.Cmd, bool) {
 			return nil, true
 		}
 		if r.kind == rowEdit {
-			dm.prompt, dm.input = devEdit, r.initial
+			dm.prompt, dm.input = devEdit, newLine(r.initial)
 			return nil, true
 		}
 		return r.press(m), true
@@ -533,16 +533,7 @@ func (m *Model) devicePromptKey(s string) tea.Cmd {
 		return nil
 	}
 	typing := func() {
-		switch s {
-		case "backspace":
-			dm.input = dropLast(dm.input)
-		case "space":
-			dm.input += " "
-		default:
-			if len([]rune(s)) == 1 {
-				dm.input += s
-			}
-		}
+		dm.input.key(s)
 	}
 	switch dm.prompt {
 	case devEdit:
@@ -552,22 +543,22 @@ func (m *Model) devicePromptKey(s string) tea.Cmd {
 		}
 		rows := m.deviceRows()
 		r := rows[min(dm.sel, len(rows)-1)]
-		op, err := r.apply(dm.input)
+		op, err := r.apply(dm.input.text)
 		if err != nil {
 			m.fail("INVALID  " + err.Error())
 			return nil
 		}
 		dm.prompt = devNone
-		what := strings.ToUpper(r.label) + "  " + strings.TrimSpace(dm.input)
+		what := strings.ToUpper(r.label) + "  " + strings.TrimSpace(dm.input.text)
 		switch {
 		case r.id == "import":
 			what = "PRIVATE KEY IMPORTED"
-			dm.prompt, dm.input, dm.confirm = devConfirm, "", devConfirmation{title: "REPLACE THIS RADIO'S IDENTITY",
+			dm.prompt, dm.input, dm.confirm = devConfirm, lineEdit{}, devConfirmation{title: "REPLACE THIS RADIO'S IDENTITY",
 				warning: "Your contacts will see a different node, and the current private key is gone unless you exported it.",
 				word:    "import", id: "import", what: what, op: op}
 			return nil
 		case r.group == "Radio" && r.id != "tx":
-			dm.prompt, dm.input, dm.confirm = devConfirm, "", devConfirmation{title: "CHANGE THE RADIO SETTINGS",
+			dm.prompt, dm.input, dm.confirm = devConfirm, lineEdit{}, devConfirmation{title: "CHANGE THE RADIO SETTINGS",
 				warning: "You'll only hear nodes using the same frequency, bandwidth, spreading factor and coding rate.",
 				id:      r.id, what: what, op: op}
 			return nil
@@ -583,7 +574,7 @@ func (m *Model) devicePromptKey(s string) tea.Cmd {
 			p := presets[dm.pick]
 			params := p.Params
 			params.Repeat = dm.s.Radio.Repeat && inRanges(dm.s.RepeatFreqs, params.FreqKHz)
-			dm.prompt, dm.input, dm.confirm = devConfirm, "", devConfirmation{title: "SWITCH TO " + strings.ToUpper(p.Name),
+			dm.prompt, dm.input, dm.confirm = devConfirm, lineEdit{}, devConfirmation{title: "SWITCH TO " + strings.ToUpper(p.Name),
 				warning: "You'll only hear nodes using the same settings: " + paramsText(params) + ".", id: "preset", what: "RADIO  " + p.Name,
 				op: func(ctx context.Context, d radio.Device) error { return d.SetRadio(ctx, params) }}
 		}
@@ -599,7 +590,7 @@ func (m *Model) devicePromptKey(s string) tea.Cmd {
 				typing()
 				return nil
 			}
-			if !strings.EqualFold(strings.TrimSpace(dm.input), c.word) {
+			if !strings.EqualFold(strings.TrimSpace(dm.input.text), c.word) {
 				m.fail("NOT CONFIRMED  type " + c.word + " to go ahead")
 				return nil
 			}

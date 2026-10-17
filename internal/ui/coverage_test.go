@@ -159,8 +159,8 @@ func TestChatEdges(t *testing.T) {
 	typeKeys(m, "hello x")
 	key(m, tea.KeyBackspace)
 	key(m, tea.KeyEscape)
-	if m.chats.writing || m.chats.input != "hello " {
-		t.Fatalf("esc stops writing and keeps the draft: %q", m.chats.input)
+	if m.chats.writing || m.chats.input.text != "hello " {
+		t.Fatalf("esc stops writing and keeps the draft: %q", m.chats.input.text)
 	}
 
 	// The radio refuses the send outright.

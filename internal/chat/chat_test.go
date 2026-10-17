@@ -131,6 +131,25 @@ func TestRetriesThenFloodsThenFails(t *testing.T) {
 	}
 }
 
+func TestRetryResendsAFailedMessage(t *testing.T) {
+	s := newService(t, 1, false)
+	m, send, _ := s.Compose(store.ContactConvo(alice.Key), "anyone?", t0)
+	if _, _, err := s.Retry(m, t0); err == nil {
+		t.Fatal("a message still sending isn't retried")
+	}
+	_, wait, _ := s.Result(send, radio.Sent{Ack: 7, Timeout: time.Second}, nil)
+	failed, _, _ := s.Timeout(*wait)
+	later := t0.Add(time.Hour)
+	again, send, err := s.Retry(failed, later)
+	if err != nil || again.ID == failed.ID || send.ID != again.ID || send.Attempt != 0 || send.Text != "anyone?" {
+		t.Fatalf("retry = %+v, %+v, %v", again, send, err)
+	}
+	ms, _ := s.Messages(store.ContactConvo(alice.Key), 10)
+	if len(ms) != 1 || ms[0].ID != again.ID || ms[0].State != store.Pending || !ms[0].SentAt.Equal(later) {
+		t.Fatalf("stored = %+v", ms)
+	}
+}
+
 func TestLateAckForEarlierAttemptStillDelivers(t *testing.T) {
 	s := newService(t, 3, true)
 	_, send, _ := s.Compose(store.ContactConvo(alice.Key), "hello", t0)

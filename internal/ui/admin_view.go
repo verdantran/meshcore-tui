@@ -256,9 +256,8 @@ func (m *Model) loginLines(ct radio.Contact, sess *admin.Session) []string {
 
 func (m *Model) promptLines(ct radio.Contact, sess *admin.Session, w, rows int) []string {
 	th, a := m.th, &m.adm
-	cursor := th.Fg(th.Text, true).Render("█")
-	field := func(label, value string) string {
-		return th.Fg(th.Magenta, true).Render(label+" ▸ ") + th.Fg(th.Text, false).Render(value) + cursor
+	field := func(label string, mask bool) string {
+		return th.Fg(th.Magenta, true).Render(label+" ▸ ") + a.input.render(th, w-visibleWidth(label)-3, mask)
 	}
 	switch a.prompt {
 	case promptPassword:
@@ -267,18 +266,18 @@ func (m *Model) promptLines(ct radio.Contact, sess *admin.Session, w, rows int) 
 			box = th.Fg(th.Green, true).Render("[x]")
 		}
 		return []string{th.Fg(th.Muted, true).Render("LOG IN TO " + strings.ToUpper(ct.Name)), "",
-			field("password", strings.Repeat("•", len([]rune(a.input)))), "",
+			field("password", true), "",
 			box + th.Fg(th.Text, false).Render(" remember it in the system keychain ") + th.Fg(th.Dim, false).Render("(ctrl+s)"), "",
 			th.Fg(th.Dim, false).Render("enter logs in · leave it empty to log in as a guest · esc cancels")}
 	case promptEdit:
 		st := m.settingRows(sess)[a.setSel]
-		out := []string{th.Fg(th.Muted, true).Render("EDIT " + strings.ToUpper(st.Label)), "", field(st.Key, a.input), ""}
+		out := []string{th.Fg(th.Muted, true).Render("EDIT " + strings.ToUpper(st.Label)), "", field(st.Key, false), ""}
 		if st.Help != "" {
 			out = append(out, th.Fg(th.Dim, false).Render(clip(st.Help, w)))
 		}
 		return append(out, th.Fg(th.Dim, false).Render("enter stages the change · it's sent when you apply with s · esc cancels"))
 	case promptRegion:
-		return []string{th.Fg(th.Muted, true).Render("NEW REGION UNDER " + strings.ToUpper(sess.Regions[a.regSel].Name)), "", field("name", a.input), "",
+		return []string{th.Fg(th.Muted, true).Render("NEW REGION UNDER " + strings.ToUpper(sess.Regions[a.regSel].Name)), "", field("name", false), "",
 			th.Fg(th.Dim, false).Render("enter adds it with flood allowed · esc cancels")}
 	case promptDiff:
 		return m.diffLines(ct, w)
@@ -288,7 +287,7 @@ func (m *Model) promptLines(ct radio.Contact, sess *admin.Session, w, rows int) 
 		for _, l := range strings.Split(ansi.Wrap(c.warning, w, " "), "\n") {
 			out = append(out, th.Fg(th.Yellow, false).Render(l))
 		}
-		return append(out, "", th.Fg(th.Text, false).Render("Type "+ct.Name+" to go ahead:"), field("name", a.input), "",
+		return append(out, "", th.Fg(th.Text, false).Render("Type "+ct.Name+" to go ahead:"), field("name", false), "",
 			th.Fg(th.Dim, false).Render("esc cancels"))
 	case promptPick:
 		people := m.aclCandidates(sess)
@@ -769,7 +768,8 @@ func (m *Model) consoleLines(sess *admin.Session, w, rows int) []string {
 	if len(lines) == 0 {
 		lines = append(lines, th.Fg(th.Dim, false).Render("Commands go to the node as you'd type them on its serial console. Try ver, get name, or neighbors."))
 	}
-	prompt := th.Fg(th.Magenta, true).Render(strings.ToLower(clip(sess.Name, 16))+"▸ ") + th.Fg(th.Text, false).Render(m.adm.console) + th.Fg(th.Text, true).Render("█")
+	prompt := th.Fg(th.Magenta, true).Render(strings.ToLower(clip(sess.Name, 16)) + "▸ ")
+	prompt += m.adm.console.render(th, w-visibleWidth(prompt), false)
 	if sess.Busy() {
 		prompt += "  " + m.waiting("waiting for a reply")
 	}

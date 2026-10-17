@@ -648,8 +648,8 @@ func (m *Model) mapAnimating() bool {
 	return false
 }
 
-// mapSweeping reports the radar sweep turning, which runs whenever the map shows at full motion.
-func (m *Model) mapSweeping() bool {
+// mapBeaconOn reports the beacon pulsing around us, which runs whenever the map shows at full motion.
+func (m *Model) mapBeaconOn() bool {
 	return m.visible(2) && m.mapv.world != nil && m.mapv.path == nil && m.level == motion.Full && m.phase == phaseMain &&
 		!(mapview.LatLon{Lat: m.ready.Self.Lat, Lon: m.ready.Self.Lon}).Unplaced()
 }

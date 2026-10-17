@@ -137,7 +137,7 @@ func (m *Model) renderPath(w, mapH int) []string {
 	out := append([]string(nil), mv.rows...)
 	if anims := m.pathAnims(r, nodes); len(anims) > 0 {
 		c := mv.cache.Clone()
-		mapview.DrawAnims(c, v, anims, mapview.LatLon{}, m.level, m.now, pal) // no sweep on a path
+		mapview.DrawAnims(c, v, anims, mapview.LatLon{}, m.level, m.now, pal) // no beacon on a path
 		for y := range out {
 			if c.Dirty(y) {
 				out[y] = c.RenderRow(y, !th.Mono)

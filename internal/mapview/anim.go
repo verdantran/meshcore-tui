@@ -26,10 +26,10 @@ type Anim struct {
 }
 
 const (
-	HopDur    = 320 * time.Millisecond
-	pulseDur  = 1100 * time.Millisecond
-	rippleDur = 900 * time.Millisecond
-	sweepTurn = 4500 * time.Millisecond
+	HopDur       = 320 * time.Millisecond
+	pulseDur     = 1100 * time.Millisecond
+	rippleDur    = 900 * time.Millisecond
+	beaconPeriod = 2400 * time.Millisecond
 )
 
 func (a Anim) Dur() time.Duration {
@@ -49,11 +49,11 @@ func (a Anim) Allowed(l motion.Level) bool {
 	return l == motion.Full || l == motion.Reduced && a.Kind != Ripple
 }
 
-// DrawAnims paints running animations, and at full motion the radar sweep around us, over the map.
+// DrawAnims paints running animations, and at full motion the beacon pulsing around us, over the map.
 func DrawAnims(c *Canvas, v View, anims []Anim, self LatLon, level motion.Level, now time.Time, pal Palette) {
 	v.W, v.H = c.W*2, c.H*4
 	if level == motion.Full && !self.Unplaced() {
-		sweep(c, v, self, now, pal)
+		beacon(c, v, self, now, pal)
 	}
 	for _, a := range anims {
 		if !a.Allowed(level) {
@@ -152,14 +152,12 @@ func comet(c *Canvas, v View, a Anim, t float64, pal Palette) {
 	}
 }
 
-func sweep(c *Canvas, v View, self LatLon, now time.Time, pal Palette) {
+// beacon is two rings growing out from us half a period apart, fading as they go.
+func beacon(c *Canvas, v View, self LatLon, now time.Time, pal Palette) {
 	x, y := v.Project(self)
-	base := float64(now.UnixMilli()%sweepTurn.Milliseconds()) / float64(sweepTurn.Milliseconds()) * 2 * math.Pi
-	for k := range 6 {
-		ang := base - float64(k)*0.07
-		col := pal.Green.Lerp(pal.Land, 0.6+0.06*float64(k))
-		for r := 4.0; r < 46; r++ {
-			c.Dot(int(math.Round(x+r*math.Cos(ang))), int(math.Round(y+r*math.Sin(ang))), col, prioSweep)
-		}
+	period := beaconPeriod.Milliseconds()
+	for k := range int64(2) {
+		t := float64((now.UnixMilli()+k*period/2)%period) / float64(period)
+		ring(c, x, y, 5+28*motion.EaseOut(t), pal.Green.Lerp(pal.Land, 0.3+0.65*t), prioBeacon)
 	}
 }

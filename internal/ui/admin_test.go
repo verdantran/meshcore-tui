@@ -407,25 +407,25 @@ func TestAdminPanes(t *testing.T) {
 	h.idle(sess)
 	h.key(tea.KeyUp)
 	h.key(tea.KeyUp)
-	if h.m.adm.console != "dance" {
-		t.Errorf("history: %q", h.m.adm.console)
+	if h.m.adm.console.text != "dance" {
+		t.Errorf("history: %q", h.m.adm.console.text)
 	}
 	h.key(tea.KeyDown)
 	h.key(tea.KeyDown)
 	h.key(tea.KeyDown)
-	if h.m.adm.console != "" {
-		t.Errorf("history end: %q", h.m.adm.console)
+	if h.m.adm.console.text != "" {
+		t.Errorf("history end: %q", h.m.adm.console.text)
 	}
 	h.keys("get flood.ad")
 	h.key(tea.KeyTab)
-	if h.m.adm.console != "get flood.advert.interval " {
-		t.Errorf("completion: %q", h.m.adm.console)
+	if h.m.adm.console.text != "get flood.advert.interval " {
+		t.Errorf("completion: %q", h.m.adm.console.text)
 	}
 	h.key(tea.KeyEscape)
 	h.keys("adv")
 	h.key(tea.KeyTab)
-	if h.m.adm.console != "advert" {
-		t.Errorf("shared prefix: %q", h.m.adm.console)
+	if h.m.adm.console.text != "advert" {
+		t.Errorf("shared prefix: %q", h.m.adm.console.text)
 	}
 	h.key(tea.KeyEscape)
 	h.typeLine("password hunter2")

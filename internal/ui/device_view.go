@@ -132,12 +132,8 @@ func (m *Model) devEditLines(w int) []string {
 	th, dm := m.th, &m.device
 	rows := m.deviceRows()
 	r := rows[dm.sel]
-	input := dm.input
-	if r.id == "import" {
-		input = strings.Repeat("•", len([]rune(input))) // a private key never shows on screen
-	}
 	out := []string{th.Fg(th.Muted, true).Render("EDIT " + strings.ToUpper(r.label)), "",
-		clip(th.Fg(th.Magenta, true).Render("▸ ")+th.Fg(th.Text, false).Render(input)+th.Fg(th.Text, true).Render("█"), w), ""}
+		th.Fg(th.Magenta, true).Render("▸ ") + dm.input.render(th, w-2, r.id == "import"), ""} // a private key never shows on screen
 	if r.hint != "" {
 		for _, l := range strings.Split(ansi.Wrap(r.hint, w, " "), "\n") {
 			out = append(out, th.Fg(th.Dim, false).Render(l))
@@ -176,7 +172,7 @@ func (m *Model) devConfirmLines(w int) []string {
 		return append(out, th.Fg(th.Text, false).Render("y goes ahead · any other key cancels"))
 	}
 	return append(out, th.Fg(th.Text, false).Render("Type "+c.word+" to go ahead:"),
-		th.Fg(th.Magenta, true).Render("▸ ")+th.Fg(th.Text, false).Render(m.device.input)+th.Fg(th.Text, true).Render("█"), "",
+		th.Fg(th.Magenta, true).Render("▸ ")+m.device.input.render(th, w-2, false), "",
 		th.Fg(th.Dim, false).Render("esc cancels"))
 }
 

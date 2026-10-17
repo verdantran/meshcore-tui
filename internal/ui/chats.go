@@ -31,7 +31,7 @@ type chatsModel struct {
 	infos   []chat.Info
 	sel     int
 	writing bool
-	input   string
+	input   lineEdit
 	msgs    []store.Message
 	scroll  int // messages hidden below the bottom of the pane
 
@@ -250,17 +250,56 @@ func (m *Model) composeSend() tea.Cmd {
 		m.addLog(m.now, "SENDING UNSIGNED  "+err.Error(), radio.ToneWarn)
 		sign = false
 	}
-	_, send, err := m.chat.Compose(cur.Convo, m.chats.input, m.now)
+	_, send, err := m.chat.Compose(cur.Convo, m.chats.input.text, m.now)
 	if err != nil {
 		m.fail(err.Error())
 		return nil
 	}
-	m.chats.input, m.chats.scroll, m.chats.signFlip = "", 0, false
+	m.chats.input, m.chats.scroll, m.chats.signFlip = lineEdit{}, 0, false
 	m.refreshChats()
 	if sign {
 		return m.signedSendCmd(send, cur.Title)
 	}
 	return m.sendCmd(send)
+}
+
+// retry sends a failed message again, signed if the channel's messages are.
+func (m *Model) retry(msg store.Message) tea.Cmd {
+	cur, ok := m.selectedConvo()
+	if !ok || m.chat == nil {
+		return nil
+	}
+	_, send, err := m.chat.Retry(msg, m.now)
+	if err != nil {
+		m.fail("RETRY  " + err.Error())
+		return nil
+	}
+	delete(m.chats.failed, msg.ID)
+	m.chats.reading, m.chats.scroll = false, 0
+	m.refreshChats()
+	m.addLog(m.now, "RETRYING  "+cur.Title, radio.ToneInfo)
+	if cur.Kind == chat.KindChannel && m.signedChannel(cur.Title) && m.canSign() == nil {
+		return m.signedSendCmd(send, cur.Title)
+	}
+	return m.sendCmd(send)
+}
+
+func (m *Model) retryHint() string {
+	if i := m.picked(); i >= 0 && m.chats.msgs[i].Out && m.chats.msgs[i].State == store.Failed {
+		return m.th.Fg(m.th.Cyan, true).Render("R") + m.th.Fg(m.th.Text, false).Render(" send again · ")
+	}
+	return ""
+}
+
+// newestFailed is the newest message of yours in view that failed, or -1.
+func (m *Model) newestFailed() int {
+	c := &m.chats
+	for i := len(c.msgs) - 1 - c.scroll; i >= 0 && i < len(c.msgs); i-- {
+		if c.msgs[i].Out && c.msgs[i].State == store.Failed {
+			return i
+		}
+	}
+	return -1
 }
 
 // chatsKey handles keys on the Chats screen. It returns handled=false for keys the screen leaves to the app.
@@ -305,14 +344,8 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 			m.completeMention()
 		case "enter":
 			return m.composeSend(), true
-		case "backspace":
-			c.input = dropLast(c.input)
-		case "space":
-			c.input += " "
 		default:
-			if len([]rune(s)) == 1 {
-				c.input += s
-			}
+			c.input.key(s)
 		}
 		return nil, true
 	}
@@ -357,6 +390,11 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		if i := m.newestReceived(); i >= 0 {
 			m.showMessagePath(c.msgs[i])
 		}
+	case "R":
+		if i := m.newestFailed(); i >= 0 {
+			return m.retry(c.msgs[i]), true
+		}
+		m.addLog(m.now, "RETRY  nothing here failed to send", radio.ToneInfo)
 	case "S":
 		m.toggleChannelSigning()
 	case "pgup", "K":
@@ -408,11 +446,20 @@ func (m *Model) readingKey(s string) (tea.Cmd, bool) {
 	case "left", "esc":
 		c.reading = false
 		return nil, true
+	case "R":
+		if msg := c.msgs[i]; msg.Out && msg.State == store.Failed {
+			return m.retry(msg), true
+		}
+		m.addLog(m.now, "RETRY  only a message that failed can be sent again", radio.ToneInfo)
+		return nil, true
 	case "r", "enter":
 		msg := c.msgs[i]
-		c.reading, c.writing, c.input = false, true, ""
+		if msg.Out && msg.State == store.Failed && s == "enter" {
+			return m.retry(msg), true
+		}
+		c.reading, c.writing, c.input = false, true, lineEdit{}
 		if cur, ok := m.selectedConvo(); ok && cur.Kind == chat.KindChannel && !msg.Out {
-			c.input = "@[" + msg.Sender + "] " // in a channel, a reply names who it's to
+			c.input.set("@[" + msg.Sender + "] ") // in a channel, a reply names who it's to
 		}
 		return nil, true
 	case "M":
@@ -589,7 +636,7 @@ func (m *Model) convoPane(w, rows int) []string {
 	if m.chat != nil {
 		limit = m.chat.MaxBytes(cur.Convo)
 	}
-	used := len(c.input)
+	used := len(c.input.text)
 	counterCol := th.Dim
 	switch {
 	case used > limit:
@@ -610,17 +657,13 @@ func (m *Model) convoPane(w, rows int) []string {
 	}
 	var compose string
 	if c.writing {
-		text := c.input
-		room := w - 4 - visibleWidth(counter)
-		if r := []rune(text); len(r) > room {
-			text = "…" + string(r[len(r)-room+1:])
-		}
-		compose = th.Fg(th.Magenta, true).Render("▸ ") + th.Fg(th.Text, false).Render(text) + th.Fg(th.Text, true).Render("█")
+		compose = th.Fg(th.Magenta, true).Render("▸ ") + c.input.render(th, w-3-visibleWidth(counter), false)
 	} else {
 		compose = th.Fg(th.Dim, false).Render("▸ enter to write · ↑↓ conversations · → pick a message to reply to or see its route · / filter · ctrl+f search all")
 		if c.reading {
 			compose = th.Fg(th.Magenta, true).Render("▸ ") + th.Fg(th.Text, false).Render("↑↓ messages · ") +
 				th.Fg(th.Cyan, true).Render("r") + th.Fg(th.Text, false).Render(" reply · ") +
+				m.retryHint() +
 				th.Fg(th.Cyan, true).Render("M") + th.Fg(th.Text, false).Render(" route on the map · ") +
 				th.Fg(th.Cyan, true).Render("y") + th.Fg(th.Text, false).Render(" copy · ") +
 				th.Fg(th.Dim, false).Render("← back to conversations")
@@ -797,7 +840,8 @@ func (m *Model) messageMeta(msg store.Message) string {
 		}
 		return th.Fg(col, true).Render("✓") + th.Fg(th.Green, popping).Render(" "+seconds(msg.RTT))
 	case store.Failed:
-		return th.Fg(th.Red, true).Render(fmt.Sprintf("[FAIL] not delivered after %d tries", max(msg.Attempts, 1)))
+		return th.Fg(th.Red, true).Render(fmt.Sprintf("[FAIL] not delivered after %d tries", max(msg.Attempts, 1))) +
+			th.Fg(th.Dim, false).Render(" · R sends it again")
 	}
 	return ""
 }
@@ -868,7 +912,7 @@ type mentionCycle struct {
 	at      int // where the @ is in the input
 	matches []string
 	i       int
-	last    string // the input as completed, so a further tab cycles rather than starting again
+	last    lineEdit // the input as completed, so a further tab cycles rather than starting again
 }
 
 // mentionNames are the people who can be mentioned here: contacts, and anyone who has written in
@@ -931,15 +975,15 @@ func (m *Model) completeMention() {
 	c := &m.chats
 	if mc := c.mention; mc != nil && c.input == mc.last && len(mc.matches) > 1 {
 		mc.i = (mc.i + 1) % len(mc.matches)
-		c.input = c.input[:mc.at] + "@[" + mc.matches[mc.i] + "] "
+		c.input.replace(mc.at, m.mentionText(mc.matches[mc.i]))
 		mc.last = c.input
 		return
 	}
-	at := strings.LastIndex(c.input, "@")
+	at := strings.LastIndex(c.input.before(), "@")
 	if at < 0 {
 		return
 	}
-	partial := c.input[at+1:]
+	partial := c.input.before()[at+1:]
 	bracket := strings.HasPrefix(partial, "[")
 	partial = strings.TrimPrefix(partial, "[")
 	if strings.Contains(partial, "]") || !bracket && strings.Contains(partial, " ") {
@@ -954,8 +998,16 @@ func (m *Model) completeMention() {
 	if len(matches) == 0 {
 		return
 	}
-	c.input = c.input[:at] + "@[" + matches[0] + "] "
+	c.input.replace(at, m.mentionText(matches[0]))
 	c.mention = &mentionCycle{at: at, matches: matches, last: c.input}
+}
+
+// mentionText is a completed @name, with a space after unless the text after the cursor brings one.
+func (m *Model) mentionText(name string) string {
+	if strings.HasPrefix(m.chats.input.text[m.chats.input.pos:], " ") {
+		return "@[" + name + "]"
+	}
+	return "@[" + name + "] "
 }
 
 // mentionHint tells the writer more names fit, while a completion is showing.

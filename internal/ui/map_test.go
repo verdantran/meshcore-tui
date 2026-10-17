@@ -60,12 +60,12 @@ func TestMapScreen(t *testing.T) {
 		}
 	}
 	h.advance(5 * time.Second)
-	if !h.m.mapSweeping() || !h.m.animating() || h.m.moving() {
-		t.Error("the radar sweep runs at full motion, on its own")
+	if !h.m.mapBeaconOn() || !h.m.animating() || h.m.moving() {
+		t.Error("the beacon runs at full motion, on its own")
 	}
 	h.m.ticking = false
 	if cmd := h.m.ensureTick(); cmd == nil {
-		t.Error("the sweep keeps the clock going, at its slower rate")
+		t.Error("the beacon keeps the clock going, at its slower rate")
 	}
 
 	// A message on Public comes in by Kelston or Lansdown, then Purdown; a stranger advertises from Bath.
@@ -292,8 +292,8 @@ func TestMessagePaths(t *testing.T) {
 
 	// r replies, mentioning them.
 	h.keys("r")
-	if !c.writing || c.input != "@[Bob] " || c.reading {
-		t.Errorf("reply: %q", c.input)
+	if !c.writing || c.input.text != "@[Bob] " || c.reading {
+		t.Errorf("reply: %q", c.input.text)
 	}
 	h.key(tea.KeyEscape)
 	h.key(tea.KeyRight)
@@ -325,7 +325,7 @@ func TestMessagePaths(t *testing.T) {
 	h.key(tea.KeyEscape)
 	h.key(tea.KeyRight)
 	h.keys("r")
-	if c.input != "" || !c.writing {
+	if c.input.text != "" || !c.writing {
 		t.Error("a direct reply needs no mention")
 	}
 	h.key(tea.KeyEscape)
@@ -612,7 +612,7 @@ func TestMapLoadingAndMotionOff(t *testing.T) {
 	h.until("loaded", func() bool { return h.m.mapv.world != nil })
 	h.m.setMotion(motion.Off)
 	h.hear(channelPacket(t, h, "Public", "Bob", "hi", []byte{0x77}), 2)
-	if len(h.m.mapv.anims) != 0 || h.m.mapAnimating() || h.m.mapSweeping() {
+	if len(h.m.mapv.anims) != 0 || h.m.mapAnimating() || h.m.mapBeaconOn() {
 		t.Error("no animation with motion off")
 	}
 	h.keys("l")

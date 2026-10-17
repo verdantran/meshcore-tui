@@ -267,6 +267,11 @@ func (s *Store) UpdateDelivery(m Message) error {
 	return err
 }
 
+func (s *Store) DeleteMessage(id int64) error {
+	_, err := s.db.Exec(`DELETE FROM messages WHERE id = ?`, id)
+	return err
+}
+
 // SetSig records what a message's signature showed.
 func (s *Store) SetSig(id int64, sig Sig, key []byte) error {
 	_, err := s.db.Exec(`UPDATE messages SET sig = ?, sig_key = ? WHERE id = ?`, int(sig), key, id)

@@ -269,6 +269,18 @@ func (s *Service) Compose(c store.Convo, text string, now time.Time) (store.Mess
 	return m, send, nil
 }
 
+// Retry sends a failed message again as a new one, listed from now, and drops the failed copy.
+func (s *Service) Retry(m store.Message, now time.Time) (store.Message, Send, error) {
+	if !m.Out || m.State != store.Failed {
+		return store.Message{}, Send{}, errors.New("only a message that failed can be sent again")
+	}
+	nm, send, err := s.Compose(m.Convo, m.Text, now)
+	if err != nil {
+		return store.Message{}, Send{}, err
+	}
+	return nm, send, s.store.DeleteMessage(m.ID)
+}
+
 // Result records the radio's answer to a Send. For a direct message it returns how long to wait for the ack.
 func (s *Service) Result(sd Send, sent radio.Sent, err error) (store.Message, *Wait, error) {
 	if sd.Channel {

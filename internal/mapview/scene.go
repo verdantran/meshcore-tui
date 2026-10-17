@@ -164,7 +164,7 @@ const (
 	prioTrunk
 	prioMotorway
 	prioTraffic
-	prioSweep
+	prioBeacon
 	prioRouteDim
 	prioRouteAlt
 	prioRoute

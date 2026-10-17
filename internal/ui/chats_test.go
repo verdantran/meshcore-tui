@@ -211,6 +211,30 @@ func TestChatsRetryFloodThenFail(t *testing.T) {
 	if got := plain(screen(t, m)); !strings.Contains(got, "[FAIL] not delivered after 3 tries") {
 		t.Errorf("failed message:\n%s", got)
 	}
+
+	// R sends it again as a new message, and the failed copy goes.
+	key(m, tea.KeyEscape)
+	_, cmd = m.Update(tea.KeyPressMsg{Code: 'R', Text: "R"})
+	follow(t, m, c, cmd, false)
+	if len(r.texts) != 4 || r.texts[3] != "anyone there" {
+		t.Fatalf("retry sends = %v", r.texts)
+	}
+	tick(m, c, time.Second)
+	got := plain(screen(t, m))
+	if strings.Contains(got, "[FAIL]") || strings.Count(got, "anyone there") != 1 || !strings.Contains(got, "awaiting ack") {
+		t.Errorf("retried message:\n%s", got)
+	}
+	send(m, c, 0, radio.Acked{Ack: 4, RTT: time.Second})
+	tick(m, c, time.Second)
+	if got := plain(screen(t, m)); !strings.Contains(got, "✓") {
+		t.Errorf("the retry is delivered:\n%s", got)
+	}
+
+	// With nothing failed, R says so.
+	m.Update(tea.KeyPressMsg{Code: 'R', Text: "R"})
+	if !strings.Contains(m.log[len(m.log)-1].text, "nothing here failed") {
+		t.Error("R with nothing failed")
+	}
 }
 
 func TestChatsLimitAndPaletteSend(t *testing.T) {
@@ -233,8 +257,8 @@ func TestChatsLimitAndPaletteSend(t *testing.T) {
 
 	typeKeys(m, ":msg bri")
 	key(m, tea.KeyTab)
-	if m.pal.input != "msg bristol " {
-		t.Fatalf("msg completion = %q", m.pal.input)
+	if m.pal.input.text != "msg bristol " {
+		t.Fatalf("msg completion = %q", m.pal.input.text)
 	}
 	typeKeys(m, "hello channel")
 	_, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -367,29 +391,29 @@ func TestMentionCompletion(t *testing.T) {
 	h.keys("i")
 	h.keys("hi @ca")
 	h.key(tea.KeyTab)
-	if h.m.chats.input != "hi @[Carol] " {
-		t.Fatalf("completed = %q", h.m.chats.input)
+	if h.m.chats.input.text != "hi @[Carol] " {
+		t.Fatalf("completed = %q", h.m.chats.input.text)
 	}
-	h.m.chats.input, h.m.chats.mention = "and @", nil
+	h.m.chats.input, h.m.chats.mention = newLine("and @"), nil
 	h.key(tea.KeyTab)
-	first := h.m.chats.input
+	first := h.m.chats.input.text
 	if !strings.HasPrefix(first, "and @[") || !strings.Contains(h.screen(), "tab: 1 of") {
 		t.Fatalf("first of many = %q\n%s", first, h.screen())
 	}
 	h.key(tea.KeyTab)
-	if h.m.chats.input == first || !strings.Contains(h.screen(), "tab: 2 of") {
-		t.Errorf("tab again cycles: %q", h.m.chats.input)
+	if h.m.chats.input.text == first || !strings.Contains(h.screen(), "tab: 2 of") {
+		t.Errorf("tab again cycles: %q", h.m.chats.input.text)
 	}
-	h.m.chats.input = "@[Ali"
+	h.m.chats.input.set("@[Ali")
 	h.key(tea.KeyTab)
-	if h.m.chats.input != "@[Alice] " {
-		t.Errorf("bracket partial = %q", h.m.chats.input)
+	if h.m.chats.input.text != "@[Alice] " {
+		t.Errorf("bracket partial = %q", h.m.chats.input.text)
 	}
 	for _, in := range []string{"no at sign", "@[Alice] done", "@zzz", "@Al ice"} {
-		h.m.chats.input, h.m.chats.mention = in, nil
+		h.m.chats.input, h.m.chats.mention = newLine(in), nil
 		h.key(tea.KeyTab)
-		if h.m.chats.input != in {
-			t.Errorf("%q changed to %q", in, h.m.chats.input)
+		if h.m.chats.input.text != in {
+			t.Errorf("%q changed to %q", in, h.m.chats.input.text)
 		}
 	}
 	h.key(tea.KeyEscape)
