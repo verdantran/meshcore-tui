@@ -50,6 +50,7 @@ type Options struct {
 	MapIndex  string              // where the street detail's tile list is; empty uses OpenFreeMap
 	Notes     []string            // warnings from startup, put in the event log
 	ASCII     bool                // plain ASCII in place of braille, box drawing and symbols
+	Keys      config.Keys         // keys.toml: a key pressed does what another does by default
 }
 
 type phase int
@@ -449,6 +450,14 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 	s := k.String()
 	if s == "ctrl+c" {
 		return nil, true
+	}
+	if !m.typing() && !m.paneKey { // the key after ctrl+w is the chord's own
+		if to, ok := m.rebound(s); ok {
+			if to == "" {
+				return nil, false
+			}
+			s = to
+		}
 	}
 	if m.pal.open {
 		m.paletteKey(s)

@@ -204,3 +204,18 @@ func TestOpenStore(t *testing.T) {
 }
 
 func uiTarget(kind, addr string) ui.Target { return ui.Target{Kind: kind, Addr: addr} }
+
+func TestSetupKeys(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	os.WriteFile(filepath.Join(dir, "keys.toml"), []byte("[map]\nw = \"up\"\n"), 0o644)
+	var errs bytes.Buffer
+	opt, err := setup([]string{"--config", cfgPath}, env(nil), &errs)
+	if err != nil || opt.Keys["map"]["w"] != "up" {
+		t.Errorf("keys.toml beside the config: %v %v", opt.Keys, err)
+	}
+	os.WriteFile(filepath.Join(dir, "keys.toml"), []byte("[nowhere]\n"), 0o644)
+	if _, err := setup([]string{"--config", cfgPath}, env(nil), &errs); err == nil || !strings.Contains(err.Error(), "keys.toml") {
+		t.Errorf("a bad keys.toml stops startup and says which file: %v", err)
+	}
+}

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -95,5 +96,22 @@ func TestPathsAndFailures(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "config.toml"), []byte("[ui]\ntheme = 3"), 0o644)
 	if _, err := Load(filepath.Join(dir, "config.toml")); err == nil {
 		t.Error("a wrongly typed value should fail to load")
+	}
+}
+
+func TestLoadKeys(t *testing.T) {
+	dir := t.TempDir()
+	if k, err := LoadKeys(filepath.Join(dir, "none.toml")); err != nil || len(k) != 0 {
+		t.Errorf("no file is no rebinding: %v %v", k, err)
+	}
+	path := filepath.Join(dir, "keys.toml")
+	os.WriteFile(path, []byte("[all]\n\"ctrl+n\" = \"down\"\n[map]\nw = \"up\"\nx = \"\"\n"), 0o644)
+	k, err := LoadKeys(path)
+	if err != nil || k["all"]["ctrl+n"] != "down" || k["map"]["w"] != "up" || k["map"]["x"] != "" {
+		t.Errorf("keys = %v %v", k, err)
+	}
+	os.WriteFile(path, []byte("[maps]\nw = \"up\"\n"), 0o644)
+	if _, err := LoadKeys(path); err == nil || !strings.Contains(err.Error(), "unknown section [maps]") {
+		t.Errorf("a misspelt section is caught: %v", err)
 	}
 }

@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"meshcore-tui/internal/config"
 	"meshcore-tui/internal/motion"
 	"meshcore-tui/internal/radio"
 	"meshcore-tui/internal/sim"
@@ -367,5 +368,49 @@ func TestContactsPlaceByHand(t *testing.T) {
 	h.key(tea.KeyEnter)
 	if _, ok := h.m.manualPlace(ct.Key); ok || !strings.Contains(h.lastLog(), "back to what it shares") {
 		t.Errorf("empty clears it: %s", h.lastLog())
+	}
+}
+
+func TestRemappedKeys(t *testing.T) {
+	h := newHarness(t)
+	h.m.opt.Keys = config.Keys{"all": {"ctrl+n": "down"}, "map": {"w": "up", "+": ""}}
+	h.openMap()
+	h.screen() // the map takes its size from the first frame
+	mv := &h.m.mapv
+	start := mv.view
+	h.keys("w")
+	if mv.view.Center.Lat <= start.Center.Lat {
+		t.Error("w does what up does on the map")
+	}
+	zoom := mv.view.Zoom
+	h.keys("+")
+	if mv.view.Zoom != zoom {
+		t.Error("+ is unbound on the map")
+	}
+	h.keys("?")
+	if scr := h.screen(); !strings.Contains(scr, "YOUR KEYS") || !strings.Contains(scr, "does what up does") || !strings.Contains(scr, "does nothing here") {
+		t.Errorf("help lists them:\n%s", scr)
+	}
+	h.key(tea.KeyEscape)
+
+	h.keys("2")
+	sel := h.m.contacts.sel
+	h.m.Update(tea.KeyPressMsg{Code: 'n', Mod: tea.ModCtrl})
+	if h.m.contacts.sel != sel+1 {
+		t.Errorf("ctrl+n does what down does everywhere: %d from %d", h.m.contacts.sel, sel)
+	}
+	h.m.opt.Keys["all"]["w"] = "up"
+	h.m.Update(tea.KeyPressMsg{Code: 'w', Mod: tea.ModCtrl})
+	if !h.m.paneKey {
+		t.Fatal("ctrl+w starts a pane chord")
+	}
+	h.keys("w")
+	if h.m.paneKey || h.m.contacts.sel != sel+1 {
+		t.Error("the key after ctrl+w is the chord's, not rebound")
+	}
+	delete(h.m.opt.Keys["all"], "w")
+	h.keys("/w")
+	if h.m.contacts.filter != "w" {
+		t.Errorf("a text field takes the key as typed: %q", h.m.contacts.filter)
 	}
 }

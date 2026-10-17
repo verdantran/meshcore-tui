@@ -118,6 +118,11 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 	if err != nil {
 		return ui.Options{}, fmt.Errorf("can't read %s: %w", *configPath, err)
 	}
+	keysPath := filepath.Join(filepath.Dir(*configPath), "keys.toml")
+	keys, err := config.LoadKeys(keysPath)
+	if err != nil {
+		return ui.Options{}, fmt.Errorf("can't read %s: %w", keysPath, err)
+	}
 	themeName := cfg.UI.Theme
 	if *themeFlag != "" {
 		themeName = *themeFlag
@@ -151,7 +156,7 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 	if oldConsole(goos, env) {
 		notes = append(notes, "CONSOLE  this looks like the old Windows console, which may not draw the map's braille, some symbols or the mouse. Windows Terminal, free from Microsoft, shows everything; --ascii draws in plain ASCII instead.")
 	}
-	opt := ui.Options{ASCII: *asciiOnly || cfg.UI.ASCII, Notes: notes, Theme: th, Motion: level, Dial: dial, Ports: ports, Scan: scanBLE, Config: cfg, MotionChosen: chosen, Keychain: admin.SystemOr(&admin.FileKeychain{Path: filepath.Join(config.Dir(), "passwords.json")})}
+	opt := ui.Options{Keys: keys, ASCII: *asciiOnly || cfg.UI.ASCII, Notes: notes, Theme: th, Motion: level, Dial: dial, Ports: ports, Scan: scanBLE, Config: cfg, MotionChosen: chosen, Keychain: admin.SystemOr(&admin.FileKeychain{Path: filepath.Join(config.Dir(), "passwords.json")})}
 	if d, ok := cfg.Device(cfg.Connection.AutoConnect); ok {
 		opt.Start = &ui.Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name, Mode: d.Mode}
 	}

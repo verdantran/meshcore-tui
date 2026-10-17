@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -243,6 +244,17 @@ func (m *Model) helpLines() []string {
 	}
 	lines := []string{th.Fg(th.Muted, true).Render("KEYS")}
 	lines = append(lines, m.screenKeys()...)
+	if mine := m.myKeys(); len(mine) > 0 {
+		lines = append(lines, th.Fg(th.Muted, true).Render("YOUR KEYS")+th.Fg(th.Dim, false).Render("  from keys.toml"))
+		for _, b := range mine {
+			what := "does what " + b[1] + " does"
+			if b[1] == "" {
+				what = "does nothing here"
+			}
+			lines = append(lines, key(b[0], what))
+		}
+		lines = append(lines, "")
+	}
 	lines = append(lines,
 		key("1-7", "switch screen"), key("tab", "next screen"), key(":", "command palette"),
 		key("click", "a screen's name in the tab bar goes to it; a click in a pane focuses it"), "",
@@ -341,4 +353,40 @@ func traceCommand() command {
 			}
 			return out
 		}}
+}
+
+// keyScope is the keys.toml section for what has the keyboard now.
+func (m *Model) keyScope() string {
+	switch m.phase {
+	case phaseConnect:
+		return "connect"
+	case phaseMain:
+		return strings.ToLower(tabNames[m.tab])
+	}
+	return ""
+}
+
+// rebound is what a pressed key stands for: the screen's binding first, then one for everywhere.
+func (m *Model) rebound(s string) (string, bool) {
+	if to, ok := m.opt.Keys[m.keyScope()][s]; ok {
+		return to, true
+	}
+	to, ok := m.opt.Keys["all"][s]
+	return to, ok
+}
+
+// myKeys are the rebindings in force here, as key and what it stands for, sorted.
+func (m *Model) myKeys() [][2]string {
+	seen := map[string]bool{}
+	var out [][2]string
+	for _, scope := range []string{m.keyScope(), "all"} {
+		for from, to := range m.opt.Keys[scope] {
+			if !seen[from] {
+				seen[from] = true
+				out = append(out, [2]string{from, to})
+			}
+		}
+	}
+	slices.SortFunc(out, func(a, b [2]string) int { return strings.Compare(a[0], b[0]) })
+	return out
 }
