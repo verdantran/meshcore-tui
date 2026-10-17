@@ -12,6 +12,7 @@ import (
 
 	"meshcore-tui/internal/admin"
 	"meshcore-tui/internal/golden"
+	"meshcore-tui/internal/mapview"
 	"meshcore-tui/internal/motion"
 	"meshcore-tui/internal/radio"
 )
@@ -243,4 +244,38 @@ func TestGoldenSettingsApplied(t *testing.T) {
 	sess.Settings["tx"] = admin.Value{Value: "20", At: t0.Add(400 * time.Millisecond)}
 	snap(time.Second) // both in
 	golden.Check(t, "settings-applied", out)
+}
+
+func TestGoldenTraceDraws(t *testing.T) {
+	h := newHarness(t)
+	h.m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	h.keys("2")
+	far, longest := "", 0
+	for _, ct := range h.m.chat.Contacts() {
+		if ct.PathLen > longest {
+			far, longest = ct.Name, ct.PathLen
+		}
+	}
+	if longest < 2 {
+		t.Fatal("no contact two hops away in the simulator")
+	}
+	h.pick(far)
+	h.keys("t")
+	h.until("trace result", func() bool {
+		run := h.m.contacts.traces[h.m.contacts.lastTrace[h.contact(far).Key]]
+		return run != nil && run.result != nil
+	})
+	h.until("the world map", func() bool { h.keys("3"); return h.m.mapv.world != nil })
+	h.keys("2")
+	h.keys("M")
+	h.screen()
+	p := h.m.mapv.path
+	if p == nil || !h.m.tracePlays() {
+		t.Fatal("M opens the trace on the map, drawing itself in")
+	}
+	t0 := h.clk.t.Add(time.Second)
+	p.playAt = t0
+	m, c := h.m, h.clk
+	hops := len(p.routes[p.sel].hops) + 1
+	golden.Check(t, "trace-draws", frames(t, m, c, t0, 0, mapview.HopDur*3/2, time.Duration(hops)*mapview.HopDur+countDur))
 }

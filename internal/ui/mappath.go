@@ -10,6 +10,7 @@ import (
 
 	"meshcore-tui/internal/chat"
 	"meshcore-tui/internal/mapview"
+	"meshcore-tui/internal/motion"
 	"meshcore-tui/internal/radio"
 	"meshcore-tui/internal/store"
 )
@@ -119,12 +120,13 @@ func (m *Model) renderPath(w, mapH int) []string {
 	}
 	v := m.mapCurrent()
 	v.W, v.H = w*2, mapH*4
+	drawn := m.traceSoFar(r)
 	layers := mapview.Layers{Labels: true, Roads: mv.layers.Roads, Selected: 0, PathOnly: true}
 	pal := mapview.PaletteFor(th)
 	key := fmt.Sprintf("path|%.6f|%.6f|%.4f|%d|%d|%v|%v|%p|%d|%s", v.Center.Lat, v.Center.Lon, v.Zoom, w, mapH, th, layers,
-		mv.detail, len(nodes), routeKey([]mapview.Route{r}, m.now))
+		mv.detail, len(nodes), routeKey([]mapview.Route{drawn}, m.now)) + fmt.Sprint(drawn.Links)
 	if key != mv.cacheKey || mv.cache == nil {
-		mv.cache = m.mapDraw(mapview.Input{World: mv.world, Detail: mv.detail, Nodes: nodes, Routes: []mapview.Route{r},
+		mv.cache = m.mapDraw(mapview.Input{World: mv.world, Detail: mv.detail, Nodes: nodes, Routes: []mapview.Route{drawn},
 			Layers: layers, Now: m.now}, v, w, mapH, pal)
 		credit := "Natural Earth"
 		if mv.detail != nil && v.Zoom >= 7 && mv.detail.Covers(v.Center) {
@@ -163,6 +165,15 @@ func (m *Model) pathAnims(r mapview.Route, nodes []mapview.Node) []mapview.Anim 
 	if p.playAt.IsZero() || len(pts) < 2 {
 		return nil
 	}
+	if m.tracePlays() {
+		// A trace draws hop by hop instead: a comet flies each hop in turn, and the hop is drawn once it lands.
+		var anims []mapview.Anim
+		for i := 0; i+1 < len(pts); i++ {
+			anims = append(anims, mapview.Anim{Kind: mapview.Comet, Start: p.playAt.Add(time.Duration(i) * mapview.HopDur),
+				Path: pts[i : i+2], Links: links[i : i+1]})
+		}
+		return anims
+	}
 	anims := []mapview.Anim{{Kind: mapview.Comet, Start: p.playAt, Path: pts, Links: links}}
 	if p.routes[p.sel].flood {
 		anims = append(anims, mapview.Anim{Kind: mapview.Ripple, Start: p.playAt, At: pts[0]})
@@ -183,7 +194,34 @@ func (m *Model) pathPlaying() bool {
 			return true
 		}
 	}
-	return false
+	return m.tracePlays() && m.now.Before(p.playAt.Add(time.Duration(len(r.Stops))*mapview.HopDur+countDur))
+}
+
+// tracePlays reports a trace on the path view, which draws itself in rather than replaying with a comet.
+func (m *Model) tracePlays() bool {
+	p := m.mapv.path
+	return p != nil && !p.playAt.IsZero() && p.routes[p.sel].what == "trace" && m.level.Allows(motion.Typing)
+}
+
+// traceSoFar is as much of a trace as has landed: the hops a comet has finished flying, each SNR counting
+// up from when its hop landed.
+func (m *Model) traceSoFar(r mapview.Route) mapview.Route {
+	p := m.mapv.path
+	if !m.tracePlays() || len(r.Stops) < 2 {
+		return r
+	}
+	landed := min(int(m.now.Sub(p.playAt)/mapview.HopDur), len(r.Stops)-1)
+	if landed < 0 {
+		landed = 0
+	}
+	out := r
+	out.Stops = r.Stops[:landed+1]
+	out.Links = append([]mapview.Link(nil), r.Links[:landed]...)
+	for i := range out.Links {
+		at := p.playAt.Add(time.Duration(i+1) * mapview.HopDur)
+		out.Links[i].SNR = motion.Count(0, r.Links[i].SNR, at, countDur, m.now)
+	}
+	return out
 }
 
 // showPacketPath opens the map on a packet's path, with each copy heard as an alternative.

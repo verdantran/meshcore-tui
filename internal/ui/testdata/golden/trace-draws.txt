@@ -1,0 +1,96 @@
+== 0s ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌PATH · TRACE TO ALICE, NOW ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                                             ⡠⠊                                                   ┃
+┃                                           ⢠⠊                                                     ┃
+┃                                         ⢀⠔⠁                                                      ┃
+┃                                        ⡠⠃                                  BRISTOL               ┃
+┃                                      ⡠⠊                                     ◉ me                 ┃
+┃                                    ⢀⠔⠁                                                           ┃
+┃                                   ⡔⠁                                                             ┃
+┃                                 ⡠⠊                                                               ┃
+┃                               ⣀⠜                                                                 ┃
+┃                             ⢠⠊                                                                   ┃
+┃                      ⡰⠉⠑⠒⠢⠤⠔⠁                                                                    ┃
+┃                    ⡤⠊                                                                            ┃
+┃                    ⠑⢄                                                                            ┃
+┃                     ⡠⠃                                                                           ┃
+┃                    ⡔⠁                                                                            ┃
+┃                  ⢀⠜                                                                              ┃
+┃                 ⢠⠎                                                                               ┃
+┃                 ⢸                                                                                ┃
+┃                 ⢸                                                                                ┃
+┃            ⠐⡖⠒⠤⠤⠎                                                                 Natural Earth  ┃
+┃ ▌TRACE 2 hops · 39.8 km · 2s ago  me ─+7.2→ Dundry ─+1.2→ Cabot Tower ──→ Alice                  ┃
+┃ [ ] other routes · space replay · ←↑↓→ hjkl move · + - zoom · m fit the path · L labels · r roa… ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ ● 3 unread · 0 packets heard · 15 contacts · 3 channels · theme neon · motion full
+ [10:00:02] ▸ TRACE  Alice  A3 +7.2 · 1E +1.2 · A3 -2.2 · back +3.8
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles 12a7c2fbf4e24942
+== 480ms ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌PATH · TRACE TO ALICE, NOW ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                                             ⡠⠊                                                   ┃
+┃                                           ⢠⠊                                                     ┃
+┃                                         ⢀⠔⠁                                                      ┃
+┃                                        ⡠⠃                                  BRISTOL               ┃
+┃                                      ⡠⠊                                     ◉ me                 ┃
+┃                                    ⢀⠔⠁                                     ⣜⠎                    ┃
+┃                                   ⡔⠁                                    ⣶⡆⢮⠊                     ┃
+┃                                 ⡠⠊                                     +5.0                      ┃
+┃                               ⣀⠜                                       ⡜⠃                        ┃
+┃                             ⢠⠊                                       ⢀⡼⠎                         ┃
+┃                      ⡰⠉⠑⠒⠢⠤⠔⠁                                         ▲ Dundry                   ┃
+┃                    ⡤⠊                                                                            ┃
+┃                    ⠑⢄                                                                            ┃
+┃                     ⡠⠃                                                                           ┃
+┃                    ⡔⠁                                                                            ┃
+┃                  ⢀⠜                                                                              ┃
+┃                 ⢠⠎                                                                               ┃
+┃                 ⢸                                                                                ┃
+┃                 ⢸                                                                                ┃
+┃            ⠐⡖⠒⠤⠤⠎                                                                 Natural Earth  ┃
+┃ ▌TRACE 2 hops · 39.8 km · 2s ago  me ─+7.2→ Dundry ─+1.2→ Cabot Tower ──→ Alice                  ┃
+┃ [ ] other routes · space replay · ←↑↓→ hjkl move · + - zoom · m fit the path · L labels · r roa… ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ ● 3 unread · 0 packets heard · 15 contacts · 3 channels · theme neon · motion full
+ [10:00:02] ▸ TRACE  Alice  A3 +7.2 · 1E +1.2 · A3 -2.2 · back +3.8
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles 627ddcfa16ffb367
+== 1.46s ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌PATH · TRACE TO ALICE, NOW ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                                             ⡠⠊                                                   ┃
+┃                                           ⢠⠊                                                     ┃
+┃                                         ⢀⠔⠁                                                      ┃
+┃                                        ⡠⠃                                ⣀⣤▲⡄Cabot Tower         ┃
+┃                                      ⡠⠊                             ⢀⣀⣤⠶⠛⠉⢀⡾◉ me                 ┃
+┃                                    ⢀⠔⠁                           ⣀⣤⠶⠋⠉    ⣼⣟⠎                    ┃
+┃                                   ⡔⠁                        ⢀⣠⡴⠞⠛⠉    +1.2⢯⠊                     ┃
+┃                                 ⡠⠊                      ⣀⣤⡴⠞⠋⠁         +7.2                      ┃
+┃                               ⣀⠜                    ⣀⣤⠶⠛⠉              ⣴⠟                        ┃
+┃                             ⢠⠊                 ⢀⣠⡴⠞⠛⠉                ⢀⢼⡟                         ┃
+┃                      ⡰⠉⠑⠒⠢⠤⠔⠁              ⣀⣤⡴⠞⠋⠁                     ▲ Dundry                   ┃
+┃                    ⡤⠊                  ⣀⣤⠶⠛⠉                                                     ┃
+┃                    ⠑⢄             ⢀⣠⡴⠞⠛⠉                                                         ┃
+┃                     ⡠⠃        ⣀⣤⠶⠞⠋⠁                                                             ┃
+┃                    ⡔⠁    ⢀⣀⣤⠶⠛⠉                                                                  ┃
+┃                  ⢀⠜  ⢀⣠⡴⠞⠋⠉                                                                      ┃
+┃              Alice ●⠞⠋⠁                                                                          ┃
+┃                 ⢸                                                                                ┃
+┃                 ⢸                                                                                ┃
+┃            ⠐⡖⠒⠤⠤⠎                                                                 Natural Earth  ┃
+┃ ▌TRACE 2 hops · 39.8 km · 3s ago  me ─+7.2→ Dundry ─+1.2→ Cabot Tower ──→ Alice                  ┃
+┃ [ ] other routes · space replay · ←↑↓→ hjkl move · + - zoom · m fit the path · L labels · r roa… ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ ● 3 unread · 0 packets heard · 15 contacts · 3 channels · theme neon · motion full
+ [10:00:02] ▸ TRACE  Alice  A3 +7.2 · 1E +1.2 · A3 -2.2 · back +3.8
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles 44109c0c7b5a6ec2
