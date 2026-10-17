@@ -53,8 +53,9 @@ type Config struct {
 		WatchEvery   int      `toml:"watch_poll_m"`  // minutes between polls of a watched node over the air
 		LocalEvery   int      `toml:"watch_local_s"` // seconds between polls of a node on USB
 	} `toml:"admin"`
-	Devices   []Device          `toml:"devices"`
-	Batteries map[string]string `toml:"batteries"` // battery chemistry by public key (hex), for its charge curve
+	Devices   []Device              `toml:"devices"`
+	Batteries map[string]string     `toml:"batteries"` // battery chemistry by public key (hex), for its charge curve
+	Locations map[string][2]float64 `toml:"locations"` // latitude, longitude set by hand, by public key (hex)
 
 	path string
 }
@@ -172,6 +173,18 @@ func (c *Config) SetBattery(key, chemistry string) {
 		c.Batteries = map[string]string{}
 	}
 	c.Batteries[key] = chemistry
+}
+
+// SetLocation places a node by hand; ok false takes it away again.
+func (c *Config) SetLocation(key string, lat, lon float64, ok bool) {
+	if !ok {
+		delete(c.Locations, key)
+		return
+	}
+	if c.Locations == nil {
+		c.Locations = map[string][2]float64{}
+	}
+	c.Locations[key] = [2]float64{lat, lon}
 }
 
 func (c *Config) Forget(kind, addr string) {

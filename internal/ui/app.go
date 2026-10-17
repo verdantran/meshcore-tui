@@ -787,6 +787,7 @@ func (m *Model) screenKeys() []string {
 		return []string{key("↑↓ j k", "choose a contact"), key("m", "message them"), key("t", "trace the route, showing signal at each hop"),
 			key("d", "discover a fresh route"), key("p", "set the route by hand"), key("r", "reset the route, so messages flood"),
 			key("f", "favourite"), key("e", "share as a QR code and meshcore:// link"), key("x", "remove from the radio"),
+			key("L", "place it on the map by hand, for a node that doesn't share a location; empty clears it"),
 			key("M", "show the way to them on the map: the newest trace, else the stored route, else their advert's path"),
 			key("I", "import a meshcore:// link"), key("a", "nodes heard but not added"), key("A", "auto-add settings"),
 			key("P", "suggest contacts to prune"), key("F s /", "filter by type or favourites · sort · filter by name"), ""}

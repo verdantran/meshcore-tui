@@ -24,6 +24,8 @@ func (m *Model) renderContacts(w, rows int) []string {
 		return m.editorLines(w, rows)
 	case importOverlay:
 		return m.importLines(w)
+	case placeOverlay:
+		return m.placeLines(w)
 	case removeOverlay:
 		return m.confirmLines("REMOVE CONTACT", "Remove %s from the radio? Its message history stays here.", "y removes · any other key cancels")
 	case autoOverlay:
@@ -87,6 +89,9 @@ func (m *Model) contactTable(w, rows int) []string {
 		if ct.Lat != 0 || ct.Lon != 0 {
 			loc = "✓"
 		}
+		if _, ok := m.manualPlace(ct.Key); ok {
+			loc = "✎"
+		}
 		heard := ago(now.Sub(ct.LastAdvert))
 		if ct.LastAdvert.IsZero() || ct.LastAdvert.Unix() <= 0 {
 			heard = "never"
@@ -121,9 +126,12 @@ func (m *Model) contactDetail(w int) []string {
 	}
 	out := []string{th.Fg(typeColour(th, ct.Type), true).Render("▌"+ct.Name) + th.Fg(th.Dim, false).Render("  "+strings.ToLower(ct.Type.String())) + fav}
 	out = append(out, label("key")+th.Fg(th.Muted, false).Render(truncate(radio.KeyHex(ct.Key[:]), w-12)))
-	where := "not shared"
+	where := "not shared · L places it by hand"
 	if ct.Lat != 0 || ct.Lon != 0 {
 		where = fmt.Sprintf("%.4f, %.4f", ct.Lat, ct.Lon)
+	}
+	if p, ok := m.manualPlace(ct.Key); ok {
+		where = fmt.Sprintf("%.4f, %.4f · set by you", p.Lat, p.Lon)
 	}
 	out = append(out, label("last advert")+val(ago(now.Sub(ct.LastAdvert)))+th.Fg(th.Dim, false).Render("  ·  ")+label("location")+val(where))
 
@@ -337,6 +345,20 @@ func (m *Model) importLines(w int) []string {
 	return []string{
 		th.Fg(th.Muted, true).Render("IMPORT A CONTACT") + th.Fg(th.Dim, false).Render("  ·  paste a meshcore:// link, then enter · esc cancels"), "",
 		th.Fg(th.Magenta, true).Render("▸ ") + th.Fg(th.Text, false).Render(in) + th.Fg(th.Text, true).Render("█"),
+	}
+}
+
+func (m *Model) placeLines(w int) []string {
+	th := m.th
+	ct, _ := m.selectedContact()
+	shared := "it doesn't share one"
+	if ct.Lat != 0 || ct.Lon != 0 {
+		shared = fmt.Sprintf("it shares %.4f, %.4f; yours is used instead", ct.Lat, ct.Lon)
+	}
+	return []string{
+		th.Fg(th.Muted, true).Render("PLACE "+strings.ToUpper(ct.Name)) + th.Fg(th.Dim, false).Render(truncate("  ·  latitude, longitude, then enter · empty clears · esc cancels", w-len(ct.Name)-6)), "",
+		th.Fg(th.Magenta, true).Render("▸ ") + m.contacts.placeIn.render(th, w-2, false), "",
+		th.Fg(th.Dim, false).Render(truncate("Only this app uses it, for the map and its routes; "+shared+".", w)),
 	}
 }
 

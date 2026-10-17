@@ -73,6 +73,9 @@ func (m *Model) packetRoute(dec packets.Decoded, path []byte, snr float32, at ti
 		for _, n := range m.mapNodes() {
 			if n.Name == dec.Name {
 				r.from.kind = n.Kind
+				if _, manual := m.manualPlace(n.Key); manual || r.from.pos.Unplaced() {
+					r.from.pos = n.Pos
+				}
 			}
 		}
 	default:
@@ -283,17 +286,30 @@ func (m *Model) mapNodes() []mapview.Node {
 		for _, c := range m.chat.Contacts() {
 			if !seen[c.Key] {
 				seen[c.Key] = true
-				nodes = append(nodes, mapview.Node{Name: c.Name, Kind: kindOf(c.Type), Pos: mapview.LatLon{Lat: c.Lat, Lon: c.Lon}, Key: c.Key})
+				nodes = append(nodes, mapview.Node{Name: c.Name, Kind: kindOf(c.Type), Pos: m.placeOf(c), Key: c.Key})
 			}
 		}
 	}
 	for _, h := range m.contacts.heard {
 		if !seen[h.c.Key] {
 			seen[h.c.Key] = true
-			nodes = append(nodes, mapview.Node{Name: h.c.Name, Kind: kindOf(h.c.Type), Pos: mapview.LatLon{Lat: h.c.Lat, Lon: h.c.Lon}, Key: h.c.Key})
+			nodes = append(nodes, mapview.Node{Name: h.c.Name, Kind: kindOf(h.c.Type), Pos: m.placeOf(h.c), Key: h.c.Key})
 		}
 	}
 	return nodes
+}
+
+// placeOf is where a node is: where you put it, if you did, or else where it says it is.
+func (m *Model) placeOf(c radio.Contact) mapview.LatLon {
+	if p, ok := m.manualPlace(c.Key); ok {
+		return p
+	}
+	return mapview.LatLon{Lat: c.Lat, Lon: c.Lon}
+}
+
+func (m *Model) manualPlace(key [32]byte) (mapview.LatLon, bool) {
+	p, ok := m.adminConfig().Locations[radio.KeyHex(key[:])]
+	return mapview.LatLon{Lat: p[0], Lon: p[1]}, ok
 }
 
 func (m *Model) placedPoints() []mapview.LatLon {

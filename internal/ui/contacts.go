@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -29,6 +30,7 @@ const (
 	shareOverlay
 	editorOverlay
 	importOverlay
+	placeOverlay
 	removeOverlay
 	autoOverlay
 	pruneOverlay
@@ -79,6 +81,7 @@ type contactsModel struct {
 	editPath  []byte
 	editSel   int
 	importIn  string
+	placeIn   lineEdit
 	auto      radio.AutoAdd
 	autoSel   int
 	autoReady bool
@@ -527,6 +530,11 @@ func (m *Model) contactAction(s string, ct radio.Contact) (tea.Cmd, bool) {
 			link, err := r.ExportContact(ctx, ct.Key)
 			return exportedMsg{link, err}
 		}), true
+	case "L":
+		c.overlay, c.placeIn = placeOverlay, lineEdit{}
+		if p, ok := m.manualPlace(ct.Key); ok {
+			c.placeIn.set(fmt.Sprintf("%.5f, %.5f", p.Lat, p.Lon))
+		}
 	case "x":
 		c.overlay = removeOverlay
 	default:
@@ -615,6 +623,13 @@ func (m *Model) overlayKey(s string) tea.Cmd {
 		if s == "y" {
 			return m.contactOp("REMOVED  "+ct.Name, func(ctx context.Context, r radio.Radio) error { return r.RemoveContact(ctx, ct.Key) })
 		}
+	case placeOverlay:
+		if s != "enter" {
+			c.placeIn.key(s)
+			return nil
+		}
+		c.overlay = noOverlay
+		m.placeContact(ct, c.placeIn.text)
 	case importOverlay:
 		switch s {
 		case "enter":
@@ -718,4 +733,39 @@ func (m *Model) contactsAnimating() bool {
 		}
 	}
 	return len(m.contacts.discovering) > 0
+}
+
+// placeContact puts a node on the map by hand from "lat, lon", or takes it off again when in is empty.
+func (m *Model) placeContact(ct radio.Contact, in string) {
+	key := radio.KeyHex(ct.Key[:])
+	if strings.TrimSpace(in) == "" {
+		if _, ok := m.manualPlace(ct.Key); ok {
+			m.adminConfig().SetLocation(key, 0, 0, false)
+			m.saveLocations()
+			m.addLog(m.now, "LOCATION  "+ct.Name+" back to what it shares", radio.ToneInfo)
+		}
+		return
+	}
+	a, b, ok := strings.Cut(in, ",")
+	lat, err := parseFloat(a, "latitude", -90, 90)
+	if err == nil {
+		var lon float64
+		if lon, err = parseFloat(b, "longitude", -180, 180); err == nil && ok {
+			m.adminConfig().SetLocation(key, lat, lon, true)
+			m.saveLocations()
+			m.addLog(m.now, fmt.Sprintf("LOCATION  %s placed at %.5f, %.5f", ct.Name, lat, lon), radio.ToneOK)
+			return
+		}
+	}
+	if !ok {
+		err = errors.New("a location is latitude, longitude, e.g. 51.4545, -2.5879")
+	}
+	m.fail("LOCATION  " + err.Error())
+}
+
+func (m *Model) saveLocations() {
+	m.mapv.cacheKey = ""
+	if m.opt.Config != nil {
+		m.saveConfig()
+	}
 }

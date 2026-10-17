@@ -323,3 +323,49 @@ func TestColumnsLineUpWithWideNames(t *testing.T) {
 	h.keys("5")
 	aligned("admin", strings.Split(h.screen(), "\n"), "signed out")
 }
+
+func TestContactsPlaceByHand(t *testing.T) {
+	h := newHarness(t)
+	h.keys("2")
+	name := h.m.chat.Contacts()[0].Name
+	h.pick(name)
+	ct, _ := h.m.selectedContact()
+	h.keys("L")
+	if scr := h.screen(); !strings.Contains(scr, "PLACE "+strings.ToUpper(name)) || !strings.Contains(scr, "yours is used instead") {
+		t.Fatalf("the prompt says what it overrides:\n%s", scr)
+	}
+	h.key(tea.KeyEscape)
+
+	h.keys("L")
+	h.keys("51.40, -2.70")
+	h.key(tea.KeyEnter)
+	if p, ok := h.m.manualPlace(ct.Key); !ok || p.Lat != 51.40 || p.Lon != -2.70 {
+		t.Fatalf("placed at %v %v", p, ok)
+	}
+	if scr := h.screen(); !strings.Contains(scr, "51.4000, -2.7000 · set by you") || !strings.Contains(scr, "✎") || !strings.Contains(h.lastLog(), "LOCATION  "+name+" placed") {
+		t.Errorf("shown as yours:\n%s", scr)
+	}
+	placed := false
+	for _, n := range h.m.mapNodes() {
+		placed = placed || n.Key == ct.Key && n.Pos.Lat == 51.40
+	}
+	if !placed {
+		t.Error("the map puts it there")
+	}
+
+	h.keys("L")
+	if h.m.contacts.placeIn.text != "51.40000, -2.70000" {
+		t.Errorf("the prompt starts from yours: %q", h.m.contacts.placeIn.text)
+	}
+	h.m.contacts.placeIn.set("somewhere")
+	h.key(tea.KeyEnter)
+	if !strings.Contains(h.lastLog(), "latitude, longitude") {
+		t.Errorf("a bad location says what's wanted: %s", h.lastLog())
+	}
+	h.keys("L")
+	h.m.contacts.placeIn.set("")
+	h.key(tea.KeyEnter)
+	if _, ok := h.m.manualPlace(ct.Key); ok || !strings.Contains(h.lastLog(), "back to what it shares") {
+		t.Errorf("empty clears it: %s", h.lastLog())
+	}
+}

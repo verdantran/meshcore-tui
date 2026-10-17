@@ -28,7 +28,7 @@ func (m *Model) typing() bool {
 		c := &m.chats
 		return c.writing || c.filtering || c.chanStage != chanNone
 	case 1:
-		return m.contacts.filtering || m.contacts.overlay == importOverlay
+		return m.contacts.filtering || m.contacts.overlay == importOverlay || m.contacts.overlay == placeOverlay
 	case 3:
 		return m.inspector.filtering
 	case 4:
