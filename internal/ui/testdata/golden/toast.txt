@@ -1,0 +1,192 @@
+== 0s ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CHATS · 1 UNREAD ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ CHANNELS                 │ ▌Public  channel · flood                                              ┃
+┃ ▌ # Public               │                                                                       ┃
+┃  # bristol               │                                                                       ┃
+┃                          │                                                                       ┃
+┃ DIRECT                   │                                                                       ┃
+┃  ● Alice              ▪  │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │ No messages yet. Press enter to write the first one.                  ┃
+┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
+ [10:03:03] ▸ █
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles dc79204d3025ff09
+== 130ms ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CHATS · 1 UNREAD ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ CHANNELS                 │ ▌Public  channel · flood                ┏━ Alice ━━━━━━━━━━━━━━━━━━━━ ┃
+┃ ▌ # Public               │                                         ┃ are you about tonight?      ┃
+┃  # bristol               │                                         ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ┃
+┃                          │                                                                       ┃
+┃ DIRECT                   │                                                                       ┃
+┃  ● Alice              ▪  │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │ No messages yet. Press enter to write the first one.                  ┃
+┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
+ [10:03:03] ▸ NOTIFIED  Alice · █
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles 247a43ce289ec43f
+== 260ms ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CHATS · 1 UNREAD ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ CHANNELS                 │ ▌Public  channel · flood            ┏━ Alice ━━━━━━━━━━━━━━━━━━━━━━━┓ ┃
+┃ ▌ # Public               │                                     ┃ are you about tonight?        ┃ ┃
+┃  # bristol               │                                     ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━──┛ ┃
+┃                          │                                                                       ┃
+┃ DIRECT                   │                                                                       ┃
+┃  ● Alice              ■  │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │ No messages yet. Press enter to write the first one.                  ┃
+┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
+ [10:03:03] ▸ NOTIFIED  Alice · via terminal escap█
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles a63fe5793e81d6d6
+== 2s ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CHATS · 1 UNREAD ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ CHANNELS                 │ ▌Public  channel · flood            ┏━ Alice ━━━━━━━━━━━━━━━━━━━━━━━┓ ┃
+┃ ▌ # Public               │                                     ┃ are you about tonight?        ┃ ┃
+┃  # bristol               │                                     ┗━━━━━━━━━━━━━━━━───────────────┛ ┃
+┃                          │                                                                       ┃
+┃ DIRECT                   │                                                                       ┃
+┃  ● Alice              1  │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │ No messages yet. Press enter to write the first one.                  ┃
+┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
+ [10:03:03] ▸ NOTIFIED  Alice · via terminal escape + bell
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles 5e5341dc1c669f91
+== 3.87s ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CHATS · 1 UNREAD ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ CHANNELS                 │ ▌Public  channel · flood                ┏━ Alice ━━━━━━━━━━━━━━━━━━━━ ┃
+┃ ▌ # Public               │                                         ┃ are you about tonight?      ┃
+┃  # bristol               │                                         ┗━─────────────────────────── ┃
+┃                          │                                                                       ┃
+┃ DIRECT                   │                                                                       ┃
+┃  ● Alice              1  │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │ No messages yet. Press enter to write the first one.                  ┃
+┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
+ [10:03:03] ▸ NOTIFIED  Alice · via terminal escape + bell
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles 99b4c27dc812f494
+== 4s ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌CHATS · 1 UNREAD ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ CHANNELS                 │ ▌Public  channel · flood                                              ┃
+┃ ▌ # Public               │                                                                       ┃
+┃  # bristol               │                                                                       ┃
+┃                          │                                                                       ┃
+┃ DIRECT                   │                                                                       ┃
+┃  ● Alice              1  │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │                                                                       ┃
+┃                          │ No messages yet. Press enter to write the first one.                  ┃
+┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
+ [10:03:03] ▸ NOTIFIED  Alice · via terminal escape + bell
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles 59bc430fa580f730

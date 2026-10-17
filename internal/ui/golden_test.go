@@ -279,3 +279,22 @@ func TestGoldenTraceDraws(t *testing.T) {
 	hops := len(p.routes[p.sel].hops) + 1
 	golden.Check(t, "trace-draws", frames(t, m, c, t0, 0, mapview.HopDur*3/2, time.Duration(hops)*mapview.HopDur+countDur))
 }
+
+func TestGoldenToast(t *testing.T) {
+	m, c, _ := newChatModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	selectConvo(t, m, "Public")
+	tick(m, c, time.Second)
+	t0 := c.t
+	var from [6]byte
+	copy(from[:], aliceKey[:6])
+	send(m, c, 0, radio.Incoming{At: t0, From: from, Hops: -1, SentAt: t0, Text: "are you about tonight?"})
+	m.Update(notifyFlushMsg{})
+	if len(m.toasts) != 1 || m.toasts[0].title != "Alice" || !m.toasting() {
+		t.Fatalf("a notification shows as a toast: %+v", m.toasts)
+	}
+	golden.Check(t, "toast", frames(t, m, c, t0, 0, toastSlide/2, toastSlide, toastFor/2, toastFor-toastSlide/2, toastFor))
+	if m.toasting() {
+		t.Error("it's gone when its time is up")
+	}
+}

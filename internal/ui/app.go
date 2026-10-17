@@ -91,6 +91,7 @@ type Model struct {
 	frames  []radio.Frame
 	log     []logLine
 	ticker  ticker
+	toasts  []toast
 	stats   stats
 	glitch  time.Time
 	ticking bool
@@ -366,7 +367,7 @@ func (m *Model) moving() bool {
 	case phaseBoot:
 		return !m.boot.failed || motion.Running(m.glitch, glitchDur*3, now) || m.boot.typing(m.level, now)
 	}
-	return motion.Running(m.mainAt, slideDur, now) ||
+	return m.toasting() || motion.Running(m.mainAt, slideDur, now) ||
 		motion.Running(m.tabAt, wipeDur, now) ||
 		motion.Running(m.stats.rxLamp, headerLampDur, now) || motion.Running(m.stats.txLamp, headerLampDur, now) ||
 		motion.Running(m.stats.snrAt, countDur, now) || motion.Running(m.stats.battAt, countDur, now) ||

@@ -67,8 +67,7 @@ func (m *Model) considerNote(msg store.Message, title string) tea.Cmd {
 func (m *Model) flushNotes() tea.Cmd {
 	n := &m.notes
 	n.waiting = false
-	if len(n.pending) == 0 || n.method == notify.Off {
-		n.pending = nil
+	if len(n.pending) == 0 {
 		return nil
 	}
 	title, body := "meshcore-tui · "+n.pending[0].title, n.pending[0].body
@@ -83,6 +82,10 @@ func (m *Model) flushNotes() tea.Cmd {
 		body = strings.Join(who, ", ")
 	}
 	n.pending = nil
+	m.pushToast(strings.TrimPrefix(title, "meshcore-tui · "), body)
+	if n.method == notify.Off {
+		return nil
+	}
 	return m.sendNote(title, body)
 }
 

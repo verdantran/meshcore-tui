@@ -31,6 +31,9 @@ func (m *Model) View() tea.View {
 	for i := range lines {
 		lines[i] = fit(lines[i], m.w)
 	}
+	if m.phase == phaseMain {
+		m.overlayToasts(lines)
+	}
 	frame := strings.Join(lines, "\n")
 	if m.opt.ASCII {
 		frame = toASCII(frame)
