@@ -288,19 +288,19 @@ func (m *Model) healthLines(ct radio.Contact, sess *admin.Session, w, rows int) 
 	if m.level.Allows(motion.Wipe) {
 		reveal = motion.EaseOut(motion.Progress(a.paneAt, healthReveal, m.now))
 	}
-	for i, s := range h.Series {
+	for _, s := range h.Series {
 		if len(out)+tall > rows-2 {
 			break
 		}
-		colour := []theme.RGB{th.Cyan, th.Cyan, th.Magenta, th.Red, th.Magenta, th.Magenta, th.Yellow, th.Green}[i%8]
+		colour := func(v float64) theme.RGB { return m.gradeColour(m.healthGrade(ct.Key, s.Name, v)) }
 		lo, hi := seriesRange(s)
-		chart := m.chart(s.Values, lo, hi, chartW, tall, colour, reveal)
+		chart := m.lineChart(s.Values, lo, hi, chartW, tall, colour, reveal)
 		for r, line := range chart {
 			left := strings.Repeat(" ", labelW+valueW)
 			right := ""
 			if r == len(chart)-1 {
 				left = th.Fg(th.Muted, true).Render(fmt.Sprintf("%-*s", labelW, strings.ToUpper(s.Name))) +
-					th.Fg(th.Text, true).Render(fmt.Sprintf("%-*s", valueW, m.healthMeasure(ct.Key, s.Latest, s.Unit)))
+					th.Fg(colour(s.Latest), true).Render(fmt.Sprintf("%-*s", valueW, m.healthMeasure(ct.Key, s.Latest, s.Unit)))
 				right = th.Fg(th.Dim, false).Render("  avg " + m.healthMeasure(ct.Key, s.Avg, s.Unit))
 			}
 			out = append(out, clip(left+line+right, w))
@@ -337,7 +337,7 @@ func seriesRange(s admin.Series) (float64, float64) {
 
 // healthMeasure is measure with a battery's percentage beside its voltage.
 func (m *Model) healthMeasure(node [32]byte, v float64, unit string) string {
-	if unit != "V" || math.IsNaN(v) {
+	if unit != "V" || math.IsNaN(v) || m.chemistry(node) == radio.Wired {
 		return measure(v, unit)
 	}
 	return fmt.Sprintf("%s %d%%", measure(v, unit), radio.Battery{MilliVolts: uint16(math.Round(v * 1000))}.PercentOf(m.chemistry(node)))
@@ -409,6 +409,80 @@ func (m *Model) chart(vals []float64, lo, hi float64, w, rows int, colour theme.
 	}
 	return out
 }
+
+// brailleBit is the dot at (x, y) within a braille cell, two dots wide and four tall.
+var brailleBit = [4][2]rune{{0x01, 0x08}, {0x02, 0x10}, {0x04, 0x20}, {0x40, 0x80}}
+
+// lineChart draws values as a braille line rows tall, each cell in its value's colour; gaps show as
+// dots, the newest value is bright, and only the revealed part is drawn.
+func (m *Model) lineChart(vals []float64, lo, hi float64, w, rows int, colour func(float64) theme.RGB, reveal float64) []string {
+	th := m.th
+	dotsH := rows * 4
+	at := func(v float64) int {
+		return dotsH - 1 - int(math.Round((v-lo)/(hi-lo)*float64(dotsH-1)))
+	}
+	val := func(i int) float64 {
+		if i < 0 || i >= len(vals) {
+			return math.NaN()
+		}
+		return vals[i]
+	}
+	shown := int(reveal * float64(w))
+	cells := make([][]rune, rows)
+	for r := range cells {
+		cells[r] = make([]rune, w)
+	}
+	dot := func(x, y int) {
+		if x >= 0 && x < 2*shown && y >= 0 && y < dotsH {
+			cells[y/4][x/2] |= brailleBit[y%4][x%2]
+		}
+	}
+	last := -1
+	for i := range min(w, len(vals)) {
+		v := val(i)
+		if math.IsNaN(v) {
+			continue
+		}
+		last = i
+		y0, next := at(v), val(i+1)
+		if math.IsNaN(next) {
+			dot(2*i, y0)
+			dot(2*i+1, y0)
+			continue
+		}
+		// A step to the next value, drawn as a line from this cell's left dot to the next cell's.
+		y1 := at(next)
+		steps := max(abs(y1-y0), 2)
+		for s := 0; s <= steps; s++ {
+			dot(2*i+int(math.Round(float64(2*s)/float64(steps))), y0+int(math.Round(float64((y1-y0)*s)/float64(steps))))
+		}
+	}
+	out := make([]string, rows)
+	for r := range rows {
+		var b strings.Builder
+		for i := range w {
+			v := val(i)
+			switch {
+			case i >= shown:
+				b.WriteString(" ")
+			case cells[r][i] != 0:
+				style := th.Fg(colour(v), false)
+				if i == last {
+					style = th.Fg(th.Text, true)
+				}
+				b.WriteString(style.Render(string(0x2800 + cells[r][i])))
+			case math.IsNaN(v) && r == rows-1:
+				b.WriteString(th.Fg(th.Line, false).Render("·"))
+			default:
+				b.WriteString(" ")
+			}
+		}
+		out[r] = b.String()
+	}
+	return out
+}
+
+func abs(n int) int { return max(n, -n) }
 
 // axis labels a chart's time span under it.
 func axis(w int, week bool) string {

@@ -644,6 +644,32 @@ func TestMapFollowsThemeFade(t *testing.T) {
 	}
 }
 
+func TestMapBusiestStaysPut(t *testing.T) {
+	m, _ := newTestModel(t, motion.Full, 100, 30)
+	mv := &m.mapv
+	for _, name := range []string{"Hilltop", "Dundry", "Shed", "Mast"} {
+		mv.flows[name] = &flow{aName: name, bName: "Base", count: 5, at: m.now}
+	}
+	first := ""
+	for range 50 {
+		_, b := m.mapFlows()
+		if first == "" {
+			first = b.aName
+		}
+		if b.aName != first {
+			t.Fatalf("busiest moved from %s to %s with nothing changing", first, b.aName)
+		}
+	}
+	mv.flows["Shed"].count = 5.2
+	if _, b := m.mapFlows(); b.aName != first && first != "Shed" {
+		t.Error("a link a little busier doesn't take over")
+	}
+	mv.flows["Mast"].count = 9
+	if _, b := m.mapFlows(); b.aName != "Mast" {
+		t.Errorf("busiest = %s, want Mast, now clearly busiest", b.aName)
+	}
+}
+
 func TestMapTraffic(t *testing.T) {
 	h := newHarness(t)
 	h.openMap()

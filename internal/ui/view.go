@@ -196,6 +196,10 @@ func (m *Model) header() string {
 		batt = r.Battery
 	}
 	pct := batt.PercentOf(m.chemistry(r.Self.PubKey))
+	power := seg(fmt.Sprintf("%.2fV ", float64(batt.MilliVolts)/1000), th.Cyan, true) + batteryIcon(th, pct, seg) + seg(fmt.Sprintf(" %d%%", pct), th.Cyan, true)
+	if m.chemistry(r.Self.PubKey) == radio.Wired {
+		power = seg("wired", th.Cyan, true)
+	}
 	state := seg(" ● LINKED", th.Green, true)
 	switch m.linked {
 	case linkLost:
@@ -205,7 +209,7 @@ func (m *Model) header() string {
 	}
 	// Details in order of importance; the least important drop first when the terminal is narrow.
 	details := []string{
-		seg(fmt.Sprintf("%.2fV ", float64(batt.MilliVolts)/1000), th.Cyan, true) + batteryIcon(th, pct, seg) + seg(fmt.Sprintf(" %d%%", pct), th.Cyan, true),
+		power,
 		seg(r.Self.Params(), th.Cyan, true),
 		seg(r.Device.Model, th.Muted, false),
 		seg("fw "+r.Device.Firmware, th.Muted, false),
@@ -498,6 +502,9 @@ func (m *Model) plainPaint(s string, c theme.RGB, bold bool) string {
 // batteryText is "4.11 V ████░▌ 87%", always 18 cells wide so it lines up in columns.
 func (m *Model) batteryText(node [32]byte, b radio.Battery, bold bool) string {
 	th, pct := m.th, b.PercentOf(m.chemistry(node))
+	if m.chemistry(node) == radio.Wired {
+		return th.Fg(th.Text, bold).Render(fmt.Sprintf("%-18s", "wired"))
+	}
 	return th.Fg(th.Text, bold).Render(fmt.Sprintf("%.2f V ", float64(b.MilliVolts)/1000)) + batteryIcon(th, pct, m.plainPaint) +
 		th.Fg(th.Text, bold).Render(fmt.Sprintf(" %-4s", fmt.Sprintf("%d%%", pct)))
 }

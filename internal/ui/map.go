@@ -138,6 +138,7 @@ type mapModel struct {
 	note       string
 	noteBad    bool
 
+	busiest  string        // the flow named in the title, kept until another is clearly busier
 	drawCost time.Duration // a full redraw, averaged; too slow for a frame and moves jump instead of gliding
 	cacheKey string
 	cache    *mapview.Canvas
@@ -478,18 +479,22 @@ func (m *Model) countTraffic(r mapview.Route, nodes []mapview.Node) {
 // heavy backbone link doesn't wash out the rest. It also names the busiest, and forgets links long quiet.
 func (m *Model) mapFlows() ([]mapview.Flow, *flow) {
 	mv := &m.mapv
-	peak := 0.0
-	var busiest *flow
+	peak, top := 0.0, ""
 	for k, f := range mv.flows {
 		v := f.now(m.now)
 		if v < trafficFloor/10 {
 			delete(mv.flows, k)
 			continue
 		}
-		if v > peak {
-			peak, busiest = v, f
+		if v > peak || v == peak && k < top {
+			peak, top = v, k
 		}
 	}
+	// Links that carried the same packets tie exactly, so without some stickiness the title flickers between them.
+	if cur, ok := mv.flows[mv.busiest]; !ok || cur.now(m.now) < 0.9*peak {
+		mv.busiest = top
+	}
+	busiest := mv.flows[mv.busiest]
 	var out []mapview.Flow
 	for _, f := range mv.flows {
 		if v := f.now(m.now); v >= trafficFloor {

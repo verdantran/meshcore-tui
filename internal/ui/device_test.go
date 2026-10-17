@@ -465,6 +465,10 @@ func TestBatteryIconsEverywhere(t *testing.T) {
 	if got := plain(screen(t, m)); !strings.Contains(got, "3.61 V · ██░░░▌ 38%") {
 		t.Errorf("boot POWER line:\n%s", got)
 	}
+	m.adminConfig().SetBattery(radio.KeyHex(m.ready.Self.PubKey[:]), string(radio.Wired))
+	if got := plain(screen(t, m)); !strings.Contains(got, "▸ POWER      wired") || strings.Contains(got, "38%") {
+		t.Errorf("boot POWER line, wired:\n%s", got)
+	}
 	if _, _, ok := m.batteryPercent(bootLine{key: "power", state: radio.StepOK}, true, "nospace"); ok {
 		t.Error("no percentage to find")
 	}
@@ -491,6 +495,10 @@ func TestBatteryIconsEverywhere(t *testing.T) {
 	if !strings.Contains(h.screen(), "4.08 V █████▌ 100%") {
 		t.Errorf("then LiFePO4:\n%s", h.screen())
 	}
+	h.keys("B")
+	if scr := h.screen(); !strings.Contains(scr, "wired              12d 4h") || !strings.Contains(scr, "Dundry · None (wired)") {
+		t.Errorf("then wired, with no voltage or charge:\n%s", scr)
+	}
 }
 
 func TestDeviceBatteryType(t *testing.T) {
@@ -503,6 +511,11 @@ func TestDeviceBatteryType(t *testing.T) {
 	h.key(tea.KeyEnter)
 	if scr := h.screen(); !strings.Contains(scr, "4.02V ████░▌ 74%") || !strings.Contains(scr, "Battery 4.02 V ████░▌ 74%") {
 		t.Errorf("LiPo, in the header and on the screen:\n%s", scr)
+	}
+	h.key(tea.KeyEnter)
+	h.key(tea.KeyEnter)
+	if scr := h.screen(); !strings.Contains(scr, "BW62.5 · wired · SIM") || !strings.Contains(scr, "Battery wired") || !strings.Contains(scr, "None (wired)") {
+		t.Errorf("wired, in the header and on the screen:\n%s", scr)
 	}
 }
 

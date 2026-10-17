@@ -290,9 +290,10 @@ const (
 	LiIon   Chemistry = "li-ion"
 	LiPo    Chemistry = "lipo"
 	LiFePO4 Chemistry = "lifepo4"
+	Wired   Chemistry = "none" // powered without a battery, so there's no charge to read
 )
 
-var Chemistries = []Chemistry{LiIon, LiPo, LiFePO4}
+var Chemistries = []Chemistry{LiIon, LiPo, LiFePO4, Wired}
 
 func (c Chemistry) String() string {
 	switch c {
@@ -300,6 +301,8 @@ func (c Chemistry) String() string {
 		return "LiPo"
 	case LiFePO4:
 		return "LiFePO4"
+	case Wired:
+		return "None (wired)"
 	}
 	return "Li-ion (18650)"
 }

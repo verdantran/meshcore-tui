@@ -43,11 +43,11 @@ type Thresholds struct {
 // Check flags a node; newest is the newest firmware seen on any node.
 func Check(sess *Session, lastAdvert time.Time, newest string, th Thresholds, now time.Time) Alerts {
 	var a Alerts
-	if p, ok := sess.Latest(); ok && th.BatteryVolts > 0 {
-		chem := radio.LiIon
-		if th.Chemistry != nil {
-			chem = th.Chemistry(sess.Key)
-		}
+	chem := radio.LiIon
+	if th.Chemistry != nil {
+		chem = th.Chemistry(sess.Key)
+	}
+	if p, ok := sess.Latest(); ok && th.BatteryVolts > 0 && chem != radio.Wired {
 		low := radio.Battery{MilliVolts: uint16(math.Round(th.BatteryVolts * 1000))}.Percent()
 		a.LowBattery = radio.Battery{MilliVolts: p.Stats.BattMilliVolts}.PercentOf(chem) < low
 	}

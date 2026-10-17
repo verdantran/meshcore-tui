@@ -33,6 +33,11 @@ func TestFleetAlerts(t *testing.T) {
 	if !Check(a, t0, s.Newest(), th, t0).LowBattery {
 		t.Error("a LiFePO4 cell at 3.05 V is nearly flat")
 	}
+	th.Chemistry = func([32]byte) radio.Chemistry { return radio.Wired }
+	a.Status[0].Stats.BattMilliVolts = 0
+	if Check(a, t0, s.Newest(), th, t0).LowBattery {
+		t.Error("a wired node has no battery to run low")
+	}
 	th.Chemistry = nil
 	if got := Check(b, t0, s.Newest(), th, t0); got.Any() || got.String() != "" {
 		t.Errorf("healthy = %+v", got)

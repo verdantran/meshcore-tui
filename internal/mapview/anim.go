@@ -158,6 +158,6 @@ func beacon(c *Canvas, v View, self LatLon, now time.Time, pal Palette) {
 	period := beaconPeriod.Milliseconds()
 	for k := range int64(2) {
 		t := float64((now.UnixMilli()+k*period/2)%period) / float64(period)
-		ring(c, x, y, 5+28*motion.EaseOut(t), pal.Green.Lerp(pal.Land, 0.3+0.65*t), prioBeacon)
+		ring(c, x, y, 2+8*motion.EaseOut(t), pal.Green.Lerp(pal.Land, 0.5+0.45*t), prioBeacon)
 	}
 }

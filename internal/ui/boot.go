@@ -148,6 +148,9 @@ func (m *Model) renderBoot() []string {
 		label := textStyle.Render(text)
 		if pct, cut, ok := m.batteryPercent(l, typed, text); ok {
 			label = textStyle.Render(text[:cut+1]) + batteryIcon(th, pct, m.plainPaint) + textStyle.Render(fmt.Sprintf(" %d%%", pct))
+			if m.chemistry(m.ready.Self.PubKey) == radio.Wired {
+				label = textStyle.Render(strings.TrimSuffix(text, l.detail) + "wired")
+			}
 		}
 		gap := inner - visibleWidth(label) - visibleWidth(tag)
 		dots := ""

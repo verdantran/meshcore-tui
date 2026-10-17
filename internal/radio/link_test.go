@@ -392,7 +392,7 @@ func TestNamesAndHelpers(t *testing.T) {
 			t.Errorf("%s at 3.8 V = %d%%, want %d%%", c, got, want)
 		}
 	}
-	if (Battery{3300}).PercentOf(LiFePO4) != 73 || LiIon.Next() != LiPo || LiFePO4.Next() != LiIon || Chemistry("").Next() != LiIon {
+	if (Battery{3300}).PercentOf(LiFePO4) != 73 || LiIon.Next() != LiPo || LiFePO4.Next() != Wired || Wired.Next() != LiIon || Chemistry("").Next() != LiIon {
 		t.Error("LiFePO4 curve, or cycling chemistries")
 	}
 	for typ, want := range map[ContactType]string{TypeChat: "Chat", TypeRepeater: "Repeater", TypeRoom: "Room", TypeSensor: "Sensor", 9: "Unknown"} {

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -164,6 +165,45 @@ func TestHealthRangesAndCharts(t *testing.T) {
 	lo, hi := seriesRange(admin.Series{Unit: "V", Values: []float64{4.1, 4.1}})
 	if math.Abs(lo-3.1) > 1e-9 || math.Abs(hi-5.1) > 1e-9 {
 		t.Errorf("a flat level gets room either side: %v %v", lo, hi)
+	}
+}
+
+func TestHealthGradesAndLines(t *testing.T) {
+	m, _ := newTestModel(t, motion.Full, 100, 30)
+	node := [32]byte{7}
+	for _, c := range []struct {
+		name string
+		v    float64
+		want grade
+	}{
+		{"Received", 120, veryGood}, {"Received", 0, bad}, {"Transmitting", 2, good}, {"Transmitting", 12, bad},
+		{"Receive errors", 8, average}, {"Noise floor", -118, veryGood}, {"Noise floor", -90, bad},
+		{"Battery", 4.1, veryGood}, {"Battery", 3.45, average}, {"Duplicates", math.NaN(), ungraded}, {"Uptime", 5, ungraded},
+	} {
+		if got := m.healthGrade(node, c.name, c.v); got != c.want {
+			t.Errorf("%s %v graded %d, want %d", c.name, c.v, got, c.want)
+		}
+	}
+	m.adminConfig().SetBattery(radio.KeyHex(node[:]), string(radio.Wired))
+	if m.healthGrade(node, "Battery", 4.1) != ungraded {
+		t.Error("a wired node's supply isn't graded")
+	}
+
+	th := m.th
+	if pale := m.gradeColour(good); pale == th.Green || pale == th.Bg || m.gradeColour(average) != th.Yellow || m.gradeColour(bad) != th.Red {
+		t.Error("pale green, strong green, amber, red")
+	}
+	red := func(float64) theme.RGB { return th.Red }
+	rows := m.lineChart([]float64{0, 1, math.NaN(), 2, 3}, 0, 3, 6, 2, red, 1)
+	got := plain(rows)
+	if len(rows) != 2 || !strings.ContainsFunc(got, func(r rune) bool { return r > 0x2800 && r <= 0x28FF }) || !strings.Contains(got, "·") {
+		t.Errorf("a line with a gap:\n%s", got)
+	}
+	if !strings.Contains(strings.Join(rows, ""), fmt.Sprintf("38;2;%d;%d;%d", th.Red.R, th.Red.G, th.Red.B)) {
+		t.Error("cells take their value's colour")
+	}
+	if got := plain(m.lineChart([]float64{1, 2, 3}, 0, 3, 3, 1, red, 0)); strings.TrimSpace(got) != "" {
+		t.Errorf("nothing is drawn before the reveal: %q", got)
 	}
 }
 
