@@ -1,0 +1,66 @@
+== 0s ==
+○ NOT WATCHED · w polls it every 10m and keeps what it says · last poll 15m…  24 HOURS   7 DAYS
+
+
+RECEIVED       80/h                                                               avg 160/h
+
+SENT           0/h                                                                avg 0/h
+
+DUPLICATES     0.0%                                                               avg 0.0%
+
+RECEIVE ERRORS 0.0%                                                               avg 0.0%
+
+TRANSMITTING   0.0%                                                               avg 0.0%
+
+RECEIVING      0.0%                                                               avg 0.0%
+
+NOISE FLOOR    -107 dBm                                                           avg -108 dBm
+
+BATTERY        3.58 V 35%                                                         avg 3.86 V 67%
+                           -24h       -18h         -12h          -6h         now
+96 polls in this window
+styles 77f79ceacb615405
+== 210ms ==
+○ NOT WATCHED · w polls it every 10m and keeps what it says · last poll 15m…  24 HOURS   7 DAYS
+
+                           ⡠⠔⠒⠊⠉⠉⠉⠉⠑⠒⠒⠢⢄⣀⡀           ⢀⣀⡠⠔⠒⠊⠉⠉⠉⠉⠑⠒⠢⠤⢄⡀
+RECEIVED       80/h                      ⠈⠑⠒⠢⠤⠤⠤⠤⠔⠒⠊⠉⠁              ⠈⠉⠑⠒⠢         avg 160/h
+                           ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀
+SENT           0/h                                                                avg 0/h
+                           ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀
+DUPLICATES     0.0%                                                               avg 0.0%
+                           ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀
+RECEIVE ERRORS 0.0%                                                               avg 0.0%
+                           ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀
+TRANSMITTING   0.0%                                                               avg 0.0%
+                           ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀
+RECEIVING      0.0%                                                               avg 0.0%
+                             ⡰⠱⡀  ⡰⠱⡀  ⡰⠱⡀  ⡰⠱⡀ ⢀⡰⠱⡀ ⢀⡰⠱⡀ ⢀⡰⠱⡀ ⢀⠔⠱⡀ ⢀⠔⠱⡀
+NOISE FLOOR    -107 dBm    ⡠⠊  ⠘⡤⠊  ⠘⡤⠊  ⠘⡤⠊  ⠘⠔⠁  ⠘⠔⠁  ⠘⠔⠁  ⠘⠔⠁  ⠘⠔⠁  ⠘⠔         avg -108 dBm
+                           ⠉⠉⠉⠑⠒⠒⠒⠒⠒⠒⠒⠢⠤⠤⠤⠤⠤⠤⢄⣀⣀⣀⣀⣀⣀⣀⡀
+BATTERY        3.58 V 35%                            ⠈⠉⠉⠉⠉⠉⠉⠑⠒⠒⠒⠒⠒⠒⠢⠤⠤⠤⠤⠤         avg 3.86 V 67%
+                           -24h       -18h         -12h          -6h         now
+95 polls in this window
+styles 57954327c48dd606
+== 420ms ==
+○ NOT WATCHED · w polls it every 10m and keeps what it says · last poll 15m…  24 HOURS   7 DAYS
+
+                           ⡠⠔⠒⠊⠉⠉⠉⠉⠑⠒⠒⠢⢄⣀⡀           ⢀⣀⡠⠔⠒⠊⠉⠉⠉⠉⠑⠒⠢⠤⢄⡀
+RECEIVED       80/h                      ⠈⠑⠒⠢⠤⠤⠤⠤⠔⠒⠊⠉⠁              ⠈⠉⠑⠒⠢⠤⠤⠤⠤⠔⠒⠒  avg 160/h
+                           ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀
+SENT           0/h                                                                avg 0/h
+                           ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀
+DUPLICATES     0.0%                                                               avg 0.0%
+                           ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀
+RECEIVE ERRORS 0.0%                                                               avg 0.0%
+                           ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀
+TRANSMITTING   0.0%                                                               avg 0.0%
+                           ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀
+RECEIVING      0.0%                                                               avg 0.0%
+                             ⡰⠱⡀  ⡰⠱⡀  ⡰⠱⡀  ⡰⠱⡀ ⢀⡰⠱⡀ ⢀⡰⠱⡀ ⢀⡰⠱⡀ ⢀⠔⠱⡀ ⢀⠔⠱⡀ ⢀⠔⠱⡀ ⢀⠤
+NOISE FLOOR    -107 dBm    ⡠⠊  ⠘⡤⠊  ⠘⡤⠊  ⠘⡤⠊  ⠘⠔⠁  ⠘⠔⠁  ⠘⠔⠁  ⠘⠔⠁  ⠘⠔⠁  ⠘⠔⠁  ⠘⠔⠁   avg -108 dBm
+                           ⠉⠉⠉⠑⠒⠒⠒⠒⠒⠒⠒⠢⠤⠤⠤⠤⠤⠤⢄⣀⣀⣀⣀⣀⣀⣀⡀
+BATTERY        3.58 V 35%                            ⠈⠉⠉⠉⠉⠉⠉⠑⠒⠒⠒⠒⠒⠒⠢⠤⠤⠤⠤⠤⠤⠤⢄⣀⣀⣀⣀  avg 3.86 V 67%
+                           -24h       -18h         -12h          -6h         now
+95 polls in this window
+styles 59969ba62af7e5cb

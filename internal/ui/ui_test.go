@@ -96,7 +96,7 @@ func send(m *Model, c *clock, after time.Duration, e radio.Event) {
 	m.Update(eventMsg{e})
 }
 
-func screen(t *testing.T, m *Model) []string {
+func screen(t testing.TB, m *Model) []string {
 	t.Helper()
 	lines := strings.Split(m.View().Content, "\n")
 	if len(lines) > m.h {

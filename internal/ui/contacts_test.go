@@ -18,7 +18,7 @@ import (
 // harness runs the model against the real simulator like a small Bubble Tea runtime: every command
 // runs in the background and its result, however late, goes back through Update.
 type harness struct {
-	t       *testing.T
+	t       testing.TB
 	m       *Model
 	s       *sim.Sim
 	clk     *clock
@@ -26,11 +26,14 @@ type harness struct {
 	wait    time.Duration // how long until gives up; 0 means 3s
 }
 
-func newHarness(t *testing.T) *harness {
+func newHarness(t testing.TB) *harness {
+	return newHarnessWith(t, sim.New(5).Fast().Lossless().Quiet())
+}
+
+func newHarnessWith(t testing.TB, s *sim.Sim) *harness {
 	t.Helper()
 	st, _ := store.Open(":memory:")
 	t.Cleanup(func() { st.Close() })
-	s := sim.New(5).Fast().Lossless().Quiet()
 	c := &clock{t: time.Date(2026, 10, 14, 10, 0, 0, 0, time.UTC)}
 	m := New(Options{Theme: theme.Neon, Motion: motion.Full, Clock: c.now, Store: st, ExportDir: t.TempDir(),
 		Dial: func(Target) radio.Radio { return s }, Start: &Target{Kind: "SIM", Addr: "demo"},
