@@ -1,0 +1,96 @@
+== 0s ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌PACKETS 2 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃   TIME  TYPE        SNR  ×  SUMMARY                                                              ┃
+┃ ▌ 11:03 ADVERT    +2.50     unnamed · unknown type · BAD SIGNATURE                               ┃
+┃ █                                                                                                ┃
+┃ ──────────────────────────────────────────────────────────────────────────────────────────────── ┃
+┃ ▸ header                0x11  route FLOOD ·   0000  11 01 5F 02 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   path length           0x01  1 hops × 1 byt  0010  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   path                  5F                    0020  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   public key            02000000000000000000  0030  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   timestamp             0                     0040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   signature             INVALID               0050  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   app data              unnamed · unknown ty  0060  00 00 00 00 00 00 00 00                      ┃
+┃                                                                                                  ┃
+┃ [ ] step through fields · space pause · R ro                                                     ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ 2 packets heard · last rx now SNR +0.00  RSSI -90 · 47 contacts · 3 channels · theme neon · motion
+ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
+
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles df7e7ae824bd3ac0
+== 120ms ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌PACKETS 2 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃   TIME  TYPE        SNR  ×  SUMMARY                                                              ┃
+┃ ▌ 11:03 ADVERT    +2.50     unnamed · unknown type · BAD SIGNATURE                               ┃
+┃   11:03 ADVERT    +6.50     unnamed █                                                            ┃
+┃ ──────────────────────────────────────────────────────────────────────────────────────────────── ┃
+┃ ▸ header                0x11  route FLOOD ·   0000  11 01 5F 02 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   path length           0x01  1 hops × 1 byt  0010  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   path                  5F                    0020  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   public key            02000000000000000000  0030  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   timestamp             0                     0040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   signature             INVALID               0050  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   app data              unnamed · unknown ty  0060  00 00 00 00 00 00 00 00                      ┃
+┃                                                                                                  ┃
+┃ [ ] step through fields · space pause · R ro                                                     ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ 2 packets heard · last rx now SNR +1.40  RSSI -90 · 47 contacts · 3 channels · theme neon · motion
+ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
+                                                                                                  11
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles 7024384d1d109bd1
+== 700ms ==
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ 1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
+┏━▌PACKETS 2 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃   TIME  TYPE        SNR  ×  SUMMARY                                                              ┃
+┃ ▌ 11:03 ADVERT    +2.50     unnamed · unknown type · BAD SIGNATURE                               ┃
+┃   11:03 ADVERT    +6.50     unnamed · unknown type · BAD SIGNATURE                               ┃
+┃ ──────────────────────────────────────────────────────────────────────────────────────────────── ┃
+┃ ▸ header                0x11  route FLOOD ·   0000  11 01 5F 02 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   path length           0x01  1 hops × 1 byt  0010  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   path                  5F                    0020  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   public key            02000000000000000000  0030  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   timestamp             0                     0040  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   signature             INVALID               0050  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
+┃   app data              unnamed · unknown ty  0060  00 00 00 00 00 00 00 00                      ┃
+┃                                                                                                  ┃
+┃ [ ] step through fields · space pause · R ro                                                     ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┃                                                                                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ 2 packets heard · last rx now SNR +2.50  RSSI -90 · 47 contacts · 3 channels · theme neon · motion
+ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
+                                                                                          11 01 A3 0
+ 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
+styles bc4f522ee8ff6d50

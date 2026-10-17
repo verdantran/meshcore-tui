@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"meshcore-tui/internal/config"
 	"meshcore-tui/internal/motion"
@@ -22,7 +23,8 @@ const (
 	packetKeep   = 2000
 	hexReveal    = 260 * time.Millisecond
 	rowArrival   = 700 * time.Millisecond
-	inspectorPad = 12 // rows kept for the detail pane
+	rowCPS       = 300.0 // a new row types out inside rowArrival, even at 200 columns
+	inspectorPad = 12    // rows kept for the detail pane
 )
 
 // heardCopy is one reception of a packet; floods often arrive more than once by different routes.
@@ -382,9 +384,9 @@ func (m *Model) packetTable(list []*packetRow, w, rows int) []string {
 			if i == in.sel {
 				out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(" "+at+typ+snr+n+summary, w-1)))
 			} else {
-				out = append(out, "  "+th.Fg(th.Dim, false).Render(at)+th.Fg(m.typeColour(r), true).Render(typ)+
+				out = append(out, m.typedRow("  "+th.Fg(th.Dim, false).Render(at)+th.Fg(m.typeColour(r), true).Render(typ)+
 					th.Fg(th.SNR(float64(c.snr)), false).Render(snr)+th.Fg(th.Magenta, true).Render(n)+
-					th.Fg(th.Text, false).Render(truncate(summary, max(w-28, 4))))
+					th.Fg(th.Text, false).Render(truncate(summary, max(w-28, 4))), r.first))
 			}
 			continue
 		}
@@ -399,13 +401,26 @@ func (m *Model) packetTable(list []*packetRow, w, rows int) []string {
 			bar = th.Fg(th.Cyan.Lerp(th.Bg, motion.Progress(r.first, rowArrival, now)), true).Render("▌")
 		}
 		typeCol := m.typeColour(r)
-		out = append(out, bar+" "+th.Fg(th.Dim, false).Render(r.first.Local().Format("15:04:05")+" ")+
+		out = append(out, bar+m.typedRow(" "+th.Fg(th.Dim, false).Render(r.first.Local().Format("15:04:05")+" ")+
 			th.Fg(th.Muted, false).Render(fmt.Sprintf("%-6s ", route))+th.Fg(typeCol, true).Render(fmt.Sprintf("%-8s ", truncate(r.dec.Type, 8)))+
 			th.Fg(th.Muted, false).Render(fmt.Sprintf("%4d  ", len(r.dec.Path)))+th.Fg(th.Cyan, false).Render(fmt.Sprintf("%-14s ", truncate(path, 14)))+
 			th.Fg(th.SNR(float64(c.snr)), false).Render(fmt.Sprintf("%+6.2f ", c.snr))+th.Fg(th.Dim, false).Render(fmt.Sprintf("%5d %4d ", c.rssi, len(r.dec.Raw)))+
-			th.Fg(th.Magenta, true).Render(fmt.Sprintf("%3s  ", times))+th.Fg(th.Text, false).Render(truncate(summary, max(w-70, 10))))
+			th.Fg(th.Magenta, true).Render(fmt.Sprintf("%3s  ", times))+th.Fg(th.Text, false).Render(truncate(summary, max(w-70, 10))), r.first))
 	}
 	return out
+}
+
+// typedRow types a new packet's row out left to right, with a cursor at its head, before it takes its colours.
+func (m *Model) typedRow(row string, at time.Time) string {
+	th := m.th
+	if !m.level.Allows(motion.Typing) {
+		return row
+	}
+	typed, done := motion.Typewriter(ansi.Strip(row), at, rowCPS, m.now)
+	if done {
+		return row
+	}
+	return th.Fg(th.Cyan, false).Render(typed) + th.Fg(th.Text, true).Render("█")
 }
 
 func (m *Model) packetDetail(w, rows int) []string {

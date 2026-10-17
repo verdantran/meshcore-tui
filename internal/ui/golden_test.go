@@ -208,3 +208,16 @@ func TestGoldenContactArrives(t *testing.T) {
 	}
 	golden.Check(t, "contact-arrives", frames(t, m, c, t0, 0, arriveRowDur/5, arriveRowDur/2, arriveRowDur))
 }
+
+func TestGoldenPacketTypesIn(t *testing.T) {
+	m, c := mainScreen(t)
+	typeKeys(m, "4")
+	tick(m, c, time.Second)
+	t0 := c.t
+	for i, hop := range []byte{0xA3, 0x5F} {
+		payload := make([]byte, 101)
+		payload[0] = byte(i + 1)
+		send(m, c, 0, radio.Packet{At: t0, SNR: 6.5 - float32(4*i), RSSI: -90, Raw: rawPacket(t, meshcore.RouteTypeFlood, meshcore.PayloadTypeAdvert, []byte{hop}, payload)})
+	}
+	golden.Check(t, "packet-types-in", frames(t, m, c, t0, 0, 120*time.Millisecond, rowArrival))
+}
