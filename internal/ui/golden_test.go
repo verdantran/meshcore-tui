@@ -221,3 +221,26 @@ func TestGoldenPacketTypesIn(t *testing.T) {
 	}
 	golden.Check(t, "packet-types-in", frames(t, m, c, t0, 0, 120*time.Millisecond, rowArrival))
 }
+
+func TestGoldenSettingsApplied(t *testing.T) {
+	m, c := newTestModel(t, motion.Full, 100, 30)
+	ct := radio.Contact{Key: [32]byte{7}, Name: "Dundry", Type: radio.TypeRepeater}
+	sess := m.admin.Session(ct)
+	t0 := c.t
+	name := admin.Setting{Key: "name", Label: "Name"}
+	power := admin.Setting{Key: "tx", Label: "Transmit power"}
+	m.adm.applied, m.adm.appliedAt = []admin.Change{{Setting: name, From: "Dundry", To: "Dundry Hill"}, {Setting: power, From: "22", To: "20"}}, t0
+	sess.Settings = map[string]admin.Value{"name": {Value: "Dundry", At: t0.Add(-time.Minute)}, "tx": {Value: "22", At: t0.Add(-time.Minute)}}
+	var out []golden.Frame
+	snap := func(d time.Duration) {
+		c.t = t0.Add(d)
+		m.Update(frameMsg(c.t))
+		out = append(out, golden.Frame{Label: fmt.Sprint(d), Lines: m.appliedLines(sess, 90)})
+	}
+	snap(0) // both sent, waiting
+	sess.Settings["name"] = admin.Value{Value: "Dundry Hill", At: t0.Add(200 * time.Millisecond)}
+	snap(300 * time.Millisecond) // the first confirmed, typing in
+	sess.Settings["tx"] = admin.Value{Value: "20", At: t0.Add(400 * time.Millisecond)}
+	snap(time.Second) // both in
+	golden.Check(t, "settings-applied", out)
+}

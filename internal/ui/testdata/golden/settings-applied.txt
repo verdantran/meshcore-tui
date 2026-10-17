@@ -1,0 +1,15 @@
+== 0s ==
+  Name                     Dundry █▆▄
+  Transmit power           22 █▆▄
+
+styles e30d48d13513193b
+== 300ms ==
+  Name                     Dundry → Dund
+  Transmit power           22 ▃▁▃
+
+styles 5c885221c9477aea
+== 1s ==
+  Name                     Dundry → Dundry Hill
+  Transmit power           22 → 20
+
+styles f8956a9000b836be
