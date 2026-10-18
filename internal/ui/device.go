@@ -112,10 +112,10 @@ type keyExportedMsg struct {
 	err error
 }
 
-// clipClearMsg empties the clipboard after a private key was copied, unless something else was copied since.
+// clipClearMsg empties the clipboard after a secret was copied, unless something else was copied since.
 type clipClearMsg struct{ gen int }
 
-const keyClipFor = 30 * time.Second
+const secretClipFor = 30 * time.Second
 
 func (m *Model) dev() radio.Device {
 	if m.radio == nil {
@@ -579,9 +579,12 @@ func (m *Model) devicePromptKey(s string) tea.Cmd {
 			what = "BLE PIN CHANGED"
 		case r.id == "import":
 			what = "PRIVATE KEY IMPORTED"
+			warning := "Your contacts will see a different node, and the current private key is gone unless you exported it."
+			if m.radio.Transport() == "TCP" {
+				warning += " This radio is connected over WiFi, so the key crosses your network unencrypted on its way there."
+			}
 			dm.prompt, dm.input, dm.confirm = devConfirm, lineEdit{}, devConfirmation{title: "REPLACE THIS RADIO'S IDENTITY",
-				warning: "Your contacts will see a different node, and the current private key is gone unless you exported it.",
-				word:    "import", id: "import", what: what, op: op}
+				warning: warning, word: "import", id: "import", what: what, op: op}
 			return nil
 		case r.group == "Radio" && r.id != "tx":
 			dm.prompt, dm.input, dm.confirm = devConfirm, lineEdit{}, devConfirmation{title: "CHANGE THE RADIO SETTINGS",
@@ -629,9 +632,7 @@ func (m *Model) devicePromptKey(s string) tea.Cmd {
 	case devShowKey:
 		if s == "y" && dm.key != "" {
 			m.addLog(m.now, "COPIED  private key to the clipboard; it's cleared in 30 s", radio.ToneWarn)
-			cmd := m.copyText(dm.key)
-			gen := m.clipGen
-			return tea.Batch(cmd, tea.Tick(keyClipFor, func(time.Time) tea.Msg { return clipClearMsg{gen} }))
+			return m.copySecret(dm.key)
 		}
 		dm.prompt, dm.key = devNone, ""
 	}

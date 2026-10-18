@@ -54,8 +54,8 @@ func secretPacket(t *testing.T, secret [16]byte, sender, text string, path []byt
 // ticker, the map, Stats or an export.
 func TestPrivateChannelsNamedLikeOpenOnesStayHidden(t *testing.T) {
 	h := newHarness(t)
-	fakePublic := radio.Channel{Idx: 5, Name: "Public", Secret: [16]byte{5, 5}}
-	fakeBristol := radio.Channel{Idx: 6, Name: "#bristol", Secret: [16]byte{6, 6}}
+	fakePublic := radio.Channel{Idx: 5, Name: "Public", Secret: [16]byte{5, 5, 1, 2, 3}}
+	fakeBristol := radio.Channel{Idx: 6, Name: "#bristol", Secret: [16]byte{6, 6, 1, 2, 3}}
 	h.m.chat.ReplaceChannels(append(h.m.chat.Channels(), fakePublic, fakeBristol))
 	h.keys("4")
 	h.hear(secretPacket(t, fakePublic.Secret, "Mum", "the key's under the mat", []byte{0xA3}), 5)

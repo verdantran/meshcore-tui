@@ -11,6 +11,7 @@ import (
 	"github.com/verdantran/meshcore-tui/internal/chat"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 type chanStage int
@@ -152,7 +153,7 @@ func (m *Model) channelKey(s string) (tea.Cmd, bool) {
 		case "esc":
 			c.chanStage = chanNone
 		case "enter":
-			name := strings.TrimSpace(c.chanInput.text)
+			name := untrusted.Name(c.chanInput.text)
 			switch {
 			case name == "" || strings.HasPrefix(name, "#"):
 				m.fail("RENAME  a private channel's name can't be empty or start with #")
@@ -175,8 +176,8 @@ func (m *Model) channelKey(s string) (tea.Cmd, bool) {
 		return nil, true
 	case chanShare:
 		if s == "y" {
-			m.addLog(m.now, "COPIED  link for "+c.shareCh.Name, radio.ToneOK)
-			return m.copyText(chat.ChannelLink(c.shareCh)), true
+			m.addLog(m.now, "COPIED  link for "+c.shareCh.Name+"; it's cleared in 30 s", radio.ToneOK)
+			return m.copySecret(chat.ChannelLink(c.shareCh)), true
 		}
 		c.chanStage = chanNone
 	case chanRemove:
@@ -231,8 +232,10 @@ func (m *Model) channelShareLines(w, rows int) []string {
 	switch {
 	case chat.IsPublic(ch):
 		note = "This is the Public channel, which every MeshCore radio starts with; its secret is no secret."
-	case strings.HasPrefix(ch.Name, "#"):
+	case chat.IsHashtag(ch):
 		note = "A hashtag channel's secret comes from its name, so sharing the name " + ch.Name + " is enough."
+	case chat.IsOpen(ch):
+		note = "Anyone can work out this secret, so anyone can read this channel, whoever you share it with."
 	}
 	code := qrLines(link)
 	linkRows := strings.Split(renderWidth.Hardwrap(link, w, false), "\n")

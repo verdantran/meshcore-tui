@@ -4,6 +4,7 @@
 package chat
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -477,12 +478,34 @@ type exported struct {
 	SNR          *float32  `json:"snr,omitempty"`
 	Status       string    `json:"status,omitempty"`
 	RoundTripMS  int64     `json:"round_trip_ms,omitempty"`
+	Signature    string    `json:"signature,omitempty"`  // a channel message's: none, valid, bad, unknown or stale
+	SignerKey    string    `json:"signer_key,omitempty"` // hex; only a key's first 8 bytes when it isn't known
+	Verdict      string    `json:"verdict,omitempty"`    // what the signature means against who's pinned
 }
+
+// sigText is what a channel message's signature means, in words.
+func sigText(m store.Message, verdict func(store.Message) string) string {
+	if verdict != nil {
+		if v := verdict(m); v != "" {
+			return v
+		}
+	}
+	switch {
+	case m.Sig != store.Unsigned:
+		return "signature " + sigNames[m.Sig]
+	case !m.Out:
+		return "unsigned"
+	}
+	return ""
+}
+
+var sigNames = map[store.Sig]string{store.Unsigned: "none", store.SigValid: "valid", store.SigBad: "bad", store.SigUnknown: "unknown", store.SigStale: "stale"}
 
 var stateNames = map[store.State]string{store.Received: "", store.Pending: "pending", store.Sent: "sent", store.Delivered: "delivered", store.Failed: "failed"}
 
 // Export writes a conversation, or every conversation when c is empty, as text or JSON. It returns the count.
-func (s *Service) Export(w io.Writer, c store.Convo, asJSON bool) (int, error) {
+// verdict, if given, says what a channel message's signature means; text is one line per message.
+func (s *Service) Export(w io.Writer, c store.Convo, asJSON bool, verdict func(store.Message) string) (int, error) {
 	ms, err := s.store.All(s.device, c)
 	if err != nil {
 		return 0, err
@@ -492,6 +515,9 @@ func (s *Service) Export(w io.Writer, c store.Convo, asJSON bool) (int, error) {
 		for _, m := range ms {
 			e := exported{Conversation: s.Title(m.Convo), From: m.Sender, Outgoing: m.Out, Text: m.Text,
 				Sent: m.SentAt, Received: m.RecvAt, Status: stateNames[m.State], RoundTripMS: m.RTT.Milliseconds()}
+			if m.Convo.IsChannel() {
+				e.Signature, e.SignerKey, e.Verdict = sigNames[m.Sig], hex.EncodeToString(m.SigKey), sigText(m, verdict)
+			}
 			if !m.Out {
 				hops := m.Hops
 				e.Hops = &hops
@@ -512,7 +538,7 @@ func (s *Service) Export(w io.Writer, c store.Convo, asJSON bool) (int, error) {
 			if last != "" {
 				fmt.Fprintln(w)
 			}
-			fmt.Fprintf(w, "# %s\n\n", s.Title(m.Convo))
+			fmt.Fprintf(w, "# %s\n\n", untrusted.Line(s.Title(m.Convo)))
 			last = m.Convo
 		}
 		detail := ""
@@ -526,7 +552,11 @@ func (s *Service) Export(w io.Writer, c store.Convo, asJSON bool) (int, error) {
 		case !m.Out:
 			detail = fmt.Sprintf("  (%d hops)", m.Hops)
 		}
-		fmt.Fprintf(w, "[%s] %s: %s%s\n", m.RecvAt.Local().Format("2006-01-02 15:04:05"), m.Sender, m.Text, detail)
+		if v := sigText(m, verdict); v != "" && m.Convo.IsChannel() {
+			detail += "  [" + v + "]"
+		}
+		text := untrusted.Line(strings.ReplaceAll(untrusted.Text(m.Text), "\n", " ⏎ "))
+		fmt.Fprintf(w, "[%s] %s: %s%s\n", m.RecvAt.Local().Format("2006-01-02 15:04:05"), untrusted.Line(m.Sender), text, detail)
 	}
 	return len(ms), nil
 }

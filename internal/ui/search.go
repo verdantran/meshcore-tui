@@ -177,6 +177,15 @@ func fileName(name string) string {
 	return name
 }
 
+// exportVerdict is a message's signature badge for an export, which has no colour to say a tick is a pin.
+func (m *Model) exportVerdict(msg store.Message) string {
+	v, _, _ := m.sigVerdict(msg)
+	if v == "✓ signed" {
+		return "✓ signed by the pinned key"
+	}
+	return v
+}
+
 // createExport makes a file in the exports folder that only you can read.
 func (m *Model) createExport(name string) (*os.File, string, error) {
 	dir := m.opt.ExportDir
@@ -229,7 +238,7 @@ func exportCommand() command {
 			if err != nil {
 				return err
 			}
-			n, err := m.chat.Export(f, c, asJSON)
+			n, err := m.chat.Export(f, c, asJSON, m.exportVerdict)
 			if cerr := f.Close(); err == nil {
 				err = cerr
 			}

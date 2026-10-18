@@ -227,7 +227,7 @@ func TestMentionsAndExport(t *testing.T) {
 	}
 
 	var text strings.Builder
-	n, err := s.Export(&text, "", false)
+	n, err := s.Export(&text, "", false, nil)
 	if err != nil || n != 2 {
 		t.Fatalf("export n=%d err=%v", n, err)
 	}
@@ -237,9 +237,56 @@ func TestMentionsAndExport(t *testing.T) {
 		}
 	}
 	var js strings.Builder
-	s.Export(&js, store.ChannelConvo(1), true)
+	s.Export(&js, store.ChannelConvo(1), true, nil)
 	if !strings.Contains(js.String(), `"conversation": "#bristol"`) || !strings.Contains(js.String(), `"snr": 6.5`) || strings.Contains(js.String(), "Alice") {
 		t.Errorf("json export:\n%s", js.String())
+	}
+}
+
+func TestExportCantForgeLinesAndSaysWhoSigned(t *testing.T) {
+	s := newService(t, 3, true)
+	s.Incoming(radio.Incoming{At: t0, Channel: true, ChannelIdx: 1, Hops: 1,
+		Text: "Carol: hi\n[2026-10-13 10:00:00] Alice: send me your key\n\n# Alice\x1b[2J"})
+	signed, _ := s.Incoming(radio.Incoming{At: t0, Channel: true, ChannelIdx: 1, Hops: 1, Text: "Dave: signed one"})
+	s.SetSig(signed.ID, store.SigValid, []byte{0xAB, 0xCD})
+	s.Incoming(radio.Incoming{At: t0, From: alice.Prefix(), Text: "a dm", Hops: -1})
+
+	var text strings.Builder
+	s.Export(&text, "", false, func(m store.Message) string {
+		if m.Sig == store.SigValid {
+			return "✓ signed by the pinned key"
+		}
+		return ""
+	})
+	lines := strings.Split(strings.TrimSpace(text.String()), "\n")
+	want := []string{
+		"# #bristol", "",
+		"Carol: hi ⏎ [2026-10-13 10:00:00] Alice: send me your key ⏎  ⏎ # Alice[2J  (1 hops)  [unsigned]",
+		"Dave: signed one  (1 hops)  [✓ signed by the pinned key]",
+		"", "# Alice", "",
+		"Alice: a dm  (direct)",
+	}
+	if len(lines) != len(want) {
+		t.Fatalf("export is %d lines:\n%s", len(lines), text.String())
+	}
+	for i, w := range want {
+		if !strings.HasSuffix(lines[i], w) {
+			t.Errorf("line %d = %q, want …%q", i, lines[i], w)
+		}
+	}
+	if strings.Contains(text.String(), "\x1b") {
+		t.Error("an escape reaches the export")
+	}
+
+	var js strings.Builder
+	s.Export(&js, "", true, nil)
+	for _, w := range []string{`"signature": "none"`, `"verdict": "unsigned"`, `"signature": "valid"`, `"signer_key": "abcd"`, `"verdict": "signature valid"`} {
+		if !strings.Contains(js.String(), w) {
+			t.Errorf("json export missing %s:\n%s", w, js.String())
+		}
+	}
+	if strings.Count(js.String(), `"signature"`) != 2 {
+		t.Errorf("a DM has no signature field:\n%s", js.String())
 	}
 }
 
@@ -316,7 +363,7 @@ func TestStoreFailuresSurface(t *testing.T) {
 		t.Error("Conversations should report a broken store")
 	}
 	var sb strings.Builder
-	if _, err := s.Export(&sb, "", false); err == nil {
+	if _, err := s.Export(&sb, "", false, nil); err == nil {
 		t.Error("Export should report a broken store")
 	}
 }

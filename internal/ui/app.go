@@ -125,6 +125,7 @@ type Model struct {
 	helpScroll    int
 	asking        *question
 	clipGen       int // counts copies, so a timed clear never wipes something copied since
+	wifiNoted     bool
 	quitting      bool
 	tickerOn      bool
 	beaconOn      bool
@@ -448,6 +449,7 @@ func (m *Model) apply(e radio.Event) tea.Cmd {
 		m.boot.done(now)
 		m.stats.battFrom, m.stats.battTo, m.stats.battAt = float64(e.Battery.MilliVolts), float64(e.Battery.MilliVolts), time.Time{}
 		m.addLog(now, "LINK ESTABLISHED  "+e.Self.Name+" · "+e.Device.Model, radio.ToneOK)
+		m.wifiNote()
 		if m.level == motion.Off {
 			m.enterMain()
 		}

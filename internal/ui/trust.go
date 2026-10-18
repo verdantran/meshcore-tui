@@ -86,6 +86,15 @@ func (m *Model) radioChecked(msg radioCheckedMsg) {
 	}
 }
 
+// wifiNote says once that a WiFi link is plain TCP, which carries every channel secret on each connect.
+func (m *Model) wifiNote() {
+	if m.wifiNoted || m.radio == nil || m.radio.Transport() != "TCP" {
+		return
+	}
+	m.wifiNoted = true
+	m.addLog(m.now, "UNENCRYPTED  WiFi links aren't encrypted: anyone on this network can read and change what passes, channel secrets and passwords included", radio.ToneWarn)
+}
+
 func (m *Model) radioUnproven() {
 	m.trust = trustUnproven
 	m.addLog(m.now, "RADIO NOT VERIFIED  it can't sign, so saved passwords are asked for", radio.ToneWarn)

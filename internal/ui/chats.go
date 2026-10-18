@@ -17,6 +17,7 @@ import (
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/store"
 	"github.com/verdantran/meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 const (
@@ -506,7 +507,7 @@ func (m *Model) readingKey(s string) (tea.Cmd, bool) {
 	case "y":
 		msg := c.msgs[i]
 		m.addLog(m.now, "COPIED  "+msg.Sender+"'s message, to the clipboard", radio.ToneOK)
-		return m.copyText(msg.Text), true
+		return m.copyText(untrusted.Text(msg.Text)), true
 	default:
 		return nil, false
 	}

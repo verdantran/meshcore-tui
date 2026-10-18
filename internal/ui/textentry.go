@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -128,6 +129,14 @@ func (m *Model) paste(text string) tea.Cmd {
 func (m *Model) copyText(text string) tea.Cmd {
 	m.clipGen++
 	return tea.SetClipboard(text)
+}
+
+// copySecret copies something that shouldn't linger, and empties the clipboard after secretClipFor unless
+// something else was copied since.
+func (m *Model) copySecret(text string) tea.Cmd {
+	cmd := m.copyText(text)
+	gen := m.clipGen
+	return tea.Batch(cmd, tea.Tick(secretClipFor, func(time.Time) tea.Msg { return clipClearMsg{gen} }))
 }
 
 // dropLast removes the last character as it's seen, for backspace: a whole emoji, flag or accented letter,

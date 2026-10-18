@@ -2,6 +2,7 @@ package ui
 
 import (
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -89,7 +90,7 @@ func TestAddChannels(t *testing.T) {
 	h.keys("z")
 
 	// Joining by link, and refusing a duplicate.
-	link := chat.ChannelLink(radio.Channel{Name: "Walkers", Secret: [16]byte{4, 4}})
+	link := chat.ChannelLink(radio.Channel{Name: "Walkers", Secret: [16]byte{4, 4, 1, 2, 3}})
 	h.keys("n")
 	h.typeFast(link)
 	h.key(tea.KeyEnter)
@@ -268,4 +269,65 @@ func TestRenameChannel(t *testing.T) {
 	if h.m.chats.chanStage != chanNone {
 		t.Error("esc")
 	}
+}
+
+func TestShareViewSaysWhenTheNameIsEnough(t *testing.T) {
+	h := newHarness(t)
+	strong := [16]byte{0x3a, 0x91, 0x0c, 0xe7, 0x55, 0x12, 0xb8, 0x6f, 0xd4, 0x29, 0x80, 0x4e, 0xf3, 0x17, 0xaa, 0x6b}
+	for _, c := range []struct {
+		ch        radio.Channel
+		want, not string
+	}{
+		{radio.Channel{Name: "#bath", Secret: strong}, "Anyone with this secret", "is enough"},
+		{radio.Channel{Name: "Family", Secret: meshcore.DeriveHashtagPSK("#family")}, "Anyone can work out this secret", "Anyone with this secret"},
+	} {
+		h.m.chats.shareCh, h.m.chats.chanStage = c.ch, chanShare
+		if scr := h.screen(); !strings.Contains(scr, c.want) || strings.Contains(scr, c.not) {
+			t.Errorf("%s:\n%s", c.ch.Name, scr)
+		}
+	}
+	gen := h.m.clipGen
+	_, cmd := h.m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
+	if batch, ok := cmd().(tea.BatchMsg); !ok || len(batch) != 2 || h.m.clipGen != gen+1 || !strings.Contains(h.lastLog(), "cleared in 30 s") {
+		t.Errorf("a copied link is cleared like the private key: %q", h.lastLog())
+	}
+	if cmd := h.m.deviceMsg(clipClearMsg{gen + 1}); cmd == nil || fmt.Sprint(cmd()) != fmt.Sprint(tea.SetClipboard("")()) {
+		t.Error("and the clear empties it")
+	}
+}
+
+func TestCopiedMessagesKeepOnlyTheirLines(t *testing.T) {
+	h := newHarness(t)
+	h.incoming(radio.Incoming{Channel: true, ChannelIdx: 0, Text: "Bob: line one\nline\x1b]52;c;x\x07 two\r"})
+	h.openConvo("Public")
+	h.key(tea.KeyRight)
+	_, cmd := h.m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
+	if cmd == nil || fmt.Sprint(cmd()) != fmt.Sprint(tea.SetClipboard("line one\nline]52;c;x two")()) {
+		t.Errorf("copied %v", cmd())
+	}
+}
+
+func TestWiFiSaysItIsUnencrypted(t *testing.T) {
+	h := newHarness(t)
+	if strings.Contains(plainLog(h), "UNENCRYPTED") {
+		t.Fatal("only WiFi warns")
+	}
+	h.m.radio = tcpSim{h.s}
+	h.m.Update(eventMsg{h.m.ready})
+	h.m.Update(eventMsg{h.m.ready})
+	if n := strings.Count(plainLog(h), "UNENCRYPTED  WiFi links aren't encrypted"); n != 1 {
+		t.Errorf("warned %d times:\n%s", n, plainLog(h))
+	}
+
+	h.keys("6")
+	h.until("settings", func() bool { return h.m.device.loaded })
+	h.moveTo("import")
+	h.key(tea.KeyEnter)
+	h.clear()
+	h.typeFast(strings.Repeat("ab", 64))
+	h.key(tea.KeyEnter)
+	if scr := h.screen(); !strings.Contains(scr, "crosses your network unencrypted") || !strings.Contains(scr, "Type import to go ahead") {
+		t.Errorf("the import warns over WiFi:\n%s", scr)
+	}
+	h.key(tea.KeyEscape)
 }
