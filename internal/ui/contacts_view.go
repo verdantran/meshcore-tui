@@ -122,7 +122,7 @@ func (m *Model) contactDetail(w int) []string {
 	}
 	out := []string{th.Fg(typeColour(th, ct.Type), true).Render("▌"+ct.Name) + th.Fg(th.Dim, false).Render("  "+strings.ToLower(ct.Type.String())) + fav}
 	out = append(out, label("key")+th.Fg(th.Muted, false).Render(truncate(radio.KeyHex(ct.Key[:]), w-12)))
-	where := "not shared · L places it by hand"
+	where := "not shared · l places it by hand"
 	if ct.Lat != 0 || ct.Lon != 0 {
 		where = fmt.Sprintf("%.4f, %.4f", ct.Lat, ct.Lon)
 	}
@@ -164,7 +164,7 @@ func (m *Model) contactDetail(w int) []string {
 	}
 	out = append(out, label("signing key")+sig)
 	out = append(out, "")
-	keys := "enter or m message · t trace · d discover route · p set route · r reset route · M route on the map · L place on the map · K pin signing key · f favourite · e share · x remove · I import · a heard · A auto-add · P prune · F type or favourites · o sort · / filter"
+	keys := "enter or m message · t trace · d discover route · p set route · r reset route · M route on the map · l place on the map · K pin signing key · f favourite · e share · x remove · I import · a heard · A auto-add · P prune · F type or favourites · o sort · / filter"
 	for _, l := range strings.Split(ansi.Wrap(keys, w, "·"), "\n") {
 		out = append(out, th.Fg(th.Dim, false).Render(l))
 	}

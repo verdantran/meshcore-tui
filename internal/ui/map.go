@@ -682,7 +682,7 @@ func (m *Model) mapKey(s string) (tea.Cmd, bool) {
 		return nil, false
 	}
 	v := mv.view
-	if s != "m" && s != "]" && s != "[" && s != "L" && s != "r" && s != "t" && s != "f" && s != "F" && s != "d" && s != "esc" {
+	if s != "m" && s != "]" && s != "[" && s != "n" && s != "r" && s != "t" && s != "f" && s != "F" && s != "d" && s != "esc" {
 		mv.auto = false
 	}
 	switch s {
@@ -707,7 +707,7 @@ func (m *Model) mapKey(s string) (tea.Cmd, bool) {
 		}
 	case "[":
 		mv.layers.Selected = max(mv.layers.Selected-1, -1)
-	case "L":
+	case "n":
 		mv.layers.Labels = !mv.layers.Labels
 	case "r":
 		mv.layers.Roads = !mv.layers.Roads
@@ -928,7 +928,7 @@ func (m *Model) renderMap(w, h int) []string {
 		}
 	}
 
-	hint := "←↑↓→ hjkl move · + - zoom · m whole mesh · [ ] routes · t traffic · f F focus · d street detail · L labels · r roads"
+	hint := "←↑↓→ hjkl move · + - zoom · m whole mesh · [ ] routes · t traffic · f F focus · d street detail · n names · r roads"
 	if mv.hub != "" || mv.layers.Selected >= 0 {
 		hint = "esc show all · " + hint
 	}

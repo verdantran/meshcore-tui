@@ -132,7 +132,7 @@ func TestMapScreen(t *testing.T) {
 	if mv.view.Center != start.Center || mv.view.Zoom != start.Zoom {
 		t.Error("m goes back to the whole mesh")
 	}
-	h.keys("Lr")
+	h.keys("nr")
 	if mv.layers.Labels || mv.layers.Roads {
 		t.Error("labels and roads off")
 	}

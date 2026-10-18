@@ -154,7 +154,7 @@ func (m *Model) renderPath(w, mapH int) []string {
 	}
 	back := strings.ToLower(tabNames[p.back])
 	return append(out, clip(m.routeLine(r, nodes, p.to), w), clip(th.Fg(th.Dim, false).Render(
-		"[ ] other routes · space replay · ←↑↓→ hjkl move · + - zoom · m fit the path · L labels · r roads · esc back to "+back), w))
+		"[ ] other routes · space replay · ←↑↓→ hjkl move · + - zoom · m fit the path · n names · r roads · esc back to "+back), w))
 }
 
 // pathAnims replays the path as the full map shows a packet arriving: a comet along it, and a ripple where a

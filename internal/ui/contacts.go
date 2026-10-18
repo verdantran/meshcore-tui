@@ -528,7 +528,7 @@ func (m *Model) contactAction(s string, ct radio.Contact) (tea.Cmd, bool) {
 			link, err := r.ExportContact(ctx, ct.Key)
 			return exportedMsg{link, err}
 		}), true
-	case "L":
+	case "l":
 		c.overlay, c.placeIn = placeOverlay, lineEdit{}
 		if p, ok := m.manualPlace(ct.Key); ok {
 			c.placeIn.set(fmt.Sprintf("%.5f, %.5f", p.Lat, p.Lon))

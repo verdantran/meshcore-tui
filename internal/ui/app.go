@@ -864,7 +864,7 @@ func (m *Model) screenKeys() []string {
 			key("[ ]", "pick out a route, newest first; esc shows them all again"),
 			key("path", "M on a packet, message or contact shows just its path: [ ] other copies, m fits it, esc goes back"),
 			key("d", "download street detail (roads, rivers, towns) for your mesh's area from OpenFreeMap, or more of it; esc stops"),
-			key("L r", "town and node names · main roads"),
+			key("n r", "town and node names · main roads"),
 			key("t", "the traffic layer: links get more saturated the more packets crossed them lately; t again counts the last hour, then hides it"),
 			key("f F", "pick out the busiest nodes' traffic one at a time, forwards or back, fading the rest; esc shows it all again"),
 			key("esc", "stop a download, then drop the picked route, then the picked node"),
@@ -887,7 +887,7 @@ func (m *Model) screenKeys() []string {
 			key("d", "discover a fresh route"), key("p", "set the route by hand"), key("r", "reset the route, so messages flood"),
 			key("f", "favourite"), key("K", "pin their signing key to their name, or unpin it"), key("e", "share as a QR code and meshcore:// link; y copies it"),
 			key("x", "remove from the radio"),
-			key("L", "place it on the map by hand, for a node that doesn't share a location; empty clears it"),
+			key("l", "place it on the map by hand, for a node that doesn't share a location; empty clears it"),
 			key("M", "show the way to them on the map: the newest trace, else the stored route, else their advert's path"),
 			key("I", "import a meshcore:// link"), key("a", "nodes heard but not added"), key("A", "auto-add settings"),
 			key("P", "suggest contacts to prune"), key("F", "filter by type or favourites"), key("o", "sort"), key("/", "filter by name"), ""}

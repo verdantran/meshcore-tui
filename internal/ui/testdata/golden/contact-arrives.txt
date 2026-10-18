@@ -9,14 +9,14 @@
 ┃ ──────────────────────────────────────────────────────────────────────────────────────────────── ┃
 ┃ ▌Alice  chat                                                                                     ┃
 ┃ key         3AAA010000000000000000000000000000000000000000000000000000000000                     ┃
-┃ last advert 2562047h ago  ·  location    not shared · L places it by hand                        ┃
+┃ last advert 2562047h ago  ·  location    not shared · l places it by hand                        ┃
 ┃ route       direct: 2 hops via A3·1E                                                             ┃
 ┃ advert path …                                                                                    ┃
 ┃ trace       press t to trace direct A3·1E                                                        ┃
 ┃ signing key not pinned · K pins this key to Alice, so messages signed as them can be checked     ┃
 ┃                                                                                                  ┃
 ┃ enter or m message · t trace · d discover route · p set route · r reset route · M route on the   ┃
-┃ map · L place on the map · K pin signing key · f favourite · e share · x remove · I import · a   ┃
+┃ map · l place on the map · K pin signing key · f favourite · e share · x remove · I import · a   ┃
 ┃ heard · A auto-add · P prune · F type or favourites · o sort · / filter                          ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
@@ -29,7 +29,7 @@
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles b67b56f6341812ac
+styles 2500f8e7819e812c
 == 120ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -41,14 +41,14 @@ styles b67b56f6341812ac
 ┃ ──────────────────────────────────────────────────────────────────────────────────────────────── ┃
 ┃ ▌Alice  chat                                                                                     ┃
 ┃ key         3AAA010000000000000000000000000000000000000000000000000000000000                     ┃
-┃ last advert 2562047h ago  ·  location    not shared · L places it by hand                        ┃
+┃ last advert 2562047h ago  ·  location    not shared · l places it by hand                        ┃
 ┃ route       direct: 2 hops via A3·1E                                                             ┃
 ┃ advert path …                                                                                    ┃
 ┃ trace       press t to trace direct A3·1E                                                        ┃
 ┃ signing key not pinned · K pins this key to Alice, so messages signed as them can be checked     ┃
 ┃                                                                                                  ┃
 ┃ enter or m message · t trace · d discover route · p set route · r reset route · M route on the   ┃
-┃ map · L place on the map · K pin signing key · f favourite · e share · x remove · I import · a   ┃
+┃ map · l place on the map · K pin signing key · f favourite · e share · x remove · I import · a   ┃
 ┃ heard · A auto-add · P prune · F type or favourites · o sort · / filter                          ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
@@ -61,7 +61,7 @@ styles b67b56f6341812ac
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles d1f4991c80c28cdf
+styles d3f71682efc6221f
 == 300ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -73,14 +73,14 @@ styles d1f4991c80c28cdf
 ┃ ──────────────────────────────────────────────────────────────────────────────────────────────── ┃
 ┃ ▌Alice  chat                                                                                     ┃
 ┃ key         3AAA010000000000000000000000000000000000000000000000000000000000                     ┃
-┃ last advert 2562047h ago  ·  location    not shared · L places it by hand                        ┃
+┃ last advert 2562047h ago  ·  location    not shared · l places it by hand                        ┃
 ┃ route       direct: 2 hops via A3·1E                                                             ┃
 ┃ advert path …                                                                                    ┃
 ┃ trace       press t to trace direct A3·1E                                                        ┃
 ┃ signing key not pinned · K pins this key to Alice, so messages signed as them can be checked     ┃
 ┃                                                                                                  ┃
 ┃ enter or m message · t trace · d discover route · p set route · r reset route · M route on the   ┃
-┃ map · L place on the map · K pin signing key · f favourite · e share · x remove · I import · a   ┃
+┃ map · l place on the map · K pin signing key · f favourite · e share · x remove · I import · a   ┃
 ┃ heard · A auto-add · P prune · F type or favourites · o sort · / filter                          ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
@@ -93,7 +93,7 @@ styles d1f4991c80c28cdf
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 94574d106add37b5
+styles d52a80bc83e093b5
 == 600ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -105,14 +105,14 @@ styles 94574d106add37b5
 ┃ ──────────────────────────────────────────────────────────────────────────────────────────────── ┃
 ┃ ▌Alice  chat                                                                                     ┃
 ┃ key         3AAA010000000000000000000000000000000000000000000000000000000000                     ┃
-┃ last advert 2562047h ago  ·  location    not shared · L places it by hand                        ┃
+┃ last advert 2562047h ago  ·  location    not shared · l places it by hand                        ┃
 ┃ route       direct: 2 hops via A3·1E                                                             ┃
 ┃ advert path …                                                                                    ┃
 ┃ trace       press t to trace direct A3·1E                                                        ┃
 ┃ signing key not pinned · K pins this key to Alice, so messages signed as them can be checked     ┃
 ┃                                                                                                  ┃
 ┃ enter or m message · t trace · d discover route · p set route · r reset route · M route on the   ┃
-┃ map · L place on the map · K pin signing key · f favourite · e share · x remove · I import · a   ┃
+┃ map · l place on the map · K pin signing key · f favourite · e share · x remove · I import · a   ┃
 ┃ heard · A auto-add · P prune · F type or favourites · o sort · / filter                          ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
@@ -125,4 +125,4 @@ styles 94574d106add37b5
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles ce7f95e2501ece26
+styles c8c2e541b7ef4fa6
