@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -45,8 +47,9 @@ type pendingSig struct {
 
 // usedSig is the message a signature was valid for, so the same signature on another is known as a replay.
 type usedSig struct {
-	id int64
-	at time.Time
+	idx int
+	id  int64
+	at  time.Time
 }
 
 // canSign says why signing isn't possible on this radio, or nil.
@@ -60,14 +63,50 @@ func (m *Model) canSign() error {
 	return nil
 }
 
-func (m *Model) signedChannel(name string) bool {
-	return m.opt.Config != nil && slices.Contains(m.opt.Config.Messages.SignChannels, name)
+// signedChannel reports whether your messages in a conversation's channel are signed. The setting goes by the
+// channel's secret, so a later channel that reuses its name or slot doesn't take it on.
+func (m *Model) signedChannel(c store.Convo) bool {
+	if m.opt.Config == nil || m.chat == nil {
+		return false
+	}
+	ch, ok := m.chat.ChannelFor(c)
+	return ok && m.opt.Config.Signs(ch.Secret)
 }
 
 // signThis reports whether the message being written will be signed: the channel's setting, flipped by ctrl+s.
 func (m *Model) signThis() bool {
 	cur, ok := m.selectedConvo()
-	return ok && cur.Kind == chat.KindChannel && m.signedChannel(cur.Title) != m.chats.signFlip
+	return ok && cur.Kind == chat.KindChannel && m.signedChannel(cur.Convo) != m.chats.signFlip
+}
+
+// moveSigning turns signing settings kept by channel name into ones kept by secret, for the channels on
+// this radio. Names it doesn't have are dropped: a channel added under one later is another channel.
+func (m *Model) moveSigning() {
+	cfg := m.opt.Config
+	if cfg == nil || m.chat == nil || len(cfg.Messages.SignChannels) == 0 {
+		return
+	}
+	secrets := map[string][16]byte{}
+	for _, ch := range m.chat.Channels() {
+		secrets[ch.Name] = ch.Secret
+	}
+	cfg.MoveSigning(secrets)
+	m.saveConfig()
+}
+
+// forgetSigs drops what's held about a channel's signatures once it's left, since its slot may be reused.
+func (m *Model) forgetSigs(idx int) {
+	m.chats.sigs = slices.DeleteFunc(m.chats.sigs, func(p pendingSig) bool { return p.idx == idx })
+	for k := range m.chats.signedMsgs {
+		if strings.HasPrefix(k, fmt.Sprintf("%d|", idx)) {
+			delete(m.chats.signedMsgs, k)
+		}
+	}
+	for sig, u := range m.chats.usedSigs {
+		if u.idx == idx {
+			delete(m.chats.usedSigs, sig)
+		}
+	}
 }
 
 // toggleChannelSigning turns signing your messages on an open channel on or off.
@@ -77,7 +116,7 @@ func (m *Model) toggleChannelSigning() {
 		m.fail("SIGNING  only channel messages are signed; direct messages are already encrypted to one person")
 		return
 	}
-	if err := m.canSign(); err != nil && !m.signedChannel(cur.Title) {
+	if err := m.canSign(); err != nil && !m.signedChannel(cur.Convo) {
 		m.fail("SIGNING  " + err.Error())
 		return
 	}
@@ -86,10 +125,14 @@ func (m *Model) toggleChannelSigning() {
 		m.fail("SIGNING  there's no config file to keep the setting in")
 		return
 	}
-	on := !m.signedChannel(cur.Title)
-	cfg.Messages.SignChannels = slices.DeleteFunc(cfg.Messages.SignChannels, func(n string) bool { return n == cur.Title })
+	ch, ok := m.chat.ChannelFor(cur.Convo)
+	if !ok {
+		m.fail("SIGNING  that channel isn't on the radio")
+		return
+	}
+	on := !m.signedChannel(cur.Convo)
+	cfg.SetSigning(ch.Secret, on)
 	if on {
-		cfg.Messages.SignChannels = append(cfg.Messages.SignChannels, cur.Title)
 		m.addLog(m.now, "SIGNING ON  "+cur.Title+": your messages here are signed, which sends each as two packets", radio.ToneOK)
 	} else {
 		m.addLog(m.now, "SIGNING OFF  "+cur.Title, radio.ToneInfo)
@@ -140,7 +183,14 @@ func (m *Model) pins() map[string]store.Pin {
 		if err != nil {
 			m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 		}
+		for _, n := range slices.Sorted(maps.Keys(p)) {
+			k := p[n].Key
+			if p[n].Clash {
+				m.addLog(m.now, fmt.Sprintf("PIN CONFLICT  two pins read as %s, with different keys: kept the newer, to key %s", n, radio.KeyHex(k[:4])), radio.ToneWarn)
+			}
+		}
 		m.chats.pins = p
+		m.chats.pinsRev++
 	}
 	return m.chats.pins
 }
@@ -193,8 +243,18 @@ func (m *Model) check(d signing.Datagram, channel string, msg store.Message) (st
 			fresh := sigFresh
 			if _, ok := m.chats.queued[msg.ID]; ok {
 				fresh = sigQueued
+				if last := m.chat.LastRun(); !last.IsZero() {
+					fresh = min(fresh, max(msg.RecvAt.Sub(last), 0)+sigFresh) // so it was sent since the app last had the radio
+				}
 			}
 			if u, ok := m.chats.usedSigs[d.Sig]; ok && u.id != msg.ID || msg.RecvAt.Sub(msg.SentAt).Abs() > fresh {
+				return store.SigStale, k[:]
+			}
+			again, err := m.chat.SignedBefore(msg, k[:])
+			if err != nil {
+				m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
+			}
+			if again || err != nil {
 				return store.SigStale, k[:]
 			}
 			return store.SigValid, k[:]
@@ -285,7 +345,7 @@ func (m *Model) applySig(p *pendingSig) {
 	}
 	p.on, p.onSig = best.ID, sig
 	if sig == store.SigValid {
-		m.chats.usedSigs[p.d.Sig] = usedSig{best.ID, m.now}
+		m.chats.usedSigs[p.d.Sig] = usedSig{p.idx, best.ID, m.now}
 	}
 	m.setSig(best, p.idx, p.d.TS, sig, key)
 	switch {
@@ -322,7 +382,7 @@ func (m *Model) sigArrived(msg store.Message) {
 }
 
 func (m *Model) pinOf(name string) (store.Pin, bool) {
-	p, ok := m.pins()[untrusted.Name(name)]
+	p, ok := m.pins()[m.names().canonical(name)]
 	return p, ok
 }
 
@@ -337,9 +397,10 @@ func (m *Model) lookalike(name string) (string, store.Pin, bool) {
 	if len(pins) == 0 {
 		return "", store.Pin{}, false
 	}
-	name, sk, like := untrusted.Name(name), untrusted.Skeleton(name), ""
-	for n := range pins {
-		if n != name && untrusted.Skeleton(n) == sk && (like == "" || n < like) {
+	ix := m.names()
+	canon, like := ix.canonical(name), ""
+	for _, n := range ix.pinned[ix.skeleton(name)] {
+		if n != canon && (like == "" || n < like) {
 			like = n
 		}
 	}
@@ -348,7 +409,67 @@ func (m *Model) lookalike(name string) (string, store.Pin, bool) {
 
 // namesake is the name of a contact or heard node that reads like name but has another key, contacts first.
 func (m *Model) namesake(name string, key []byte) string {
-	sk := untrusted.Skeleton(name)
+	ix := m.names()
+	for _, c := range ix.named[ix.skeleton(name)] {
+		if !bytes.Equal(c.Key[:], key) {
+			return c.Name
+		}
+	}
+	return ""
+}
+
+// nameIndex is what the look-alike checks compare with, worked out when contacts, heard nodes or pins
+// change rather than for every message drawn.
+type nameIndex struct {
+	rev    [4]int
+	named  map[string][]radio.Contact // contacts, then heard nodes, by skeleton
+	owner  map[[32]byte]string        // whose each key is, contacts first
+	pinned map[string][]string        // pinned names by skeleton
+	shared map[[4]byte]int            // how many known keys start with each 4 bytes
+
+	skel  map[string]string // the skeletons and canonical forms of names asked about
+	canon map[string]string
+}
+
+const nameMemo = 8192
+
+func (ix *nameIndex) skeleton(name string) string {
+	if sk, ok := ix.skel[name]; ok {
+		return sk
+	}
+	if len(ix.skel) >= nameMemo {
+		clear(ix.skel)
+	}
+	ix.skel[name] = untrusted.Skeleton(name)
+	return ix.skel[name]
+}
+
+func (ix *nameIndex) canonical(name string) string {
+	if n, ok := ix.canon[name]; ok {
+		return n
+	}
+	if len(ix.canon) >= nameMemo {
+		clear(ix.canon)
+	}
+	ix.canon[name] = untrusted.Name(name)
+	return ix.canon[name]
+}
+
+// names is the look-alike index as things stand, rebuilt if they've changed.
+func (m *Model) names() *nameIndex {
+	ix := &m.chats.names
+	pins := m.pins()
+	rev := [4]int{-1, m.contacts.heardRev, len(m.contacts.heard), m.chats.pinsRev}
+	if m.chat != nil {
+		rev[0] = m.chat.Rev()
+	}
+	if ix.skel == nil {
+		ix.skel, ix.canon = map[string]string{}, map[string]string{}
+	} else if ix.named != nil && ix.rev == rev {
+		return ix
+	}
+	ix.rev = rev
+	ix.named, ix.owner, ix.pinned, ix.shared = map[string][]radio.Contact{}, map[[32]byte]string{}, map[string][]string{}, map[[4]byte]int{}
 	var nodes []radio.Contact
 	if m.chat != nil {
 		nodes = m.chat.Contacts()
@@ -356,12 +477,24 @@ func (m *Model) namesake(name string, key []byte) string {
 	for _, h := range m.contacts.heard {
 		nodes = append(nodes, h.c)
 	}
+	keys := map[[32]byte]bool{m.ready.Self.PubKey: true}
 	for _, c := range nodes {
-		if !bytes.Equal(c.Key[:], key) && untrusted.Skeleton(c.Name) == sk {
-			return c.Name
+		sk := ix.skeleton(c.Name)
+		ix.named[sk] = append(ix.named[sk], c)
+		if _, ok := ix.owner[c.Key]; !ok {
+			ix.owner[c.Key] = c.Name
 		}
+		keys[c.Key] = true
 	}
-	return ""
+	for n, p := range pins {
+		sk := ix.skeleton(n)
+		ix.pinned[sk] = append(ix.pinned[sk], n)
+		keys[p.Key] = true
+	}
+	for k := range keys {
+		ix.shared[[4]byte(k[:4])]++
+	}
+	return ix
 }
 
 // sigBadge describes a message's signature for the line above it, against who's pinned now.
@@ -386,11 +519,14 @@ func (m *Model) sigVerdict(msg store.Message) (string, theme.RGB, bool) {
 	if like, lp, ok := m.lookalike(msg.Sender); !pinned && ok && !(msg.Sig == store.SigValid && bytes.Equal(lp.Key[:], msg.SigKey)) {
 		return "⚠ looks like " + like, th.Red, true
 	}
+	if len(msg.Author) == 4 && pinned && !bytes.HasPrefix(p.Key[:], msg.Author) {
+		return "⚠ not " + msg.Sender + "'s key", th.Red, true
+	}
 	switch msg.Sig {
 	case store.SigValid:
 		switch {
 		case !pinned:
-			if owner := m.keyOwner(msg.SigKey); owner != "" && untrusted.Name(owner) != untrusted.Name(msg.Sender) {
+			if owner := m.keyOwner(msg.SigKey); owner != "" && m.names().canonical(owner) != m.names().canonical(msg.Sender) {
 				return "⚠ signed with " + owner + "'s key", th.Red, true
 			}
 			if other := m.namesake(msg.Sender, msg.SigKey); other != "" {
@@ -432,21 +568,28 @@ func (m *Model) signatureSummary(dec packets.Decoded) string {
 	return fmt.Sprintf("%s · signature for %s: %s · %s", dec.Channel, msg.Sender, msg.Text, verdict)
 }
 
+// roomAuthor describes who the room server says wrote a post: the 4 key bytes it names them by, which don't
+// prove anything, and a warning when more than one known key starts with them.
+func (m *Model) roomAuthor(msg store.Message) string {
+	th := m.th
+	out := th.Fg(th.Dim, false).Render(" · room post")
+	if len(msg.Author) != 4 {
+		return out
+	}
+	hex := radio.KeyHex(msg.Author)
+	out += th.Fg(th.Dim, false).Render(" · key " + hex)
+	if n := m.names().shared[[4]byte(msg.Author)]; n > 1 {
+		out += th.Fg(th.Dim, false).Render(" · ") + th.Fg(th.Red, true).Render(fmt.Sprintf("⚠ %d keys start %s", n, hex))
+	}
+	return out
+}
+
 // keyOwner is the name of the contact or heard node with a key, if any.
 func (m *Model) keyOwner(key []byte) string {
-	if m.chat != nil {
-		for _, c := range m.chat.Contacts() {
-			if bytes.Equal(c.Key[:], key) {
-				return c.Name
-			}
-		}
+	if len(key) != 32 {
+		return ""
 	}
-	for _, h := range m.contacts.heard {
-		if bytes.Equal(h.c.Key[:], key) {
-			return h.c.Name
-		}
-	}
-	return ""
+	return m.names().owner[[32]byte(key)]
 }
 
 // pinPicked pins the key a picked message was signed with to its sender's name. Replacing a pin is a
@@ -467,7 +610,7 @@ func (m *Model) pinPicked(msg store.Message) {
 			m.pin(msg.Sender, key)
 			return nil
 		})
-	case m.keyOwner(msg.SigKey) != "" && untrusted.Name(m.keyOwner(msg.SigKey)) != untrusted.Name(msg.Sender):
+	case m.keyOwner(msg.SigKey) != "" && m.names().canonical(m.keyOwner(msg.SigKey)) != m.names().canonical(msg.Sender):
 		owner := m.keyOwner(msg.SigKey)
 		m.ask("that key is "+owner+"'s: pin it to "+msg.Sender+" anyway, letting them post as "+msg.Sender+"?", "pin", func() tea.Cmd {
 			m.pin(msg.Sender, key)

@@ -173,10 +173,10 @@ func TestSendingSigned(t *testing.T) {
 	h.m.opt.Config = cfg
 	h.openConvo("#bristol")
 	h.keys("S")
-	if !h.m.signedChannel("#bristol") || !strings.Contains(h.screen(), "✍ signing your messages") {
+	if !h.m.signedChannel(store.ChannelConvo(1)) || !strings.Contains(h.screen(), "✍ signing your messages") {
 		t.Fatalf("signing on:\n%s", h.screen())
 	}
-	if back, _ := config.Load(cfg.Path()); len(back.Messages.SignChannels) != 1 {
+	if back, _ := config.Load(cfg.Path()); len(back.Messages.SignIDs) != 1 {
 		t.Error("saved")
 	}
 	h.key(tea.KeyEnter)
@@ -201,7 +201,7 @@ func TestSendingSigned(t *testing.T) {
 	// Signing off; the channel's messages go unsigned again.
 	h.key(tea.KeyEscape)
 	h.keys("S")
-	if h.m.signedChannel("#bristol") {
+	if h.m.signedChannel(store.ChannelConvo(1)) {
 		t.Error("off")
 	}
 	// Signing isn't for direct messages, and old firmware can't.
@@ -220,6 +220,7 @@ func TestSendingSigned(t *testing.T) {
 		t.Error("device row")
 	}
 	cfg.Messages.SignChannels = []string{"#bristol"}
+	h.m.moveSigning()
 	h.key(tea.KeyEnter)
 	h.keys("plain")
 	h.key(tea.KeyEnter)
@@ -267,6 +268,7 @@ func TestSignatureFailsAfterSending(t *testing.T) {
 	cfg, _ := config.Load(t.TempDir() + "/config.toml")
 	cfg.Messages.SignChannels = []string{"#bristol"}
 	h.m.opt.Config = cfg
+	h.m.moveSigning()
 	h.m.radio = failingSigner{h.s}
 	h.openConvo("#bristol")
 	h.key(tea.KeyEnter)

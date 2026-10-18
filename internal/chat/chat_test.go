@@ -378,9 +378,12 @@ func TestRoomPostsNameTheirAuthor(t *testing.T) {
 		if m.Convo != store.ContactConvo(room.Key) || m.Sender != c.want {
 			t.Errorf("author %X → %+v", c.author, m)
 		}
+		if want := c.author[:]; c.author == ([4]byte{}) && m.Author != nil || c.author != ([4]byte{}) && string(m.Author) != string(want) {
+			t.Errorf("author %X kept as %X", c.author, m.Author)
+		}
 	}
 	m, _ := s.Incoming(radio.Incoming{At: t0, From: alice.Prefix(), Author: [4]byte{0xC0}, Text: "dm"})
-	if m.Sender != "Alice" {
+	if m.Sender != "Alice" || m.Author != nil {
 		t.Error("only room posts carry an author")
 	}
 }

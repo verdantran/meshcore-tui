@@ -49,6 +49,8 @@ type chatsModel struct {
 	sigs     []pendingSig         // signatures waiting for their message
 	signFlip bool                 // ctrl+s: sign, or don't, against the channel's setting, for this message
 	pins     map[string]store.Pin // keys names are trusted to sign with; nil until read
+	pinsRev  int
+	names    nameIndex
 
 	signedMsgs map[string]store.Message // the message each signature heard was for, by channel and timestamp
 	queued     map[int64]time.Time      // channel messages the radio held while the app was away, while their signature may come
@@ -181,7 +183,10 @@ func (m *Model) chatEvent(e radio.Event) tea.Cmd {
 		if err := m.chat.Ready(e); err != nil {
 			m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 		}
+		m.moveSigning()
 		m.refreshChats()
+	case radio.Lost:
+		m.chat.Lost()
 	case radio.Incoming:
 		if e.CLI {
 			return nil // console replies belong to the admin screen
@@ -301,7 +306,7 @@ func (m *Model) retry(msg store.Message) tea.Cmd {
 	m.chats.reading, m.chats.scroll = false, 0
 	m.refreshChats()
 	m.addLog(m.now, "RETRYING  "+cur.Title, radio.ToneInfo)
-	if cur.Kind == chat.KindChannel && m.signedChannel(cur.Title) && m.canSign() == nil {
+	if cur.Kind == chat.KindChannel && m.signedChannel(cur.Convo) && m.canSign() == nil {
 		return m.signedSendCmd(send, cur.Title)
 	}
 	return m.sendCmd(send)
@@ -674,7 +679,7 @@ func (m *Model) convoPane(w, rows int) []string {
 	switch cur.Kind {
 	case chat.KindChannel:
 		route = "channel · flood"
-		if m.signedChannel(cur.Title) {
+		if m.signedChannel(cur.Convo) {
 			route += " · ✍ signing your messages (S)"
 		}
 	default:
@@ -867,7 +872,7 @@ func (m *Model) messageMeta(msg store.Message) string {
 			meta += th.Fg(th.Dim, false).Render(" · ") + th.Fg(th.SNR(float64(msg.SNR)), false).Render(fmt.Sprintf("SNR %+.2f", msg.SNR))
 		}
 		if msg.Signed {
-			meta += th.Fg(th.Violet, true).Render(" · signed")
+			meta += m.roomAuthor(msg)
 		}
 		if b := m.sigBadge(msg); b != "" {
 			meta += th.Fg(th.Dim, false).Render(" · ") + b

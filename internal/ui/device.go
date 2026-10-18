@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/store"
 )
 
 // Preset is a regional radio setting. Check new ones against the official MeshCore app before adding them.
@@ -664,11 +665,19 @@ func (m *Model) signingRow() devRow {
 	}
 	return devRow{id: "signing", group: "Security", label: "Message signing", value: value, kind: rowAction, hint: hint,
 		press: func(m *Model) tea.Cmd {
-			if m.opt.Config == nil || len(m.opt.Config.Messages.SignChannels) == 0 {
+			var signed []string
+			if m.chat != nil {
+				for _, ch := range m.chat.Channels() {
+					if m.signedChannel(store.ChannelConvo(ch.Idx)) {
+						signed = append(signed, ch.Name)
+					}
+				}
+			}
+			if len(signed) == 0 {
 				m.addLog(m.now, "SIGNING  no channels sign your messages yet: open one in Chats and press S", radio.ToneInfo)
 				return nil
 			}
-			m.addLog(m.now, "SIGNING  your messages are signed in "+strings.Join(m.opt.Config.Messages.SignChannels, ", "), radio.ToneInfo)
+			m.addLog(m.now, "SIGNING  your messages are signed in "+strings.Join(signed, ", "), radio.ToneInfo)
 			return nil
 		}}
 }

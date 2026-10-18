@@ -61,6 +61,7 @@ type Message struct {
 	PathHash int    // bytes per repeater in Path
 	Sig      Sig    // a channel message's signature, when one came with it
 	SigKey   []byte // the signer's public key; for a key we don't know, just the 8 bytes the signature named
+	Author   []byte // a room post's writer, as the room server names them: the first 4 bytes of their key
 }
 
 // Sig is what a channel message's signature showed. Whether a valid one is the sender's pinned key is
@@ -97,8 +98,11 @@ CREATE TABLE IF NOT EXISTS messages (
 	hops INTEGER NOT NULL, snr REAL NOT NULL, has_snr INTEGER NOT NULL, signed INTEGER NOT NULL,
 	state INTEGER NOT NULL, ack INTEGER NOT NULL, attempts INTEGER NOT NULL, rtt_ms INTEGER NOT NULL, flood INTEGER NOT NULL,
 	repeats INTEGER NOT NULL DEFAULT 0, path BLOB, path_hash INTEGER NOT NULL DEFAULT 0,
-	sig INTEGER NOT NULL DEFAULT 0, sig_key BLOB);
+	sig INTEGER NOT NULL DEFAULT 0, sig_key BLOB, author BLOB);
 CREATE INDEX IF NOT EXISTS messages_convo ON messages (device, convo, id);
+CREATE INDEX IF NOT EXISTS messages_sent ON messages (device, convo, sent_at);
+CREATE TABLE IF NOT EXISTS seen (
+	device TEXT PRIMARY KEY, at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS reads (
 	device TEXT NOT NULL, convo TEXT NOT NULL, last_read INTEGER NOT NULL,
 	PRIMARY KEY (device, convo));
@@ -166,6 +170,7 @@ func migrate(db *sql.DB) error {
 		{"path_hash", "INTEGER NOT NULL DEFAULT 0"},
 		{"sig", "INTEGER NOT NULL DEFAULT 0"},
 		{"sig_key", "BLOB"},
+		{"author", "BLOB"},
 	} {
 		var n int
 		if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name = ?`, col.name).Scan(&n); err != nil {
@@ -280,10 +285,10 @@ func (s *Store) Channels(device string) ([]radio.Channel, error) {
 }
 
 func (s *Store) AddMessage(device string, m *Message) error {
-	r, err := s.db.Exec(`INSERT INTO messages (device, convo, out, sender, text, sent_at, recv_at, hops, snr, has_snr, signed, state, ack, attempts, rtt_ms, flood, path, path_hash)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	r, err := s.db.Exec(`INSERT INTO messages (device, convo, out, sender, text, sent_at, recv_at, hops, snr, has_snr, signed, state, ack, attempts, rtt_ms, flood, path, path_hash, author)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		device, string(m.Convo), b2i(m.Out), m.Sender, m.Text, m.SentAt.UnixMilli(), m.RecvAt.UnixMilli(), m.Hops, m.SNR,
-		b2i(m.HasSNR), b2i(m.Signed), int(m.State), m.Ack, m.Attempts, m.RTT.Milliseconds(), b2i(m.Flood), m.Path, m.PathHash)
+		b2i(m.HasSNR), b2i(m.Signed), int(m.State), m.Ack, m.Attempts, m.RTT.Milliseconds(), b2i(m.Flood), m.Path, m.PathHash, m.Author)
 	if err != nil {
 		return err
 	}
@@ -316,10 +321,41 @@ func (s *Store) AwaitingSig(device string, c Convo, sentAt time.Time) ([]Message
 		device, string(c), int(SigValid), sentAt.UnixMilli())
 }
 
+// SignedBefore reports whether another message in a conversation, with the same time and text, already
+// carries a valid signature by a key: a copy of it is a replay, however long ago the first came.
+func (s *Store) SignedBefore(device string, c Convo, sentAt time.Time, text string, key []byte, not int64) (bool, error) {
+	msgs, err := s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? AND convo = ? AND sent_at = ? AND sig = ? AND sig_key = ? AND id != ?`,
+		device, string(c), sentAt.UnixMilli(), int(SigValid), key, not)
+	for _, m := range msgs {
+		if m.Text == text {
+			return true, err
+		}
+	}
+	return false, err
+}
+
+// Seen records that the app was connected to a radio at a time.
+func (s *Store) Seen(device string, at time.Time) error {
+	_, err := s.db.Exec(`INSERT OR REPLACE INTO seen VALUES (?, ?)`, device, at.UnixMilli())
+	return err
+}
+
+// LastSeen is when the app was last connected to a radio, as far as the store knows: the later of when it
+// last said so and the last message it kept. Zero if never.
+func (s *Store) LastSeen(device string) (time.Time, error) {
+	var at sql.NullInt64
+	err := s.db.QueryRow(`SELECT MAX(at) FROM (SELECT at FROM seen WHERE device = ? UNION ALL SELECT MAX(recv_at) FROM messages WHERE device = ?)`, device, device).Scan(&at)
+	if err != nil || !at.Valid {
+		return time.Time{}, err
+	}
+	return time.UnixMilli(at.Int64), nil
+}
+
 // Pin is the key a display name is trusted to sign with.
 type Pin struct {
-	Key [32]byte
-	At  time.Time
+	Key   [32]byte
+	At    time.Time
+	Clash bool // another pin kept under a name that reads the same had a different key; this one is newer
 }
 
 func (s *Store) Pins() (map[string]Pin, error) {
@@ -339,7 +375,15 @@ func (s *Store) Pins() (map[string]Pin, error) {
 		var p Pin
 		copy(p.Key[:], key)
 		p.At = time.UnixMilli(at)
-		out[untrusted.Name(name)] = p
+		name = untrusted.Name(name)
+		if o, ok := out[name]; ok {
+			clash := o.Clash || o.Key != p.Key
+			if o.At.After(p.At) {
+				p = o
+			}
+			p.Clash = clash
+		}
+		out[name] = p
 	}
 	return out, rows.Err()
 }
@@ -414,7 +458,7 @@ func (s *Store) AddRepeat(id int64) (int, error) {
 	return n, err
 }
 
-const messageCols = `id, convo, out, sender, text, sent_at, recv_at, hops, snr, has_snr, signed, state, ack, attempts, rtt_ms, flood, repeats, path, path_hash, sig, sig_key`
+const messageCols = `id, convo, out, sender, text, sent_at, recv_at, hops, snr, has_snr, signed, state, ack, attempts, rtt_ms, flood, repeats, path, path_hash, sig, sig_key, author`
 
 // scanMessage reads messageCols, plus any extra columns that follow them.
 func scanMessage(sc interface{ Scan(...any) error }, extra ...any) (Message, error) {
@@ -422,7 +466,7 @@ func scanMessage(sc interface{ Scan(...any) error }, extra ...any) (Message, err
 	var convo string
 	var out, hasSNR, signed, state, flood int
 	var sent, recv, rtt int64
-	dest := []any{&m.ID, &convo, &out, &m.Sender, &m.Text, &sent, &recv, &m.Hops, &m.SNR, &hasSNR, &signed, &state, &m.Ack, &m.Attempts, &rtt, &flood, &m.Repeats, &m.Path, &m.PathHash, &m.Sig, &m.SigKey}
+	dest := []any{&m.ID, &convo, &out, &m.Sender, &m.Text, &sent, &recv, &m.Hops, &m.SNR, &hasSNR, &signed, &state, &m.Ack, &m.Attempts, &rtt, &flood, &m.Repeats, &m.Path, &m.PathHash, &m.Sig, &m.SigKey, &m.Author}
 	err := sc.Scan(append(dest, extra...)...)
 	m.Sender, m.Text = untrusted.Line(m.Sender), untrusted.Text(m.Text)
 	m.Convo, m.Out, m.HasSNR, m.Signed, m.State, m.Flood = Convo(convo), out == 1, hasSNR == 1, signed == 1, State(state), flood == 1

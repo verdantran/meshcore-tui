@@ -93,6 +93,7 @@ func (m *Model) removeChannel(ch radio.Channel) tea.Cmd {
 	if err := m.chat.ForgetChannel(ch.Idx); err != nil {
 		m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 	}
+	m.forgetSigs(ch.Idx)
 	return m.writeChannel(radio.Channel{Idx: ch.Idx}, "LEFT  "+ch.Name, "", false)
 }
 

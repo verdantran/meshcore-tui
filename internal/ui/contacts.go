@@ -73,6 +73,7 @@ type contactsModel struct {
 	heardView  bool
 	heard      []heardNode
 	heardIdx   map[[32]byte]int // where each key is in heard
+	heardRev   int              // counts changes to heard nodes' names and keys
 	heardSel   int
 	full       bool
 
@@ -299,6 +300,9 @@ func (m *Model) contactsEvent(e radio.Event) tea.Cmd {
 	switch e := e.(type) {
 	case radio.Heard:
 		if i, ok := c.heardIdx[e.Contact.Key]; ok {
+			if c.heard[i].c.Name != e.Contact.Name {
+				c.heardRev++
+			}
 			c.heard[i] = heardNode{e.Contact, m.now}
 			c.arrived[e.Contact.Key] = entrance{at: m.now}
 			return nil
@@ -308,6 +312,7 @@ func (m *Model) contactsEvent(e radio.Event) tea.Cmd {
 		}
 		c.heardIdx[e.Contact.Key] = len(c.heard)
 		c.heard = append(c.heard, heardNode{e.Contact, m.now})
+		c.heardRev++
 		c.arrived[e.Contact.Key] = entrance{at: m.now, slide: true}
 		m.pruneArrived()
 	case radio.ContactRemoved:
@@ -631,6 +636,7 @@ func (m *Model) heardEvictee() int {
 func (c *contactsModel) unhear(i int) {
 	delete(c.heardIdx, c.heard[i].c.Key)
 	c.heard = slices.Delete(c.heard, i, i+1)
+	c.heardRev++
 	for k := i; k < len(c.heard); k++ {
 		c.heardIdx[c.heard[k].c.Key] = k
 	}

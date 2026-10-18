@@ -389,6 +389,69 @@ func TestSignaturesAndPins(t *testing.T) {
 	}
 }
 
+func TestReplaysAndPinClashes(t *testing.T) {
+	s, _ := Open(":memory:")
+	defer s.Close()
+	at := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	ch, key := ChannelConvo(1), [32]byte{0xAA, 1}
+	first := Message{Convo: ch, Sender: "Zed", Text: "meet at the hill", SentAt: at, RecvAt: at}
+	s.AddMessage(dev, &first)
+	copied := first
+	s.AddMessage(dev, &copied)
+	if again, err := s.SignedBefore(dev, ch, at, first.Text, key[:], copied.ID); again || err != nil {
+		t.Error("nothing is signed yet")
+	}
+	s.SetSig(first.ID, SigValid, key[:])
+	if again, _ := s.SignedBefore(dev, ch, at, first.Text, key[:], copied.ID); !again {
+		t.Error("the copy is a replay")
+	}
+	if again, _ := s.SignedBefore(dev, ch, at, first.Text, key[:], first.ID); again {
+		t.Error("a message isn't a replay of itself")
+	}
+	for _, c := range []struct {
+		convo Convo
+		at    time.Time
+		text  string
+		key   []byte
+	}{{ChannelConvo(2), at, first.Text, key[:]}, {ch, at.Add(time.Second), first.Text, key[:]}, {ch, at, "other", key[:]}, {ch, at, first.Text, []byte{1}}} {
+		if again, _ := s.SignedBefore(dev, c.convo, c.at, c.text, c.key, copied.ID); again {
+			t.Errorf("not the same message: %+v", c)
+		}
+	}
+
+	// When the app was last connected: what it said, or the latest message kept.
+	if last, _ := s.LastSeen("other"); !last.IsZero() {
+		t.Error("never")
+	}
+	if last, _ := s.LastSeen(dev); !last.Equal(at) {
+		t.Errorf("from messages: %v", last)
+	}
+	s.Seen(dev, at.Add(time.Hour))
+	if last, _ := s.LastSeen(dev); !last.Equal(at.Add(time.Hour)) {
+		t.Errorf("seen: %v", last)
+	}
+
+	// A room post keeps who the room says wrote it.
+	post := Message{Convo: ContactConvo([32]byte{7}), Sender: "Alice", Text: "post", SentAt: at, RecvAt: at, Signed: true, Author: []byte{1, 2, 3, 4}}
+	s.AddMessage(dev, &post)
+	if msgs, _ := s.Messages(dev, post.Convo, 1); len(msgs) != 1 || string(msgs[0].Author) != "\x01\x02\x03\x04" {
+		t.Errorf("author = %+v", msgs)
+	}
+
+	// Two old pins that now read the same: the newer is kept, and the clash is shown.
+	s.db.Exec(`INSERT INTO pins VALUES (?, ?, ?)`, "Zed ", key[:], at.UnixMilli())
+	s.db.Exec(`INSERT INTO pins VALUES (?, ?, ?)`, "Zed​", []byte{2}, at.Add(time.Hour).UnixMilli())
+	s.db.Exec(`INSERT INTO pins VALUES (?, ?, ?)`, "Bob", key[:], at.UnixMilli())
+	s.db.Exec(`INSERT INTO pins VALUES (?, ?, ?)`, "Bob ", key[:], at.Add(time.Hour).UnixMilli())
+	pins, _ := s.Pins()
+	if p := pins["Zed"]; len(pins) != 2 || p.Key != [32]byte{2} || !p.Clash {
+		t.Errorf("clash = %+v", pins)
+	}
+	if p := pins["Bob"]; p.Clash || !p.At.Equal(at.Add(time.Hour)) {
+		t.Errorf("same key = %+v", p)
+	}
+}
+
 func TestHistoryIsPrivate(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "meshcore-tui")
 	os.MkdirAll(dir, 0o755)

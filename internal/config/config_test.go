@@ -197,3 +197,36 @@ func TestLoadDropsImpossibleLocations(t *testing.T) {
 		t.Errorf("locations = %v", c.Locations)
 	}
 }
+
+// Signing goes by a channel's secret: a later channel under the same name doesn't take it on.
+func TestSigningByChannelSecret(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	os.WriteFile(path, []byte("[messages]\nsign_channels = [\"Ops\", \"Gone\"]\n"), 0o600)
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ops, other := [16]byte{1, 2, 3}, [16]byte{9}
+	c.MoveSigning(map[string][16]byte{"Ops": ops, "Public": other})
+	if !c.Signs(ops) || c.Signs(other) || len(c.Messages.SignIDs) != 1 || c.Messages.SignChannels != nil {
+		t.Fatalf("moved = %+v", c.Messages)
+	}
+	if id := ChannelID(ops); len(id) != 16 || strings.Contains(id, "010203") {
+		t.Errorf("id %q", id)
+	}
+	c.Save()
+	data, _ := os.ReadFile(path)
+	if strings.Contains(string(data), "Ops") || strings.Contains(string(data), "sign_channels =") {
+		t.Errorf("saved:\n%s", data)
+	}
+	back, _ := Load(path)
+	if !back.Signs(ops) {
+		t.Error("read back")
+	}
+	back.SetSigning(ops, false)
+	back.SetSigning(other, true)
+	back.SetSigning(other, true)
+	if back.Signs(ops) || !back.Signs(other) || len(back.Messages.SignIDs) != 1 {
+		t.Errorf("set = %v", back.Messages.SignIDs)
+	}
+}

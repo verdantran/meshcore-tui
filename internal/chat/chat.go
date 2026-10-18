@@ -72,6 +72,11 @@ type Service struct {
 	waiting  map[int64]*outgoing
 	byAck    map[uint32]int64
 	echoes   []echoWatch
+	rev      int // counts changes to contacts, for whatever is worked out from them
+
+	lastRun time.Time // when the app was last connected to this radio, before this connection
+	live    bool      // connected, so the time is worth keeping
+	seenAt  time.Time
 }
 
 // echoWatch is a channel message we sent, listened for as repeaters pass it on.
@@ -102,6 +107,12 @@ func (s *Service) Ready(r radio.Ready) error {
 	s.device = radio.KeyHex(r.Self.PubKey[:])
 	s.self = r.Self.Name
 	s.contacts, s.channels = r.ContactList, r.ChannelList
+	s.rev++
+	last, err := s.store.LastSeen(s.device)
+	if err != nil {
+		return err
+	}
+	s.lastRun, s.live, s.seenAt = last, true, time.Time{}
 	if err := s.store.SaveContacts(s.device, r.ContactList); err != nil {
 		return err
 	}
@@ -120,6 +131,24 @@ func (s *Service) Ready(r radio.Ready) error {
 	}
 	return nil
 }
+
+// LastRun is when the app was last connected to this radio before now; zero if it never was.
+func (s *Service) LastRun() time.Time { return s.lastRun }
+
+// Seen keeps, about once a minute, that the app is connected to the radio at a time.
+func (s *Service) Seen(now time.Time) error {
+	if !s.live || now.Sub(s.seenAt) < time.Minute {
+		return nil
+	}
+	s.seenAt = now
+	return s.store.Seen(s.device, now)
+}
+
+// Lost stops keeping the time once the link has gone: what the radio holds meanwhile is still to come.
+func (s *Service) Lost() { s.live = false }
+
+// Rev changes whenever the contacts do.
+func (s *Service) Rev() int { return s.rev }
 
 func (s *Service) contactByPrefix(p [6]byte) (radio.Contact, bool) {
 	for _, c := range s.contacts {
@@ -180,6 +209,11 @@ func (s *Service) AwaitingSig(idx int, sentAt time.Time) ([]store.Message, error
 	return s.store.AwaitingSig(s.device, store.ChannelConvo(idx), sentAt)
 }
 
+// SignedBefore reports whether another message like this one already has a valid signature by a key.
+func (s *Service) SignedBefore(m store.Message, key []byte) (bool, error) {
+	return s.store.SignedBefore(s.device, m.Convo, m.SentAt, m.Text, key, m.ID)
+}
+
 func (s *Service) SetSig(id int64, sig store.Sig, key []byte) error {
 	return s.store.SetSig(id, sig, key)
 }
@@ -204,7 +238,7 @@ func (s *Service) Incoming(in radio.Incoming) (store.Message, error) {
 	} else if c, ok := s.contactByPrefix(in.From); ok {
 		m.Convo, m.Sender = store.ContactConvo(c.Key), c.Name
 		if c.Type == radio.TypeRoom && in.Author != ([4]byte{}) {
-			m.Sender = s.author(in.Author)
+			m.Sender, m.Author = s.author(in.Author), in.Author[:]
 		}
 	} else {
 		m.Convo, m.Sender = store.UnknownConvo(in.From), radio.KeyHex(in.From[:])
@@ -216,10 +250,12 @@ func (s *Service) ContactUpdated(c radio.Contact) error {
 	for i, o := range s.contacts {
 		if o.Key == c.Key {
 			s.contacts[i] = c
+			s.rev++
 			return s.store.UpsertContact(s.device, c)
 		}
 	}
 	s.contacts = append(s.contacts, c)
+	s.rev++
 	return s.store.UpsertContact(s.device, c)
 }
 
@@ -567,6 +603,7 @@ func (s *Service) Contacts() []radio.Contact { return append([]radio.Contact(nil
 // ReplaceContacts takes a fresh copy of the radio's table, such as after an import or a removal.
 func (s *Service) ReplaceContacts(cs []radio.Contact) error {
 	s.contacts = cs
+	s.rev++
 	return s.store.SaveContacts(s.device, cs)
 }
 
@@ -575,6 +612,7 @@ func (s *Service) RemoveContact(key [32]byte) error {
 	for i, c := range s.contacts {
 		if c.Key == key {
 			s.contacts = append(s.contacts[:i], s.contacts[i+1:]...)
+			s.rev++
 			break
 		}
 	}

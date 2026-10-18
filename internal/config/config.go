@@ -3,6 +3,8 @@ package config
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io/fs"
 	"math"
@@ -43,7 +45,8 @@ type Config struct {
 	Messages struct {
 		DMRetries     int      `toml:"dm_retries"`
 		FloodFallback bool     `toml:"flood_fallback"`
-		SignChannels  []string `toml:"sign_channels"` // channels whose messages you send are signed (SIGNING.md)
+		SignIDs       []string `toml:"sign_channel_ids"`        // channels whose messages you send are signed (SIGNING.md), by ChannelID
+		SignChannels  []string `toml:"sign_channels,omitempty"` // the same by name, from before; moved to SignIDs once the radio's channels are known
 	} `toml:"messages"`
 	Notifications struct {
 		Events  []string `toml:"events"` // dm, mention
@@ -169,6 +172,37 @@ func (c *Config) SetWatch(key string, on bool) {
 	if on {
 		c.Admin.Watch = append(c.Admin.Watch, key)
 	}
+}
+
+// ChannelID names a channel by its secret, without giving the secret away: a name or slot can be reused by
+// another channel.
+func ChannelID(secret [16]byte) string {
+	h := sha256.Sum256(append([]byte("meshcore-tui channel\x00"), secret[:]...))
+	return hex.EncodeToString(h[:8])
+}
+
+// Signs reports whether your messages on the channel with this secret are signed.
+func (c *Config) Signs(secret [16]byte) bool {
+	return slices.Contains(c.Messages.SignIDs, ChannelID(secret))
+}
+
+func (c *Config) SetSigning(secret [16]byte, on bool) {
+	id := ChannelID(secret)
+	c.Messages.SignIDs = slices.DeleteFunc(c.Messages.SignIDs, func(s string) bool { return s == id })
+	if on {
+		c.Messages.SignIDs = append(c.Messages.SignIDs, id)
+	}
+}
+
+// MoveSigning turns the channel names signing was kept by into IDs, for the channels named in secrets, and
+// drops the rest.
+func (c *Config) MoveSigning(secrets map[string][16]byte) {
+	for _, name := range c.Messages.SignChannels {
+		if s, ok := secrets[name]; ok && !c.Signs(s) {
+			c.SetSigning(s, true)
+		}
+	}
+	c.Messages.SignChannels = nil
 }
 
 // SetBattery records a node's battery chemistry; li-ion, the default, isn't stored.
