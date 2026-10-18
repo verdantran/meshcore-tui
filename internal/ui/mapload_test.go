@@ -59,8 +59,11 @@ func TestMapManyHeard(t *testing.T) {
 	if len(c.heard) != heardMax || len(c.heardIdx) != heardMax {
 		t.Fatalf("heard %d, indexed %d", len(c.heard), len(c.heardIdx))
 	}
-	if _, ok := c.heardIdx[[32]byte{0, 0, 0x55}]; ok {
-		t.Error("the least recently heard should have gone")
+	if _, ok := c.heardIdx[[32]byte{0, 0, 0x55}]; !ok {
+		t.Error("the first heard should stay")
+	}
+	if _, ok := c.heardIdx[[32]byte{byte(4999 % 256), byte(4999 >> 8), 0x55}]; !ok {
+		t.Error("the latest heard should be there")
 	}
 	for i, n := range c.heard {
 		if c.heardIdx[n.c.Key] != i {

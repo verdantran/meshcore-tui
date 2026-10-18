@@ -304,13 +304,7 @@ func (m *Model) contactsEvent(e radio.Event) tea.Cmd {
 			return nil
 		}
 		if len(c.heard) >= heardMax {
-			oldest := 0
-			for i, h := range c.heard {
-				if h.at.Before(c.heard[oldest].at) {
-					oldest = i
-				}
-			}
-			c.unhear(oldest)
+			c.unhear(m.heardEvictee())
 		}
 		c.heardIdx[e.Contact.Key] = len(c.heard)
 		c.heard = append(c.heard, heardNode{e.Contact, m.now})
@@ -597,8 +591,42 @@ func (m *Model) heardKey(s string) (tea.Cmd, bool) {
 	return nil, true
 }
 
-// heardMax is how many heard nodes are kept; the least recently heard goes first.
+// heardMax is how many heard nodes are kept.
 const heardMax = 1000
+
+// heardStale is how long a node may go unheard before it's the first to make room.
+const heardStale = 48 * time.Hour
+
+// heardEvictee picks the heard node to forget for a new one. Keys cost nothing to make, so a flood of them
+// mustn't push out the nodes the look-alike warnings know: a node gone quiet goes first, then the newest
+// arrival, and a node that has signed a message or holds a pinned key only when nothing else is left.
+func (m *Model) heardEvictee() int {
+	c := &m.contacts
+	kept := map[[32]byte]bool{}
+	for _, msg := range m.chats.signedMsgs {
+		if msg.Sig == store.SigValid && len(msg.SigKey) == 32 {
+			kept[[32]byte(msg.SigKey)] = true
+		}
+	}
+	for _, p := range m.pins() {
+		kept[p.Key] = true
+	}
+	stale := -1
+	for i, h := range c.heard {
+		if !kept[h.c.Key] && m.now.Sub(h.at) > heardStale && (stale < 0 || h.at.Before(c.heard[stale].at)) {
+			stale = i
+		}
+	}
+	if stale >= 0 {
+		return stale
+	}
+	for i := len(c.heard) - 1; i >= 0; i-- {
+		if !kept[c.heard[i].c.Key] {
+			return i
+		}
+	}
+	return len(c.heard) - 1
+}
 
 func (c *contactsModel) unhear(i int) {
 	delete(c.heardIdx, c.heard[i].c.Key)

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"testing"
@@ -419,5 +420,50 @@ func TestRemappedKeys(t *testing.T) {
 	h.keys("/w")
 	if h.m.contacts.filter.text != "w" {
 		t.Errorf("a text field takes the key as typed: %q", h.m.contacts.filter.text)
+	}
+}
+
+// TestHeardFloodKeepsNamesakes: a flood of made-up nodes can't push out the ones the look-alike warnings know.
+func TestHeardFloodKeepsNamesakes(t *testing.T) {
+	h := newHarness(t)
+	zed, yan, fake := newSigner("zed"), newSigner("yan"), newSigner("fake")
+	hear := func(key [32]byte, name string) {
+		h.clk.t = h.clk.t.Add(time.Millisecond)
+		h.m.now = h.clk.t
+		h.m.Update(eventMsg{radio.Heard{Contact: radio.Contact{Key: key, Name: name}}})
+	}
+	flood := func(from int) {
+		for i := range 1500 {
+			hear([32]byte{0xee, byte(from + i), byte((from + i) >> 8)}, fmt.Sprint("N", from+i))
+		}
+	}
+	hear(zed.pub, "Zed")
+	h.openConvo("#bristol")
+	flood(0)
+	hear(yan.pub, "Yan")
+	h.clk.t = h.clk.t.Truncate(time.Second).Add(time.Second)
+	ts := h.say(1, "Yan", "hello")
+	h.datagram(1, yan.datagram("#bristol", ts, "hello"))
+	flood(1500)
+	c := &h.m.contacts
+	if len(c.heard) != heardMax {
+		t.Fatalf("heard %d", len(c.heard))
+	}
+	for _, k := range [][32]byte{zed.pub, yan.pub} {
+		if _, ok := c.heardIdx[k]; !ok {
+			t.Errorf("%x was pushed out", k[:2])
+		}
+	}
+	hear(fake.pub, "Zed")
+	h.clk.t = h.clk.t.Truncate(time.Second).Add(time.Second)
+	ts = h.say(1, "Zed", "it's me")
+	h.datagram(1, fake.datagram("#bristol", ts, "it's me"))
+	if v := h.verdict(); v != "⚠ another Zed has a different key" {
+		t.Errorf("verdict: %q", v)
+	}
+	h.clk.t = h.clk.t.Add(heardStale + time.Hour)
+	hear(newSigner("new").pub, "New")
+	if _, ok := c.heardIdx[zed.pub]; ok {
+		t.Error("a node gone quiet for days makes room first")
 	}
 }
