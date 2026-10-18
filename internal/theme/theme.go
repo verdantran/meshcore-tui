@@ -1,4 +1,4 @@
-// Package theme holds the colour tokens and shared styles from SPEC.md §6.1.
+// Package theme holds the colour tokens and shared styles.
 package theme
 
 import (

@@ -163,7 +163,7 @@ func (d *Decoded) decodePayload(p *meshcore.Packet, at int, book Book) {
 			d.field(name, fmt.Sprintf("%d bytes", end-at-from), at+from, end, PartBody)
 		}
 	}
-	// Private traffic between other people only shows what a repeater needs; see SPEC §10.
+	// Private traffic between other people only shows what a repeater needs.
 	addressed := func(what string) {
 		if len(pl) < 4 {
 			d.Summary = what + " (truncated)"

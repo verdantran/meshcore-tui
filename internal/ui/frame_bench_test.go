@@ -22,7 +22,7 @@ func busyHarness(tb testing.TB) *harness {
 	return h
 }
 
-// frameBudget is SPEC §6.2's: a frame renders in under 4 ms at 200×60.
+// frameBudget: a frame renders in under 4 ms at 200×60.
 const frameBudget = 4 * time.Millisecond
 
 // frameCases are the frames worth timing: each screen as it animates, and the map while it moves,

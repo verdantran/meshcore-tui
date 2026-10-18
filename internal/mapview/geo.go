@@ -1,5 +1,5 @@
 // Package mapview draws the Map screen: a world base map, optional street detail for the mesh's area,
-// nodes, routes and live traffic, as braille text. See SPEC.md §9.
+// nodes, routes and live traffic, as braille text.
 package mapview
 
 import (

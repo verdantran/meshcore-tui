@@ -263,7 +263,7 @@ func (m *Model) shutdown() {
 	}
 }
 
-// SlowTerminalMsg says writing frames to the terminal is taking longer than drawing them should (SPEC §6.2).
+// SlowTerminalMsg says writing frames to the terminal is taking longer than drawing them should.
 type SlowTerminalMsg struct{}
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

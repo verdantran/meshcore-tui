@@ -1,4 +1,4 @@
-// Package motion implements the effects in SPEC.md §6.2 as pure functions of time,
+// Package motion implements the app's effects as pure functions of time,
 // so every frame is deterministic and testable with a fake clock.
 package motion
 

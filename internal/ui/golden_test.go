@@ -17,7 +17,7 @@ import (
 	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
-// The animations in SPEC §6.2, each recorded at its start, midpoint and end under the fake clock.
+// The app's animations, each recorded at its start, midpoint and end under the fake clock.
 // Effects that draw on their own seed it from the time or the message, so every run draws the same.
 
 // frames renders the screen at each moment after t0.

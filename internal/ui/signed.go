@@ -19,7 +19,7 @@ import (
 	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
-// Signed channel messages (SIGNING.md, and SPEC §7): a signed message is sent as usual, then a datagram on
+// Signed channel messages (meshcore-companion's SIGNING.md): a signed message is sent as usual, then a datagram on
 // the same channel carries the radio's signature over it. They arrive separately and pair up by channel and
 // timestamp. Checking signatures costs nothing, so it always runs; signing your own is chosen per channel,
 // and per message with ctrl+s, since each signed message is two packets.

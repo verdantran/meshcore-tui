@@ -68,7 +68,7 @@ func newInspector() inspectorModel {
 
 // shown reports whether a packet belongs on the Packets screen: an advert, which is broadcast to
 // everyone, or a message or a message's signature on Public or a hashtag channel we've joined, which
-// anyone may read. Everything else stays off it; see SPEC §10.
+// anyone may read. Everything else stays off it.
 func (m *Model) shown(d packets.Decoded) bool {
 	if d.Err == nil && d.Type == "ADVERT" {
 		return true
