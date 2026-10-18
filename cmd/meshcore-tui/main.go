@@ -156,7 +156,7 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 	if oldConsole(goos, env) {
 		notes = append(notes, "CONSOLE  this looks like the old Windows console, which may not draw the map's braille, some symbols or the mouse. Windows Terminal, free from Microsoft, shows everything; --ascii draws in plain ASCII instead.")
 	}
-	opt := ui.Options{Keys: keys, ASCII: *asciiOnly || cfg.UI.ASCII, Notes: notes, Theme: th, Motion: level, Dial: dial, Ports: ports, Scan: scanBLE, Config: cfg, MotionChosen: chosen, Keychain: admin.SystemOr(&admin.FileKeychain{Path: filepath.Join(config.Dir(), "passwords.json")})}
+	opt := ui.Options{Keys: keys, ASCII: *asciiOnly || cfg.UI.ASCII, Notes: notes, Theme: th, Motion: level, Dial: dial, Ports: ports, Scan: scanBLE, Config: cfg, MotionChosen: chosen, Keychain: admin.SystemOr(passwordFile(*configPath))}
 	if d, ok := cfg.Device(cfg.Connection.AutoConnect); ok {
 		opt.Start = &ui.Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name, Mode: d.Mode}
 	}
@@ -214,6 +214,11 @@ func run(args []string, env func(string) string, stderr io.Writer) int {
 }
 
 var goos = runtime.GOOS
+
+// passwordFile is where node passwords go without a system keychain: beside the config in use.
+func passwordFile(configPath string) *admin.FileKeychain {
+	return &admin.FileKeychain{Path: filepath.Join(filepath.Dir(configPath), "passwords.json")}
+}
 
 // oldConsole reports the Windows console host, which sets none of the variables newer terminals do.
 func oldConsole(goos string, env func(string) string) bool {

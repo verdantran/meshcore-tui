@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -135,5 +136,40 @@ func TestConfigIsPrivate(t *testing.T) {
 	}
 	if st, _ := os.Stat(filepath.Dir(path)); st.Mode().Perm() != 0o700 {
 		t.Errorf("its folder is %v", st.Mode().Perm())
+	}
+}
+
+// Neither a stale temp file's permissions nor a symlink in its place carries the config anywhere.
+func TestConfigSaveIgnoresPlantedFiles(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no permission bits or plain symlinks")
+	}
+	path := filepath.Join(t.TempDir(), "config.toml")
+	c, _ := Load(path)
+	outside := filepath.Join(t.TempDir(), "outside")
+	os.WriteFile(path+".tmp", nil, 0o644)
+	os.Remove(path)
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(path + ".tmp")
+	if err := os.Symlink(outside, path+".tmp"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := os.Lstat(path); err != nil || !st.Mode().IsRegular() || st.Mode().Perm() != 0o600 {
+		t.Errorf("the config is %v %v", st.Mode(), err)
+	}
+	if _, err := os.Stat(outside); !os.IsNotExist(err) {
+		t.Error("the config went through the symlink")
+	}
+
+	open := t.TempDir()
+	os.Chmod(open, 0o777)
+	c, _ = Load(filepath.Join(open, "config.toml"))
+	if err := c.Save(); err == nil {
+		t.Error("saved into a folder anyone can write to")
 	}
 }

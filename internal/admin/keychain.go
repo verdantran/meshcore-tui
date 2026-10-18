@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"runtime"
 	"sync"
 
 	"github.com/zalando/go-keyring"
 
+	"github.com/verdantran/meshcore-tui/internal/privfile"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
@@ -76,14 +76,7 @@ func (k *FileKeychain) save(m map[string]string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(k.Path), 0o700); err != nil {
-		return err
-	}
-	tmp := k.Path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, k.Path)
+	return privfile.Write(k.Path, b)
 }
 
 func (k *FileKeychain) Get(node [32]byte) (string, bool) {

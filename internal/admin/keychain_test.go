@@ -43,6 +43,42 @@ func TestFileKeychainIsPrivateAndLasts(t *testing.T) {
 	}
 }
 
+// A stale 0644 temp file or a symlink planted in its place used to take the passwords with it.
+func TestFileKeychainIgnoresPlantedFiles(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no permission bits or plain symlinks")
+	}
+	path := filepath.Join(t.TempDir(), "passwords.json")
+	k := &FileKeychain{Path: path}
+	os.WriteFile(path+".tmp", nil, 0o644)
+	if err := k.Set([32]byte{0xA3}, "hunter2"); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o600 {
+		t.Errorf("after a stale temp file: %v", fi.Mode().Perm())
+	}
+	outside := filepath.Join(t.TempDir(), "outside")
+	os.Remove(path + ".tmp")
+	if err := os.Symlink(outside, path+".tmp"); err != nil {
+		t.Fatal(err)
+	}
+	if err := k.Set([32]byte{0x5F}, "swordfish"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(outside); !os.IsNotExist(err) {
+		t.Error("the passwords went through the symlink")
+	}
+	if fi, err := os.Lstat(path); err != nil || !fi.Mode().IsRegular() || fi.Mode().Perm() != 0o600 {
+		t.Errorf("passwords.json is %v %v", fi.Mode(), err)
+	}
+
+	open := t.TempDir()
+	os.Chmod(open, 0o777)
+	if err := (&FileKeychain{Path: filepath.Join(open, "passwords.json")}).Set([32]byte{0xA3}, "hunter2"); err == nil {
+		t.Error("saved into a folder anyone can write to")
+	}
+}
+
 type countingKeychain struct {
 	MemoryKeychain
 	gets int

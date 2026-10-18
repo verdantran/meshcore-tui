@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/verdantran/meshcore-tui/internal/privfile"
 )
 
 type Device struct {
@@ -134,15 +136,7 @@ func (c *Config) Save() error {
 	if err := toml.NewEncoder(&buf).Encode(c); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(c.path), 0o700); err != nil {
-		return err
-	}
-	tmp := c.path + ".tmp"
-	os.Remove(tmp) // WriteFile keeps an existing file's permissions
-	if err := os.WriteFile(tmp, buf.Bytes(), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, c.path)
+	return privfile.Write(c.path, buf.Bytes())
 }
 
 // Remember records a device after a successful connection, keeping the most recent first.

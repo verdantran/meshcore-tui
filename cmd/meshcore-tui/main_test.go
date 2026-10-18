@@ -10,6 +10,7 @@ import (
 
 	"go.bug.st/serial/enumerator"
 
+	"github.com/verdantran/meshcore-tui/internal/config"
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/repeaterserial"
@@ -204,6 +205,15 @@ func TestOpenStore(t *testing.T) {
 }
 
 func uiTarget(kind, addr string) ui.Target { return ui.Target{Kind: kind, Addr: addr} }
+
+func TestPasswordFileBesideConfig(t *testing.T) {
+	if got := passwordFile(filepath.Join("elsewhere", "config.toml")).Path; got != filepath.Join("elsewhere", "passwords.json") {
+		t.Errorf("--config elsewhere: %s", got)
+	}
+	if got := passwordFile(filepath.Join(config.Dir(), "config.toml")).Path; got != filepath.Join(config.Dir(), "passwords.json") {
+		t.Errorf("the default: %s", got)
+	}
+}
 
 func TestSetupKeys(t *testing.T) {
 	dir := t.TempDir()
