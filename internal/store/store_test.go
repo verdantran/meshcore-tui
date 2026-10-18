@@ -363,6 +363,26 @@ func TestSignaturesAndPins(t *testing.T) {
 	if pins, _ := s.Pins(); len(pins) != 0 {
 		t.Error("unpinned")
 	}
+
+	// Names are pinned as they read, and a pin from before that is still found and removed.
+	s.db.Exec(`INSERT INTO pins VALUES (?, ?, ?)`, "Zed ", key[:], at.UnixMilli())
+	if pins, _ := s.Pins(); pins["Zed"].Key != key {
+		t.Errorf("old pin = %+v", pins)
+	}
+	s.SetPin("Zed​", [32]byte{2}, at)
+	if pins, _ := s.Pins(); len(pins) != 1 || pins["Zed"].Key != [32]byte{2} {
+		t.Errorf("replaced = %+v", pins)
+	}
+	s.Unpin(" Zed")
+	if pins, _ := s.Pins(); len(pins) != 0 {
+		t.Errorf("unpinned = %+v", pins)
+	}
+
+	// A bad or unknown signature can still be replaced by a valid one.
+	s.SetSig(other.ID, SigBad, nil)
+	if got, _ := s.AwaitingSig(dev, ch, other.SentAt); len(got) != 1 || got[0].ID != other.ID {
+		t.Errorf("bad awaits = %+v", got)
+	}
 	s.Close()
 	if _, err := s.Pins(); err == nil {
 		t.Error("closed")

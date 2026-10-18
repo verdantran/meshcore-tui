@@ -14,6 +14,7 @@ require (
 	github.com/rivo/uniseg v0.4.7
 	github.com/zalando/go-keyring v0.2.8
 	go.bug.st/serial v1.8.0
+	golang.org/x/text v0.41.0
 	modernc.org/sqlite v1.60.1
 	rsc.io/qr v0.2.0
 	tinygo.org/x/bluetooth v0.16.0

@@ -90,11 +90,11 @@ func TestSignedMessages(t *testing.T) {
 	h.clk.t = h.clk.t.Add(time.Minute)
 	ts = uint32(h.clk.t.Unix())
 	h.datagram(idx, zed.datagram("#bristol", ts, "on my way"))
-	if len(h.m.chats.sigs) != 1 {
+	if len(h.m.chats.sigs) != 2 || h.m.chats.sigs[1].on != 0 {
 		t.Fatal("held")
 	}
 	h.say(idx, "Zed", "on my way")
-	if m := h.lastMessage(); m.Sig != store.SigValid || len(h.m.chats.sigs) != 0 {
+	if m := h.lastMessage(); m.Sig != store.SigValid || h.m.chats.sigs[1].on != m.ID {
 		t.Errorf("paired on arrival: %+v", m)
 	}
 

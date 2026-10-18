@@ -52,6 +52,7 @@ type chatsModel struct {
 	pins     map[string]store.Pin // keys names are trusted to sign with; nil until read
 
 	signedMsgs map[string]store.Message // the message each signature heard was for, by channel and timestamp
+	usedSigs   map[[64]byte]usedSig     // valid signatures lately, against replays
 
 	arrived map[int64]time.Time       // incoming messages, for the decode and the bar flash
 	acked   map[int64]time.Time       // for the ✓ pop
@@ -74,7 +75,7 @@ type chatsModel struct {
 
 func newChats() chatsModel {
 	return chatsModel{arrived: map[int64]time.Time{}, acked: map[int64]time.Time{}, failed: map[int64]time.Time{}, echoed: map[int64]time.Time{},
-		routed: map[int64]time.Time{}, signedMsgs: map[string]store.Message{}, popped: map[store.Convo]time.Time{}}
+		routed: map[int64]time.Time{}, signedMsgs: map[string]store.Message{}, usedSigs: map[[64]byte]usedSig{}, popped: map[store.Convo]time.Time{}}
 }
 
 type sendResultMsg struct {
@@ -776,10 +777,9 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 	if msg.Out {
 		nameCol = th.Magenta
 	}
-	name := th.Fg(nameCol, true).Render(msg.Sender)
 	meta := m.messageMeta(msg)
 	if picked {
-		if _, pinned := m.pins()[msg.Sender]; msg.Sig == store.SigValid && !msg.Out && !pinned {
+		if _, pinned := m.pinOf(msg.Sender); msg.Sig == store.SigValid && !msg.Out && !pinned {
 			meta = th.Fg(th.Cyan, true).Render("K") + th.Fg(th.Dim, false).Render(" pin key · ") + meta
 		}
 		meta = th.Fg(th.Cyan, true).Render("r") + th.Fg(th.Dim, false).Render(" reply · ") +
@@ -794,7 +794,8 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 	if at, ok := m.chats.failed[msg.ID]; ok && m.level.Allows(motion.Glitch) && motion.Running(at, glitchDur*3, now) {
 		text, marks = motion.GlitchText(text, msg.ID, int(now.Sub(at)/motion.FrameDur)), nil
 	}
-	headLine := bar + stamp + name
+	room := w - visibleWidth(bar+stamp) - visibleWidth(meta) - 1
+	headLine := bar + stamp + th.Fg(nameCol, true).Render(clip(msg.Sender, max(min(senderMax, room), 4)))
 	gap := w - visibleWidth(headLine) - visibleWidth(meta)
 	out := []string{headLine + strings.Repeat(" ", max(gap, 1)) + meta}
 	lines, lineMarks := wrapEmph(text, marks, max(w-8, 10), func(s string, w int) string { return ansi.Wrap(s, w, "") })

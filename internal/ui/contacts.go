@@ -479,7 +479,7 @@ func (m *Model) contactAction(s string, ct radio.Contact) (tea.Cmd, bool) {
 		m.showContactPath(ct)
 		return nil, true
 	case "K":
-		if p, ok := m.pins()[ct.Name]; ok && p.Key == ct.Key {
+		if p, ok := m.pinOf(ct.Name); ok && p.Key == ct.Key {
 			m.unpin(ct.Name)
 		} else {
 			m.pin(ct.Name, ct.Key)

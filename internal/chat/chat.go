@@ -14,6 +14,7 @@ import (
 
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 type Kind int
@@ -197,7 +198,7 @@ func (s *Service) Incoming(in radio.Incoming) (store.Message, error) {
 		m.Convo = store.ChannelConvo(in.ChannelIdx)
 		// Channel text arrives as "name: message"; the name is whatever the sender calls themselves.
 		if name, text, ok := strings.Cut(in.Text, ": "); ok {
-			m.Sender, m.Text = name, text
+			m.Sender, m.Text = untrusted.Name(name), text
 		}
 	} else if c, ok := s.contactByPrefix(in.From); ok {
 		m.Convo, m.Sender = store.ContactConvo(c.Key), c.Name

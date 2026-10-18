@@ -71,6 +71,7 @@ const (
 	SigValid       // verified with the key in SigKey
 	SigBad         // a signature came, but it doesn't match the message
 	SigUnknown     // signed by a key we've never heard an advert from, so it can't be checked
+	SigStale       // a valid signature, but on a message sent long before it arrived, or already used: a replay
 )
 
 type Summary struct {
@@ -307,11 +308,11 @@ func (s *Store) SetSig(id int64, sig Sig, key []byte) error {
 	return err
 }
 
-// AwaitingSig lists a channel conversation's received messages sent at a time that have no signature yet,
-// for pairing with a signature that's arrived: the two carry the same timestamp.
+// AwaitingSig lists a channel conversation's received messages sent at a time that have no valid signature
+// yet, for pairing with a signature that's arrived: the two carry the same timestamp.
 func (s *Store) AwaitingSig(device string, c Convo, sentAt time.Time) ([]Message, error) {
-	return s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? AND convo = ? AND out = 0 AND sig = 0 AND sent_at = ? ORDER BY id`,
-		device, string(c), sentAt.UnixMilli())
+	return s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? AND convo = ? AND out = 0 AND sig != ? AND sent_at = ? ORDER BY id`,
+		device, string(c), int(SigValid), sentAt.UnixMilli())
 }
 
 // Pin is the key a display name is trusted to sign with.
@@ -337,19 +338,48 @@ func (s *Store) Pins() (map[string]Pin, error) {
 		var p Pin
 		copy(p.Key[:], key)
 		p.At = time.UnixMilli(at)
-		out[untrusted.Text(name)] = p
+		out[untrusted.Name(name)] = p
 	}
 	return out, rows.Err()
 }
 
+// SetPin pins a name in its canonical form (untrusted.Name), replacing any pin that reads the same.
 func (s *Store) SetPin(name string, key [32]byte, at time.Time) error {
-	_, err := s.db.Exec(`INSERT OR REPLACE INTO pins VALUES (?, ?, ?)`, name, key[:], at.UnixMilli())
+	if err := s.Unpin(name); err != nil {
+		return err
+	}
+	_, err := s.db.Exec(`INSERT INTO pins VALUES (?, ?, ?)`, untrusted.Name(name), key[:], at.UnixMilli())
 	return err
 }
 
+// Unpin removes every pin whose name reads the same as this one, including any kept before names were
+// made canonical.
 func (s *Store) Unpin(name string) error {
-	_, err := s.db.Exec(`DELETE FROM pins WHERE name = ?`, name)
-	return err
+	rows, err := s.db.Query(`SELECT name FROM pins`)
+	if err != nil {
+		return err
+	}
+	var gone []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			rows.Close()
+			return err
+		}
+		if untrusted.Name(n) == untrusted.Name(name) {
+			gone = append(gone, n)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, n := range gone {
+		if _, err := s.db.Exec(`DELETE FROM pins WHERE name = ?`, n); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // SetPath records the repeaters a received message came through.

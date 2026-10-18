@@ -155,7 +155,7 @@ func (m *Model) contactDetail(w int) []string {
 	out = append(out, label("advert path")+adv)
 	out = append(out, label("trace")+m.traceLine(ct))
 	sig := th.Fg(th.Dim, false).Render("not pinned · K pins this key to " + ct.Name + ", so messages signed as them can be checked")
-	if p, ok := m.pins()[ct.Name]; ok {
+	if p, ok := m.pinOf(ct.Name); ok {
 		if p.Key == ct.Key {
 			sig = th.Fg(th.Green, true).Render("✓ pinned") + th.Fg(th.Dim, false).Render(" · K unpins")
 		} else {
