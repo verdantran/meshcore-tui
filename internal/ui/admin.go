@@ -83,7 +83,8 @@ type adminModel struct {
 	local       bool      // connected to a repeater's own console over USB
 	keysChecked bool
 	favOnly     bool
-	remember    bool // save the password being typed once it works
+	remember    bool   // save the password being typed once it works
+	loginNote   string // why a saved password wasn't sent, shown at the login
 	saving      map[[32]byte]string
 
 	auto     map[[32]byte]bool
@@ -95,7 +96,7 @@ type adminModel struct {
 	picking    bool                             // a cursor is on the health charts, at bucket pick
 	pick       int                              // -1 until placed, on the newest poll
 	lastTry    map[[32]byte]time.Time           // the last time the watch polled each node
-	noPassword map[[32]byte]bool                // watched, but there's no way to log in to poll it
+	noPassword map[[32]byte]string              // watched, but there's no way to log in to poll it, and why
 	background map[int]bool                     // jobs the watch started, which fail quietly
 	watchGen   int
 	storeErr   bool
@@ -104,7 +105,7 @@ type adminModel struct {
 func newAdmin() adminModel {
 	return adminModel{auto: map[[32]byte]bool{}, resultAt: map[[32]byte]time.Time{}, visited: map[[32]byte]map[adminPane]bool{},
 		saving: map[[32]byte]string{}, kept: map[[32]byte][]admin.StatusPoint{}, lastTry: map[[32]byte]time.Time{},
-		noPassword: map[[32]byte]bool{}, background: map[int]bool{}}
+		noPassword: map[[32]byte]string{}, background: map[int]bool{}}
 }
 
 type jobSentMsg struct {
@@ -397,7 +398,9 @@ func (m *Model) adminMsg(msg tea.Msg) tea.Cmd {
 				return m.startJob(m.admin.RequestStatus(c, now))
 			}
 			if pw, ok := m.opt.Keychain.Get(c.Key); ok {
-				return m.startJob(m.admin.Login(c, pw, now))
+				if safe, _ := m.savedPasswordsOK(); safe {
+					return m.startJob(m.admin.Login(c, pw, now))
+				}
 			}
 		}
 	}
@@ -410,13 +413,18 @@ func (m *Model) autoStatusTick(k [32]byte) tea.Cmd {
 
 // pollFleet polls every node it can reach, spaced out to spare airtime.
 func (m *Model) pollFleet() tea.Cmd {
+	safe, why := m.savedPasswordsOK()
 	var keys [][32]byte
 	for _, c := range m.adminNodes() {
 		sess, ok := m.admin.Find(c.Key)
 		_, saved := m.opt.Keychain.Get(c.Key)
-		if saved || ok && sess.State == admin.LoggedIn {
+		if saved && safe || ok && sess.State == admin.LoggedIn {
 			keys = append(keys, c.Key)
 		}
+	}
+	if len(keys) == 0 && !safe {
+		m.fail("POLL  saved passwords aren't sent: " + why + "; log in to a node yourself to poll it")
+		return nil
 	}
 	if len(keys) == 0 {
 		m.fail("POLL  no nodes to poll: log in to one, or save its password with ctrl+s at the login")
@@ -530,7 +538,7 @@ func (m *Model) nodeListKey(s string) (tea.Cmd, bool) {
 		a.open, a.opened = ct.Key, true
 		if sess := m.admin.Session(ct); sess.State != admin.LoggedIn && sess.State != admin.LoggingIn {
 			if pw, ok := m.opt.Keychain.Get(ct.Key); ok && sess.State != admin.LoginFailed {
-				return m.startJob(m.admin.Login(ct, pw, m.now)), true
+				return m.savedLogin(ct, pw), true
 			}
 			m.openLogin()
 			return nil, true
@@ -602,7 +610,23 @@ func (m *Model) nodeListKey(s string) (tea.Cmd, bool) {
 
 // openLogin asks for a password, with remember-it off so a password is only saved for the node it was ticked for.
 func (m *Model) openLogin() {
-	m.adm.prompt, m.adm.input, m.adm.remember = promptPassword, lineEdit{}, false
+	m.adm.prompt, m.adm.input, m.adm.remember, m.adm.loginNote = promptPassword, lineEdit{}, false, ""
+}
+
+// savedLogin logs in with a saved password when the radio is one it's safe to hand it to. When the radio is
+// verified but the link may not be encrypted it asks first; otherwise the password is typed.
+func (m *Model) savedLogin(ct radio.Contact, pw string) tea.Cmd {
+	safe, why := m.savedPasswordsOK()
+	switch {
+	case safe:
+		return m.startJob(m.admin.Login(ct, pw, m.now))
+	case m.trust == trustVerified:
+		m.ask("send the saved password for "+ct.Name+"? "+why, "send", func() tea.Cmd { return m.startJob(m.admin.Login(ct, pw, m.now)) })
+		return nil
+	}
+	m.openLogin()
+	m.adm.loginNote = "The saved password isn't sent: " + why + "."
+	return nil
 }
 
 func (m *Model) logout(ct radio.Contact) tea.Cmd {

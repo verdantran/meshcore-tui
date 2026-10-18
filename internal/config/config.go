@@ -22,6 +22,7 @@ type Device struct {
 	Kind     string    `toml:"kind"` // USB, TCP
 	Addr     string    `toml:"addr"`
 	Mode     string    `toml:"mode,omitempty"` // "repeater" for a repeater's own console; empty is a companion
+	Key      string    `toml:"key,omitempty"`  // the radio's public key, once it has proved it holds it
 	LastUsed time.Time `toml:"last_used"`
 }
 
@@ -149,6 +150,9 @@ func (c *Config) Save() error {
 func (c *Config) Remember(d Device) {
 	for i, o := range c.Devices {
 		if o.Kind == d.Kind && o.Addr == d.Addr {
+			if d.Key == "" {
+				d.Key = o.Key
+			}
 			c.Devices = append(c.Devices[:i], c.Devices[i+1:]...)
 			break
 		}
@@ -201,10 +205,14 @@ func (c *Config) Forget(kind, addr string) {
 }
 
 func (c *Config) Device(name string) (Device, bool) {
+	var found []Device
 	for _, d := range c.Devices {
 		if d.Name == name {
-			return d, true
+			found = append(found, d)
 		}
 	}
-	return Device{}, false
+	if len(found) != 1 {
+		return Device{}, false // a radio names itself, so two saved under one name can't be told apart
+	}
+	return found[0], true
 }

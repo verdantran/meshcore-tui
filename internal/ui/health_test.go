@@ -36,7 +36,7 @@ func TestWatchOverTheAir(t *testing.T) {
 
 	// Without a saved password the watch can't log in, and Health says why.
 	h.watchTick()
-	if !h.m.adm.noPassword[dundry.Key] {
+	if h.m.adm.noPassword[dundry.Key] == "" {
 		t.Fatal("no password to poll with")
 	}
 	h.keys("H")

@@ -26,10 +26,10 @@
 ░▒▓█
 ░▒▓█
  0 packets heard · 47 contacts · 3 channels · theme neon · motion full
- [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
+ [10:03:00] ▸ RADIO NOT VERIFIED  it can't sign, so saved passwords are asked for
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles d87bb70174da5fab
+styles 52c152b64a9e2c18
 == 70ms ==
  Mes*▙*/#$B╱  RX ●  TX ●  Heltec V4 · fw v1.17.1░▒▓█
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -38,7 +38,7 @@ styles d87bb70174da5fab
 ┃                                                                                  ░▒▓█
 ┃ SYSTEM LOG                                                                       ░▒▓█
 ┃ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4                           ░▒▓█
-┃                                                                                  ░▒▓█
+┃ [10:03:00] ▸ RADIO NOT VERIFIED  it can't sign, so saved passwords are asked for ░▒▓█
 ┃                                                                                  ░▒▓█
 ┃                                                                                  ░▒▓█
 ┃                                                                                  ░▒▓█
@@ -58,10 +58,10 @@ styles d87bb70174da5fab
 ┃                                                                                  ░▒▓█
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━░▒▓█
  0 packets heard · 47 contacts · 3 channels · theme neon · motion full
- [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
+ [10:03:00] ▸ RADIO NOT VERIFIED  it can't sign, so saved passwords are asked for
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 35865e02f49a84eb
+styles 5f4feed324489817
 == 140ms ==
  MeshC▟4█AF█  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ░▒▓█
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -70,7 +70,7 @@ styles 35865e02f49a84eb
 ┃                                                                                                  ┃
 ┃ SYSTEM LOG                                                                                       ┃
 ┃ [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4                                           ┃
-┃                                                                                                  ┃
+┃ [10:03:00] ▸ RADIO NOT VERIFIED  it can't sign, so saved passwords are asked for                 ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
@@ -90,7 +90,7 @@ styles 35865e02f49a84eb
 ┃                                                                                                  ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 47 contacts · 3 channels · theme neon · motion full
- [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
+ [10:03:00] ▸ RADIO NOT VERIFIED  it can't sign, so saved passwords are asked for
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles f309289eacfa04b9
+styles 3060b3e386168531

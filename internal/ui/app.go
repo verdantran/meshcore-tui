@@ -130,6 +130,8 @@ type Model struct {
 	beaconOn      bool
 	mouseOn       bool
 	extraCommands []command
+	trust         radioTrust // whether the radio has proved it's the one saved, which saved passwords need
+	renewKey      bool       // the radio's key is expected to change: a factory reset, a new key, or :radio trust
 }
 
 // question is something that waits for y before it's done: anything that deletes data or changes another node.
@@ -213,7 +215,7 @@ func New(opt Options) *Model {
 	m.device = newDevice()
 	m.notes = newNotifier(opt)
 	m.focused = true
-	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand(), notifyCommand(), traceCommand(), channelCommand(), mapCommand())
+	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand(), notifyCommand(), traceCommand(), channelCommand(), mapCommand(), radioCommand())
 	m.connect = newConnect(opt.Ports, m.savedTargets)
 	m.ticker = newTicker()
 	for _, n := range opt.Notes {
@@ -321,6 +323,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.safely("a reply from a node", func() tea.Cmd { return m.adminMsg(msg) }))
 	case devLoadedMsg, devOpMsg, keyExportedMsg, clipClearMsg:
 		cmds = append(cmds, m.deviceMsg(msg))
+	case radioCheckedMsg:
+		m.radioChecked(msg)
 	case statsMsg, statsTickMsg:
 		cmds = append(cmds, m.statsMsg(msg))
 	case channelsMsg:
@@ -431,6 +435,7 @@ func (m *Model) moving() bool {
 
 func (m *Model) apply(e radio.Event) tea.Cmd {
 	now := m.now
+	var check tea.Cmd
 	switch e := e.(type) {
 	case radio.BootStep:
 		m.boot.step(e, now)
@@ -454,6 +459,7 @@ func (m *Model) apply(e radio.Event) tea.Cmd {
 			c.Remember(config.Device{Name: e.Self.Name, Kind: m.target.Kind, Addr: m.target.Addr, Mode: mode, LastUsed: now})
 			m.saveConfig()
 		}
+		check = m.checkRadio()
 	case radio.Fatal:
 		m.boot.fail(e.Err, now)
 		m.glitch = now
@@ -464,6 +470,7 @@ func (m *Model) apply(e radio.Event) tea.Cmd {
 		m.addLog(now, "LINK LOST  "+untrusted.Line(e.Err.Error())+"  reconnecting…", radio.ToneFail)
 	case radio.Restored:
 		m.linked = linkUp
+		m.trust = trustChecking // whatever answered may not be the same radio; it proves itself again on Ready
 		m.addLog(now, "LINK RESTORED", radio.ToneOK)
 		m.device.loaded, m.device.err = false, nil // a reboot or reset may have changed everything
 	case radio.Packet:
@@ -489,7 +496,7 @@ func (m *Model) apply(e radio.Event) tea.Cmd {
 		}
 	}
 	m.mapEvent(e)
-	return tea.Batch(m.chatEvent(e), m.contactsEvent(e), m.adminEvent(e))
+	return tea.Batch(check, m.chatEvent(e), m.contactsEvent(e), m.adminEvent(e))
 }
 
 func (s *stats) currentSNR(now time.Time) float64 {

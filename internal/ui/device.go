@@ -173,6 +173,9 @@ func (m *Model) deviceMsg(msg tea.Msg) tea.Cmd {
 		}
 		dm.doneAt[msg.id] = m.now
 		m.addLog(m.now, msg.what, radio.ToneOK)
+		if msg.id == "reset" || msg.id == "import" {
+			m.renewKey = true // the radio has a new identity, so its next proof is saved as the new one
+		}
 		if msg.reload {
 			return m.loadDevice()
 		}
@@ -417,6 +420,7 @@ func (m *Model) deviceRows() []devRow {
 				return func(ctx context.Context, d radio.Device) error { return d.SetPin(ctx, uint32(n)) }, nil
 			}},
 		m.signingRow(),
+		m.identityRow(),
 		devRow{id: "export", group: "Security", label: "Export private key", value: "show", kind: rowAction,
 			hint: "Anyone with this key can be you on the mesh.",
 			press: func(m *Model) tea.Cmd {

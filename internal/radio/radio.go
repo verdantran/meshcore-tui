@@ -266,6 +266,7 @@ type DeviceInfo struct {
 	BuildDate   string
 	MaxContacts int
 	MaxChannels int
+	PinSet      bool // it pairs over Bluetooth only with its PIN, so that link is encrypted
 }
 
 // Ready is sent once the connect sequence has finished.

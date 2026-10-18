@@ -271,10 +271,20 @@ func (m *Model) promptLines(ct radio.Contact, sess *admin.Session, w, rows int) 
 		if a.remember {
 			box = th.Fg(th.Green, true).Render("[x]")
 		}
-		return []string{th.Fg(th.Muted, true).Render("LOG IN TO " + strings.ToUpper(ct.Name)), "",
+		out := []string{th.Fg(th.Muted, true).Render("LOG IN TO " + strings.ToUpper(ct.Name)), "",
 			field("password", true), "",
-			box + th.Fg(th.Text, false).Render(" remember it in the system keychain ") + th.Fg(th.Dim, false).Render("(ctrl+s)"), "",
-			th.Fg(th.Dim, false).Render("enter log in · leave it empty to log in as a guest · esc cancel")}
+			box + th.Fg(th.Text, false).Render(" remember it in the system keychain ") + th.Fg(th.Dim, false).Render("(ctrl+s)"), ""}
+		note := a.loginNote
+		if safe, why := m.savedPasswordsOK(); note == "" && !safe {
+			note = "Whatever you type goes to the radio, and " + why + "."
+		}
+		switch {
+		case m.trust == trustChanged:
+			out = append(out, th.Fg(th.Red, true).Render(clip("⚠ This may not be your radio: it isn't the one saved for this connection.", w)), "")
+		case note != "":
+			out = append(out, th.Fg(th.Yellow, false).Render(clip(note, w)), "")
+		}
+		return append(out, th.Fg(th.Dim, false).Render("enter log in · leave it empty to log in as a guest · esc cancel"))
 	case promptEdit:
 		st := m.settingRows(sess)[a.setSel]
 		out := []string{th.Fg(th.Muted, true).Render("EDIT " + strings.ToUpper(st.Label)), "", field(st.Key, st.Kind == admin.KindPassword), ""}

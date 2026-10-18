@@ -179,10 +179,14 @@ func (m *Model) pollWatched() tea.Cmd {
 		return nil
 	}
 	if pw, ok := m.opt.Keychain.Get(due.Key); ok {
+		if safe, why := m.savedPasswordsOK(); !safe {
+			m.adm.noPassword[due.Key] = "Its saved password isn't sent, so the watch can't log in to poll it: " + why + "."
+			return nil
+		}
 		delete(m.adm.noPassword, due.Key)
 		return m.backgroundJob(m.admin.Login(due, pw, m.now))
 	}
-	m.adm.noPassword[due.Key] = true
+	m.adm.noPassword[due.Key] = "Its password isn't saved, so the watch can't log in to poll it. Log in with ctrl+s ticked to save it."
 	return nil
 }
 
@@ -313,8 +317,8 @@ func (m *Model) healthLines(ct radio.Contact, sess *admin.Session, w, rows int) 
 	}
 	switcher := day + " " + week
 	out := []string{clip(state, w-visibleWidth(switcher)-1) + strings.Repeat(" ", max(w-visibleWidth(state)-visibleWidth(switcher), 1)) + switcher}
-	if m.watched(ct.Key) && a.noPassword[ct.Key] && sess.State != admin.LoggedIn {
-		out = append(out, th.Fg(th.Yellow, false).Render(clip("Its password isn't saved, so the watch can't log in to poll it. Log in with ctrl+s ticked to save it.", w)))
+	if why := a.noPassword[ct.Key]; m.watched(ct.Key) && why != "" && sess.State != admin.LoggedIn {
+		out = append(out, th.Fg(th.Yellow, false).Render(clip(why, w)))
 	}
 	out = append(out, "")
 	if len(h.Series) == 0 {
