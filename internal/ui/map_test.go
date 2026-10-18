@@ -256,6 +256,27 @@ func (h *harness) incoming(in radio.Incoming) {
 	h.settle()
 }
 
+// TestMessagePathsNameForms: a name NFKC changes, or with extra spaces, still gets its path, both ways round.
+func TestMessagePathsNameForms(t *testing.T) {
+	h := newHarness(t)
+	odd := "Ｚed  Lee"
+	h.hear(channelPacket(t, h, "Public", odd, "hi", []byte{0x5F, 0x77}), 6)
+	h.hear(channelPacket(t, h, "Public", odd, "hi", []byte{0xA3}), 2)
+	h.incoming(radio.Incoming{Channel: true, ChannelIdx: 0, Hops: 2, Text: odd + ": hi"})
+	h.incoming(radio.Incoming{Channel: true, ChannelIdx: 0, Hops: 1, Text: "Ｂob: later"})
+	h.hear(channelPacket(t, h, "Public", "Ｂob", "later", []byte{0x1E}), 4)
+	h.openConvo("Public")
+	if scr := h.screen(); !strings.Contains(scr, "2 hops via 5F·77") || !strings.Contains(scr, "1 hop via 1E") {
+		t.Errorf("paths not given:\n%s", scr)
+	}
+	h.key(tea.KeyRight)
+	h.key(tea.KeyUp)
+	h.keys("M")
+	if p := h.m.mapv.path; p == nil || p.title != "message from Zed Lee" || len(p.routes) != 2 {
+		t.Fatalf("Zed Lee's path and the repeat: %+v", p)
+	}
+}
+
 func TestMessagePaths(t *testing.T) {
 	h := newHarness(t)
 	// The packet first, then the message: the message is given the packet's path.

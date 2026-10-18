@@ -13,6 +13,7 @@ import (
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 // pathView is the map showing a single path, opened with M from wherever a route is mentioned: a packet,
@@ -266,7 +267,7 @@ func (m *Model) showMessagePath(msg store.Message) {
 	if cur, ok := m.selectedConvo(); ok && cur.Kind == chat.KindChannel {
 		for _, row := range m.inspector.rows {
 			d := row.dec
-			if !d.Decrypted || d.Type != "GRP_TXT" || store.ChannelConvo(d.ChannelIdx) != cur.Convo || d.Sender != msg.Sender || d.Text != msg.Text {
+			if !d.Decrypted || d.Type != "GRP_TXT" || store.ChannelConvo(d.ChannelIdx) != cur.Convo || untrusted.Name(d.Sender) != msg.Sender || d.Text != msg.Text {
 				continue
 			}
 			for i := len(row.copies) - 1; i >= 0; i-- {

@@ -8,6 +8,7 @@ import (
 	"github.com/verdantran/meshcore-tui/internal/packets"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 // A received message tells us only how many hops it took; the packet that carried it names them. The two
@@ -42,11 +43,12 @@ func (m *Model) messagePacket(dec packets.Decoded, raw []byte, snr float32) {
 	switch {
 	case dec.Type == "GRP_TXT" && dec.Decrypted:
 		ch, ok := m.packetChannel(dec)
-		if !ok || dec.Sender == m.ready.Self.Name {
+		sender := untrusted.Name(dec.Sender) // as chat files it
+		if !ok || sender == untrusted.Name(m.ready.Self.Name) {
 			return
 		}
 		h.convo = store.ChannelConvo(ch.Idx)
-		h.sender, h.text = dec.Sender, dec.Text
+		h.sender, h.text = sender, dec.Text
 	case dec.Type == "TXT_MSG":
 		to, from := -1, -1
 		for _, f := range dec.Fields {

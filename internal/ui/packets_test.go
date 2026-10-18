@@ -83,7 +83,48 @@ func TestPrivateChannelsNamedLikeOpenOnesStayHidden(t *testing.T) {
 	}
 }
 
-// A packet replayed by many routes keeps only its first copies, and counts the rest.
+// TestMadeUpPathsDontCrowdOut: copies with invented paths sent first leave room for the real ones that follow,
+// those passed on by a neighbour first, then the strongest.
+func TestMadeUpPathsDontCrowdOut(t *testing.T) {
+	h := newHarness(t)
+	h.m.contacts.heard = append(h.m.contacts.heard, heardNode{radio.Contact{Key: [32]byte{0xA3, 0x01}, Name: "Hill", PathLen: 0}, h.clk.t})
+	p, _ := meshcore.PacketFromBytes(channelPacket(t, h, "Public", "Bob", "again", nil))
+	hear := func(path []byte, snr float32) {
+		p.Path, p.PathLength = path, meshcore.MakePathLen(1, uint8(len(path)))
+		raw, _ := p.ToBytes()
+		h.m.heardPacket(radio.Packet{At: h.clk.t, SNR: snr, Raw: raw})
+	}
+	for i := range 200 {
+		hear([]byte{0x10, byte(i)}, 9)
+	}
+	hear([]byte{0x5F, 0xA3}, 1)
+	hear([]byte{0x77, 0xA3}, 3)
+	hear([]byte{0x5F, 0xA3}, 4) // the same way again
+	hear([]byte{0x10, 0xEE}, 12)
+	row := h.m.inspector.rows[0]
+	if len(row.copies) != packetCopies || row.heard() != 204 {
+		t.Fatalf("copies kept %d, heard %d", len(row.copies), row.heard())
+	}
+	paths := map[string]float32{}
+	for i, c := range row.copies {
+		paths[string(c.path)] = c.snr
+		if i < firstCopies && c.path[1] != byte(i) {
+			t.Errorf("copy %d is %x: the first heard stay", i, c.path)
+		}
+	}
+	if paths["\x5F\xA3"] != 1 || paths["\x77\xA3"] != 3 {
+		t.Error("the copies passed on by a neighbour are kept")
+	}
+	if _, ok := paths["\x10\xEE"]; !ok {
+		t.Error("the strongest copy is kept")
+	}
+	h.m.showPacketPath(row)
+	if p := h.m.mapv.path; p == nil || len(p.routes) != packetCopies {
+		t.Fatalf("map routes: %+v", p)
+	}
+}
+
+// A packet replayed by many routes keeps 32 copies, and counts the rest.
 func TestReplaysAreCapped(t *testing.T) {
 	h := newHarness(t)
 	h.keys("4")
@@ -102,7 +143,7 @@ func TestReplaysAreCapped(t *testing.T) {
 	if d := time.Since(start); d > 50*time.Millisecond {
 		t.Errorf("a frame took %v", d)
 	}
-	if !strings.Contains(scr, "heard 100000 times") || !strings.Contains(scr, "heard 100000 times, the first 32 kept") || !strings.Contains(scr, "99+") {
+	if !strings.Contains(scr, "heard 100000 times") || !strings.Contains(scr, "heard 100000 times, 32 kept") || !strings.Contains(scr, "99+") {
 		t.Errorf("the count of replays is shown:\n%s", scr)
 	}
 }

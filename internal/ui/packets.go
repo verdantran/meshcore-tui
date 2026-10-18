@@ -1,9 +1,11 @@
 package ui
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/verdantran/meshcore-tui/internal/chat"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,6 +25,7 @@ const (
 	rowCPS       = 300.0 // a new row types out inside rowArrival, even at 200 columns
 	inspectorPad = 12    // rows kept for the detail pane
 	packetCopies = 32    // copies of one packet kept; replays beyond are only counted
+	firstCopies  = 16    // of those, the first heard always stay
 )
 
 // heardCopy is one reception of a packet; floods often arrive more than once by different routes.
@@ -31,6 +34,56 @@ type heardCopy struct {
 	snr  float32
 	rssi int8
 	path []byte
+	near bool // its last hop is a node we hear directly
+}
+
+// below reports whether c is a less likely route than o. Paths aren't signed, so anyone can make one up,
+// but not the repeater next to us that passed it on, nor how strongly it came in.
+func (c heardCopy) below(o heardCopy) bool {
+	if c.near != o.near {
+		return o.near
+	}
+	return c.snr < o.snr
+}
+
+// admit keeps a copy heard once the row is full, in place of the least likely of the later ones, so made-up
+// paths sent first can't crowd out the real ones. The same path again is only counted.
+func (r *packetRow) admit(c heardCopy) bool {
+	worst := -1
+	for i, k := range r.copies {
+		if string(k.path) == string(c.path) {
+			return false
+		}
+		if i >= firstCopies && (worst < 0 || k.below(r.copies[worst])) {
+			worst = i
+		}
+	}
+	if worst < 0 || !r.copies[worst].below(c) {
+		return false
+	}
+	r.copies = append(slices.Delete(r.copies, worst, worst+1), c)
+	return true
+}
+
+// nearHop reports whether a packet's last hop is a contact or heard node we reach without a repeater.
+func (m *Model) nearHop(dec packets.Decoded) bool {
+	if dec.HashSize == 0 || len(dec.Path) < dec.HashSize {
+		return false
+	}
+	hop := dec.Path[len(dec.Path)-dec.HashSize:]
+	if m.chat != nil {
+		for _, c := range m.chat.Contacts() {
+			if c.PathLen == 0 && bytes.HasPrefix(c.Key[:], hop) {
+				return true
+			}
+		}
+	}
+	for _, h := range m.contacts.heard {
+		if h.c.PathLen == 0 && bytes.HasPrefix(h.c.Key[:], hop) {
+			return true
+		}
+	}
+	return false
 }
 
 type packetRow struct {
@@ -132,15 +185,20 @@ func (m *Model) heardPacket(p radio.Packet) {
 		return
 	}
 	row, again := in.byHash[dec.Hash]
-	if again && dec.Err == nil && len(row.copies) >= packetCopies {
+	again = again && dec.Err == nil
+	copy := heardCopy{at: m.now, snr: p.SNR, rssi: p.RSSI, path: dec.Path, near: m.nearHop(dec)}
+	if again && len(row.copies) >= packetCopies {
 		row.extra++
-		return
+		if !row.admit(copy) {
+			return
+		}
 	}
 	m.ticker.add(hexBytes(p.Raw, dec.Hidden), m.now, m.w)
 	m.mapHeard(dec, p.SNR)
-	copy := heardCopy{at: m.now, snr: p.SNR, rssi: p.RSSI, path: dec.Path}
-	if again && dec.Err == nil {
-		row.copies = append(row.copies, copy)
+	if again {
+		if len(row.copies) < packetCopies {
+			row.copies = append(row.copies, copy)
+		}
 		return
 	}
 	row = &packetRow{first: m.now, dec: dec, copies: []heardCopy{copy}}
@@ -465,7 +523,7 @@ func (m *Model) packetDetail(w, rows int) []string {
 		}
 		head := fmt.Sprintf("heard %d times: ", n)
 		if r.extra > 0 {
-			head = fmt.Sprintf("heard %d times, the first %d kept: ", n, len(r.copies))
+			head = fmt.Sprintf("heard %d times, %d kept: ", n, len(r.copies))
 		}
 		left = append(left, "", th.Fg(th.Magenta, true).Render(head)+th.Fg(th.Muted, false).Render(strings.Join(via, " · ")))
 	}
