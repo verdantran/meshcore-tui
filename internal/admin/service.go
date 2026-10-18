@@ -377,7 +377,7 @@ func (s *Service) OnBinary(r radio.BinaryReply, now time.Time) (*Session, *Job) 
 		}
 	case JobOwner:
 		if oi, err := meshcore.ParseOwnerInfoReply(r.Data); err == nil {
-			oi.FirmwareVersion, oi.Name, oi.Owner = untrusted.Text(oi.FirmwareVersion), untrusted.Text(oi.Name), untrusted.Text(oi.Owner)
+			oi.FirmwareVersion, oi.Name, oi.Owner = untrusted.Line(oi.FirmwareVersion), untrusted.Line(oi.Name), untrusted.Line(oi.Owner)
 			sess.Owner = &oi
 		}
 	}

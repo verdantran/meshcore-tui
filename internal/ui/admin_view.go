@@ -5,8 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/x/ansi"
-
 	"github.com/verdantran/meshcore-tui/internal/admin"
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/radio"
@@ -292,7 +290,7 @@ func (m *Model) promptLines(ct radio.Contact, sess *admin.Session, w, rows int) 
 	case promptConfirm:
 		c := a.confirm
 		out := []string{th.Fg(th.Red, true).Render(c.title), ""}
-		for _, l := range strings.Split(ansi.Wrap(c.warning, w, " "), "\n") {
+		for _, l := range strings.Split(renderWidth.Wrap(c.warning, w, " "), "\n") {
 			out = append(out, th.Fg(th.Yellow, false).Render(l))
 		}
 		return append(out, "", th.Fg(th.Text, false).Render("Type "+ct.Name+" to go ahead:"), field("name", false), "",
@@ -794,7 +792,7 @@ func (m *Model) consoleLines(sess *admin.Session, w, rows int) []string {
 }
 
 // clip shortens styled text to w cells, keeping its colours.
-func clip(s string, w int) string { return ansi.Truncate(s, max(w, 0), "…") }
+func clip(s string, w int) string { return renderWidth.Truncate(s, max(w, 0), "…") }
 
 // roomLine says whether you're logged in to the room whose conversation is open.
 func (m *Model) roomLine(w int) string {

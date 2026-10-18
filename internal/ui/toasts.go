@@ -4,8 +4,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/x/ansi"
-
 	"github.com/verdantran/meshcore-tui/internal/motion"
 )
 
@@ -28,7 +26,7 @@ func (m *Model) pushToast(title, body string) {
 			live = append(live, t)
 		}
 	}
-	m.toasts = append(live, toast{title, body, m.now})
+	m.toasts = append(live, toast{oneLine(title), oneLine(body), m.now})
 	if len(m.toasts) > toastMax {
 		m.toasts = m.toasts[len(m.toasts)-toastMax:]
 	}
@@ -74,7 +72,7 @@ func (m *Model) overlayToasts(lines []string) {
 			if visible <= 0 {
 				break
 			}
-			lines[row+j] = ansi.Truncate(lines[row+j], x, "") + ansi.Truncate(b, visible, "") + ansi.TruncateLeft(lines[row+j], x+visible, "")
+			lines[row+j] = renderWidth.Truncate(lines[row+j], x, "") + renderWidth.Truncate(b, visible, "") + renderWidth.TruncateLeft(lines[row+j], x+visible, "")
 		}
 		row += len(box)
 	}

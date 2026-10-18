@@ -126,7 +126,7 @@ func (r *Repeater) get(ctx context.Context, key string) string {
 	if err != nil {
 		return ""
 	}
-	return untrusted.Text(v)
+	return untrusted.Line(v)
 }
 
 func (r *Repeater) Start(ctx context.Context) {
@@ -158,8 +158,9 @@ func (r *Repeater) Start(ctx context.Context) {
 			r.emit(radio.Fatal{Err: err})
 			return
 		}
-		fw, built, _ := strings.Cut(ver, " (Build: ")
+		fw, built, _ := strings.Cut(untrusted.Line(ver), " (Build: ")
 		board, _ := r.run(ctx, "board")
+		board = untrusted.Line(board)
 		step("console", "CONSOLE", "repeater "+fw+" · "+board, radio.StepOK)
 
 		step("identity", "IDENTITY", "", radio.StepWait)

@@ -135,7 +135,7 @@ func (m *Model) devEditLines(w int) []string {
 	out := []string{th.Fg(th.Muted, true).Render("EDIT " + strings.ToUpper(r.label)), "",
 		th.Fg(th.Magenta, true).Render("▸ ") + dm.input.render(th, w-2, r.id == "import"), ""} // a private key never shows on screen
 	if r.hint != "" {
-		for _, l := range strings.Split(ansi.Wrap(r.hint, w, " "), "\n") {
+		for _, l := range strings.Split(renderWidth.Wrap(r.hint, w, " "), "\n") {
 			out = append(out, th.Fg(th.Dim, false).Render(l))
 		}
 	}
@@ -164,7 +164,7 @@ func (m *Model) presetLines(w int) []string {
 func (m *Model) devConfirmLines(w int) []string {
 	th, c := m.th, m.device.confirm
 	out := []string{th.Fg(th.Red, true).Render(c.title), ""}
-	for _, l := range strings.Split(ansi.Wrap(c.warning, w, " "), "\n") {
+	for _, l := range strings.Split(renderWidth.Wrap(c.warning, w, " "), "\n") {
 		out = append(out, th.Fg(th.Yellow, false).Render(l))
 	}
 	out = append(out, "")
@@ -182,7 +182,7 @@ func (m *Model) keyLines(w int) []string {
 	if dm.key == "" {
 		return append(out, m.waiting("reading it from the radio…"))
 	}
-	for _, l := range strings.Split(ansi.Hardwrap(dm.key, min(w, 64), false), "\n") {
+	for _, l := range strings.Split(renderWidth.Hardwrap(dm.key, min(w, 64), false), "\n") {
 		out = append(out, th.Fg(th.Yellow, true).Render(l))
 	}
 	return append(out, "", th.Fg(th.Dim, false).Render("Keep it somewhere safe. It isn't written to the log or saved by this app."))

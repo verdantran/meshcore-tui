@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 const bleScanFor = 10 * time.Second
@@ -88,12 +89,12 @@ func (c *connectModel) scanned(msg scanMsg) tea.Cmd {
 	if msg.done {
 		c.stopScan()
 		if msg.err != nil {
-			c.scanErr = msg.err.Error()
+			c.scanErr = untrusted.Line(msg.err.Error())
 		}
 		return nil
 	}
 	t := msg.t
-	t.Kind = "BLE"
+	t.Kind, t.Addr, t.Detail = "BLE", untrusted.Line(t.Addr), untrusted.Line(t.Detail)
 	updated := false
 	for i := range c.found {
 		if c.found[i].Addr == t.Addr {

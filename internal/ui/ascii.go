@@ -4,7 +4,6 @@ import (
 	"math/rand"
 	"strings"
 
-	"github.com/charmbracelet/x/ansi"
 	"github.com/clipperhouse/uax29/v2/graphemes"
 
 	"github.com/verdantran/meshcore-tui/internal/motion"
@@ -41,7 +40,7 @@ func toASCII(frame string) string {
 			if a, ok := asciiFor[s]; ok {
 				b.WriteString(a)
 			} else {
-				b.WriteString(strings.Repeat("?", max(ansi.StringWidth(s), 1)))
+				b.WriteString(strings.Repeat("?", max(renderWidth.StringWidth(s), 1)))
 			}
 		}
 	}
@@ -76,7 +75,7 @@ func scrambleRow(row string, rng *rand.Rand) string {
 	g.AnsiEscapeSequences = true
 	for g.Next() {
 		s := g.Value()
-		if s[0] != 0x1b && s != " " && ansi.StringWidth(s) == 1 && rng.Float64() < 0.18 {
+		if s[0] != 0x1b && s != " " && renderWidth.StringWidth(s) == 1 && rng.Float64() < 0.18 {
 			b.WriteRune(glyphs[rng.Intn(len(glyphs))])
 			continue
 		}

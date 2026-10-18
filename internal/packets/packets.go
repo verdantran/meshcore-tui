@@ -107,9 +107,9 @@ func hexs(b []byte) string {
 // Decode reads a packet heard off air; every string in what it returns is safe to draw.
 func Decode(raw []byte, book Book) Decoded {
 	d := decode(raw, book)
-	d.Summary, d.Channel, d.Sender, d.Text, d.Name = untrusted.Text(d.Summary), untrusted.Text(d.Channel), untrusted.Text(d.Sender), untrusted.Text(d.Text), untrusted.Text(d.Name)
+	d.Summary, d.Channel, d.Sender, d.Text, d.Name = untrusted.Line(d.Summary), untrusted.Line(d.Channel), untrusted.Line(d.Sender), untrusted.Text(d.Text), untrusted.Line(d.Name)
 	for i := range d.Fields {
-		d.Fields[i].Value = untrusted.Text(d.Fields[i].Value)
+		d.Fields[i].Value = untrusted.Line(d.Fields[i].Value)
 	}
 	return d
 }

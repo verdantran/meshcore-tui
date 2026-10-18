@@ -138,7 +138,7 @@ func LoadDetail(path string) (*Detail, error) {
 		return nil, err
 	}
 	for i := range d.Places {
-		d.Places[i].Name = untrusted.Text(d.Places[i].Name) // saved before names were cleaned on download
+		d.Places[i].Name = untrusted.Line(d.Places[i].Name) // saved before names were cleaned on download
 	}
 	d.index()
 	return &d, nil
@@ -203,7 +203,7 @@ func (f Fetcher) get(ctx context.Context, u string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("OpenFreeMap answered %s", resp.Status)
+		return nil, fmt.Errorf("OpenFreeMap answered %s", untrusted.Line(resp.Status))
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse+1))
 	if err == nil && len(b) > maxResponse {
@@ -347,7 +347,7 @@ func (d *Detail) addTile(t Tile, layers []mvtLayer) {
 				}
 				if f.Type == mvtPoint && rank > 0 && name != "" && len(f.Parts) > 0 && len(f.Parts[0]) > 0 {
 					q := ll(f.Parts[0][0])
-					d.Places = append(d.Places, Place{Name: untrusted.Text(name), Lat: q[1], Lon: q[0], Rank: rank})
+					d.Places = append(d.Places, Place{Name: untrusted.Line(name), Lat: q[1], Lon: q[0], Rank: rank})
 				}
 			}
 		}

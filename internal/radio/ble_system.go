@@ -12,6 +12,8 @@ import (
 
 	"github.com/OwlShack/meshcore-go/companion"
 	"tinygo.org/x/bluetooth"
+
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 const (
@@ -127,7 +129,7 @@ func (s *systemAdapter) scan(ctx context.Context, found func(BLEDevice)) error {
 	return s.a.Scan(func(_ *bluetooth.Adapter, r bluetooth.ScanResult) {
 		name := r.LocalName()
 		if r.HasServiceUUID(bleService) || strings.HasPrefix(name, "MeshCore") {
-			found(BLEDevice{Addr: r.Address.String(), Name: name, RSSI: r.RSSI})
+			found(BLEDevice{Addr: r.Address.String(), Name: untrusted.Line(name), RSSI: r.RSSI})
 		}
 	})
 }

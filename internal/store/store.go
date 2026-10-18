@@ -234,7 +234,7 @@ func (s *Store) Contacts(device string) ([]radio.Contact, error) {
 			return nil, err
 		}
 		hex.Decode(c.Key[:], []byte(keyHex))
-		c.Name = untrusted.Text(c.Name) // kept before names were cleaned as they arrived
+		c.Name = untrusted.Line(c.Name) // kept before names were cleaned as they arrived
 		c.Type, c.Flags, c.LastAdvert = radio.ContactType(typ), byte(flags), time.Unix(advert, 0)
 		out = append(out, c)
 	}
@@ -272,7 +272,7 @@ func (s *Store) Channels(device string) ([]radio.Channel, error) {
 			return nil, err
 		}
 		copy(c.Secret[:], secret)
-		c.Name = untrusted.Text(c.Name)
+		c.Name = untrusted.Line(c.Name)
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -423,7 +423,7 @@ func scanMessage(sc interface{ Scan(...any) error }, extra ...any) (Message, err
 	var sent, recv, rtt int64
 	dest := []any{&m.ID, &convo, &out, &m.Sender, &m.Text, &sent, &recv, &m.Hops, &m.SNR, &hasSNR, &signed, &state, &m.Ack, &m.Attempts, &rtt, &flood, &m.Repeats, &m.Path, &m.PathHash, &m.Sig, &m.SigKey}
 	err := sc.Scan(append(dest, extra...)...)
-	m.Sender, m.Text = untrusted.Text(m.Sender), untrusted.Text(m.Text)
+	m.Sender, m.Text = untrusted.Line(m.Sender), untrusted.Text(m.Text)
 	m.Convo, m.Out, m.HasSNR, m.Signed, m.State, m.Flood = Convo(convo), out == 1, hasSNR == 1, signed == 1, State(state), flood == 1
 	m.SentAt, m.RecvAt, m.RTT = time.UnixMilli(sent), time.UnixMilli(recv), time.Duration(rtt)*time.Millisecond
 	return m, err

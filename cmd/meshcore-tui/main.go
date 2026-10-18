@@ -26,6 +26,7 @@ import (
 	"github.com/verdantran/meshcore-tui/internal/store"
 	"github.com/verdantran/meshcore-tui/internal/theme"
 	"github.com/verdantran/meshcore-tui/internal/ui"
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 // likelyRadios are USB vendor IDs of boards that run MeshCore companion firmware.
@@ -45,7 +46,7 @@ func sortPorts(list []*enumerator.PortDetails) []ui.Target {
 			continue // on macOS the cu.* twin is the one to open
 		}
 		vid := strings.ToUpper(p.VID)
-		detail := strings.TrimSpace(p.Product)
+		detail := strings.TrimSpace(untrusted.Line(p.Product))
 		if name, ok := likelyRadios[vid]; ok {
 			if detail == "" {
 				detail = name
@@ -68,7 +69,7 @@ func ports() []ui.Target {
 
 func scanBLE(ctx context.Context, found func(ui.Target)) error {
 	return radio.ScanBLE(ctx, func(d radio.BLEDevice) {
-		found(ui.Target{Kind: "BLE", Addr: d.Addr, Detail: fmt.Sprintf("%s · %d dBm", d.Name, d.RSSI)})
+		found(ui.Target{Kind: "BLE", Addr: d.Addr, Detail: fmt.Sprintf("%s · %d dBm", untrusted.Line(d.Name), d.RSSI)})
 	})
 }
 

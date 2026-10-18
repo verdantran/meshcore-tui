@@ -190,7 +190,7 @@ func (l *Link) Start(ctx context.Context) {
 	go func() {
 		l.step("link", "LINK", l.describe, StepWait)
 		if err := l.client.Connect(ctx); err != nil {
-			l.step("link", "LINK", err.Error(), StepFail)
+			l.step("link", "LINK", untrusted.Line(err.Error()), StepFail)
 			l.emit(Fatal{Err: err})
 			return
 		}
@@ -212,10 +212,10 @@ func run[T any](l *Link, ctx context.Context, key, label string, f func(context.
 	defer cancel()
 	v, err := f(sctx)
 	if err != nil {
-		l.step(key, label, err.Error(), StepFail)
+		l.step(key, label, untrusted.Line(err.Error()), StepFail)
 		return v, false
 	}
-	l.step(key, label, detail(v), StepOK)
+	l.step(key, label, untrusted.Line(detail(v)), StepOK)
 	return v, true
 }
 
@@ -265,11 +265,11 @@ func (l *Link) sync(ctx context.Context) {
 	}
 	l.emit(Ready{
 		Self: SelfInfo{
-			Name: untrusted.Text(self.Name), PubKey: self.PublicKey, FreqKHz: self.RadioFrequency, BwHz: self.RadioBandwidth,
+			Name: untrusted.Line(self.Name), PubKey: self.PublicKey, FreqKHz: self.RadioFrequency, BwHz: self.RadioBandwidth,
 			SF: self.RadioSpreadFactor, CR: self.RadioCodingRate, TxPower: self.TxPower,
 			Lat: float64(self.AdvertLatitude) / 1e6, Lon: float64(self.AdvertLongitude) / 1e6,
 		},
-		Device:      DeviceInfo{Model: untrusted.Text(dev.Model), Firmware: untrusted.Text(dev.FirmwareVersionStr), BuildDate: untrusted.Text(dev.FirmwareBuildDate), MaxContacts: int(dev.MaxContacts), MaxChannels: int(dev.MaxChannels)},
+		Device:      DeviceInfo{Model: untrusted.Line(dev.Model), Firmware: untrusted.Line(dev.FirmwareVersionStr), BuildDate: untrusted.Line(dev.FirmwareBuildDate), MaxContacts: int(dev.MaxContacts), MaxChannels: int(dev.MaxChannels)},
 		Contacts:    len(contacts),
 		Channels:    len(channels),
 		Battery:     Battery{batt.BatteryMilliVolts},
@@ -280,7 +280,7 @@ func (l *Link) sync(ctx context.Context) {
 }
 
 func contactFrom(key [32]byte, name string, typ, flags, pathLen byte, path []byte, lastAdvert uint32, lat, lon int32) Contact {
-	c := Contact{Key: key, Name: untrusted.Text(name), Type: ContactType(typ), Flags: flags, PathLen: -1,
+	c := Contact{Key: key, Name: untrusted.Line(name), Type: ContactType(typ), Flags: flags, PathLen: -1,
 		LastAdvert: time.Unix(int64(lastAdvert), 0), Lat: float64(lat) / 1e6, Lon: float64(lon) / 1e6}
 	if pathLen != 0xFF {
 		size, hops := meshcore.PathLenFields(pathLen)
@@ -552,7 +552,7 @@ func (l *Link) registerPushes() {
 	c.OnPush(companion.PushNewAdvert, func(r companion.Response) {
 		if p, ok := r.Data.(companion.PushNewAdvertResponse); ok {
 			l.emit(Heard{Contact: contactFrom(p.PublicKey, p.AdvertName, p.Type, p.Flags, p.OutPathLen, p.OutPath[:], p.LastAdvert, p.AdvertLatitude, p.AdvertLongitude)})
-			l.emit(Log{At: time.Now(), Text: fmt.Sprintf("HEARD  %s [%s], not a contact", untrusted.Text(p.AdvertName), hexPrefix(p.PublicKey[:1]))})
+			l.emit(Log{At: time.Now(), Text: fmt.Sprintf("HEARD  %s [%s], not a contact", untrusted.Line(p.AdvertName), hexPrefix(p.PublicKey[:1]))})
 		}
 	})
 	c.OnPush(companion.PushAdvert, func(r companion.Response) {
@@ -834,7 +834,7 @@ func (l *Link) Channels(ctx context.Context) ([]Channel, error) {
 			break
 		}
 		if ch.Name != "" {
-			out = append(out, Channel{Idx: int(ch.ChannelIdx), Name: untrusted.Text(ch.Name), Secret: ch.Secret})
+			out = append(out, Channel{Idx: int(ch.ChannelIdx), Name: untrusted.Line(ch.Name), Secret: ch.Secret})
 		}
 	}
 	return out, nil

@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/verdantran/meshcore-tui/internal/admin"
 	"github.com/verdantran/meshcore-tui/internal/chat"
@@ -19,6 +20,7 @@ import (
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/store"
 	"github.com/verdantran/meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 // Target is something the user can connect to: a serial port, a TCP host, or the simulator.
@@ -287,6 +289,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
+	case tea.ModeReportMsg:
+		// Bubble Tea switches its renderer to grapheme widths on the same answer.
+		if msg.Mode == ansi.ModeUnicodeCore && (msg.Value == ansi.ModeReset || msg.Value == ansi.ModeSet || msg.Value == ansi.ModePermanentlySet) {
+			renderWidth = ansi.GraphemeWidth
+		}
 	case frameMsg:
 		m.ticking = false
 	case scanMsg:
@@ -454,7 +461,7 @@ func (m *Model) apply(e radio.Event) tea.Cmd {
 	case radio.Lost:
 		m.linked = linkLost
 		m.glitch = now
-		m.addLog(now, "LINK LOST  "+e.Err.Error()+"  reconnecting…", radio.ToneFail)
+		m.addLog(now, "LINK LOST  "+untrusted.Line(e.Err.Error())+"  reconnecting…", radio.ToneFail)
 	case radio.Restored:
 		m.linked = linkUp
 		m.addLog(now, "LINK RESTORED", radio.ToneOK)

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/verdantran/meshcore-tui/internal/chat"
 	"github.com/verdantran/meshcore-tui/internal/radio"
@@ -196,7 +195,7 @@ func (m *Model) channelLines(w, rows int) []string {
 	}
 	wrap := func(text string) []string {
 		var out []string
-		for _, l := range strings.Split(ansi.Wrap(text, w, " "), "\n") {
+		for _, l := range strings.Split(renderWidth.Wrap(text, w, " "), "\n") {
 			out = append(out, th.Fg(th.Dim, false).Render(l))
 		}
 		return out
@@ -236,7 +235,7 @@ func (m *Model) channelShareLines(w, rows int) []string {
 		note = "A hashtag channel's secret comes from its name, so sharing the name " + ch.Name + " is enough."
 	}
 	code := qrLines(link)
-	linkRows := strings.Split(ansi.Hardwrap(link, w, false), "\n")
+	linkRows := strings.Split(renderWidth.Hardwrap(link, w, false), "\n")
 	if len(code) > 0 && len(code)+len(linkRows)+6 <= rows && visibleWidth(code[0]) <= w {
 		pad := strings.Repeat(" ", max((w-visibleWidth(code[0]))/2, 0))
 		for _, l := range code {

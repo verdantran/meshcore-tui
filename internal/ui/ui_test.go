@@ -103,7 +103,7 @@ func screen(t testing.TB, m *Model) []string {
 		t.Fatalf("rendered %d rows for a %d-row terminal", len(lines), m.h)
 	}
 	for i, l := range lines {
-		if w := ansi.StringWidth(l); w != m.w {
+		if w := renderWidth.StringWidth(l); w != m.w {
 			t.Fatalf("row %d is %d cells wide, want %d: %q", i, w, m.w, ansi.Strip(l))
 		}
 	}

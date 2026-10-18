@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 	"rsc.io/qr"
 
 	"github.com/verdantran/meshcore-tui/internal/motion"
@@ -167,7 +166,7 @@ func (m *Model) contactDetail(w int) []string {
 	out = append(out, label("signing key")+sig)
 	out = append(out, "")
 	keys := "enter or m message · t trace · d discover route · p set route · r reset route · M route on the map · l place on the map · K pin signing key · f favourite · e share · x remove · I import · a heard · A auto-add · P prune · F type or favourites · o sort · / filter"
-	for _, l := range strings.Split(ansi.Wrap(keys, w, "·"), "\n") {
+	for _, l := range strings.Split(renderWidth.Wrap(keys, w, "·"), "\n") {
 		out = append(out, th.Fg(th.Dim, false).Render(l))
 	}
 	if len(out) > detailRows {
@@ -245,7 +244,7 @@ func (m *Model) shareLines(w, rows int) []string {
 		return append(out, th.Fg(th.Yellow, false).Render(motion.RampBar(m.now, 3)+" exporting from the radio…"))
 	}
 	code := qrLines(c.link)
-	linkRows := strings.Split(ansi.Hardwrap(c.link, w, false), "\n")
+	linkRows := strings.Split(renderWidth.Hardwrap(c.link, w, false), "\n")
 	if len(code)+len(linkRows)+3 > rows || len(code) > 0 && visibleWidth(code[0]) > w {
 		out = append(out, th.Fg(th.Yellow, false).Render("The terminal is too small for the QR code; enlarge it, or copy the link with c."), "")
 	} else {

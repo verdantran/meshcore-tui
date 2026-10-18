@@ -16,13 +16,13 @@ func TestToASCII(t *testing.T) {
 		"\x1b[38;2;1;2;3m◉ me": "\x1b[38;2;1;2;3m@ me",
 		"⠀⠉⣀⡇⣿":                " '.:#",
 		"東京 ok":                "???? ok",
-		"👨‍👩‍👧 family":         "?? family",
+		"👨‍👩‍👧 family":         "?????? family", // as wide as the renderer draws it
 		"plain text":           "plain text",
 	} {
 		if got := toASCII(in); got != want {
 			t.Errorf("toASCII(%q) = %q, want %q", in, got, want)
 		}
-		if ansi.StringWidth(in) != ansi.StringWidth(toASCII(in)) {
+		if renderWidth.StringWidth(in) != renderWidth.StringWidth(toASCII(in)) {
 			t.Errorf("%q changes width", in)
 		}
 	}

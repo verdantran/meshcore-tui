@@ -6,10 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/x/ansi"
-
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 // expectedSteps sizes the boot progress bar; real links send the same sequence.
@@ -177,10 +176,10 @@ func (m *Model) renderBoot() []string {
 	case b.failed:
 		msg := "connection failed"
 		if b.err != nil {
-			msg = b.err.Error()
+			msg = untrusted.Line(b.err.Error())
 		}
 		body = append(body, "")
-		for i, l := range strings.Split(ansi.Wrap(msg, inner-2, " "), "\n") {
+		for i, l := range strings.Split(renderWidth.Wrap(msg, inner-2, " "), "\n") {
 			lead := "  "
 			if i == 0 {
 				lead = "✕ "

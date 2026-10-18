@@ -9,7 +9,6 @@ import (
 	"unicode"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/verdantran/meshcore-tui/internal/admin"
 	"github.com/verdantran/meshcore-tui/internal/chat"
@@ -821,7 +820,7 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 	headLine := bar + stamp + th.Fg(nameCol, true).Render(clip(msg.Sender, max(min(senderMax, room), 4)))
 	gap := w - visibleWidth(headLine) - visibleWidth(meta)
 	out := []string{headLine + strings.Repeat(" ", max(gap, 1)) + meta}
-	lines, lineMarks := wrapEmph(text, marks, max(w-8, 10), func(s string, w int) string { return ansi.Wrap(s, w, "") })
+	lines, lineMarks := wrapEmph(text, marks, max(w-8, 10), func(s string, w int) string { return renderWidth.Wrap(s, w, "") })
 	for i, l := range lines {
 		out = append(out, bar+"      "+m.highlight(l, m.chats.filter.text, th.Text, lineMarks[i]))
 	}

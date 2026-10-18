@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -29,10 +30,15 @@ func (m *Model) View() tea.View {
 		}
 	}
 	for i := range lines {
-		lines[i] = fit(lines[i], m.w)
+		lines[i] = fit(oneLine(lines[i]), m.w)
 	}
 	if m.phase == phaseMain {
 		m.overlayToasts(lines)
+		for i, l := range lines {
+			if strings.Contains(l, "\n") {
+				lines[i] = fit(oneLine(l), m.w)
+			}
+		}
 	}
 	frame := drawable(strings.Join(lines, "\n"))
 	if m.opt.ASCII {
@@ -54,14 +60,10 @@ func (m *Model) View() tea.View {
 	return v
 }
 
-// stringSeqs are the escape sequences a terminal acts on beyond drawing: OSC, DCS, SOS, PM and APC, in 7-bit
-// and 8-bit form. The app writes none of them into a frame, so any here came in with someone else's text.
-var stringSeqs = []string{"\x1b]", "\x1bP", "\x1bX", "\x1b^", "\x1b_", "\u009d", "\u0090", "\u0098", "\u009e", "\u009f"}
-
-// drawable keeps a frame's text and colours and drops every other escape sequence, so nothing that slipped
-// past the cleaning of text from the mesh can reach the terminal.
+// drawable keeps a frame's text and colours and drops every other escape sequence and control character,
+// so nothing that slipped past the cleaning of text from the mesh can reach the terminal.
 func drawable(frame string) string {
-	if !slices.ContainsFunc(stringSeqs, func(s string) bool { return strings.Contains(frame, s) }) {
+	if plainFrame(frame) {
 		return frame
 	}
 	frame = strings.ToValidUTF8(frame, "\uFFFD") // a stray byte could otherwise swallow the escape after it
@@ -82,23 +84,48 @@ func drawable(frame string) string {
 	return b.String()
 }
 
+// plainFrame reports a frame of nothing but text, line breaks and CSI sequences, which the renderer parses and
+// keeps only for colour; anything else goes through drawable's parser.
+func plainFrame(frame string) bool {
+	if !utf8.ValidString(frame) {
+		return false
+	}
+	for i := 0; i < len(frame); i++ {
+		switch c := frame[i]; {
+		case c == 0x1b:
+			if i+1 == len(frame) || frame[i+1] != '[' {
+				return false
+			}
+		case c < 0x20 && c != '\n', c == 0x7f:
+			return false
+		case c == 0xc2 && frame[i+1] <= 0x9f: // U+0080–U+009F, and valid UTF-8 means a byte follows
+			return false
+		}
+	}
+	return true
+}
+
+// oneLine keeps a row on its row, whatever reached it.
+func oneLine(s string) string { return strings.ReplaceAll(s, "\n", " ") }
+
+// renderWidth measures text as the renderer lays it out: per character, as wcwidth does, unless the terminal
+// says it clusters graphemes (mode 2027).
+var renderWidth = ansi.WcWidth
+
 // Layout helpers. Every rendered row is fitted to the terminal width exactly.
 
-func visibleWidth(s string) int { return lipgloss.Width(s) }
+func visibleWidth(s string) int { return renderWidth.StringWidth(s) }
 
 func truncate(s string, n int) string {
 	if n <= 0 {
 		return ""
 	}
-	if len([]rune(s)) <= n {
-		return s
-	}
-	return string([]rune(s)[:max(n-1, 0)]) + "…"
+	return renderWidth.Truncate(s, n, "…")
 }
 
 func fit(s string, w int) string {
 	if vw := visibleWidth(s); vw > w {
-		return ansi.Truncate(s, w, "")
+		return renderWidth.Truncate(s, w, "")
 	} else if vw < w {
 		return s + strings.Repeat(" ", w-vw)
 	}
@@ -193,7 +220,7 @@ func wipe(line string, w int, t float64, th theme.Theme) string {
 		return line
 	}
 	edge := th.Fg(th.Cyan, false).Render("░▒▓█")
-	return ansi.Truncate(line, max(x-4, 0), "") + edge
+	return renderWidth.Truncate(line, max(x-4, 0), "") + edge
 }
 
 func (m *Model) header() string {
@@ -581,7 +608,7 @@ func (m *Model) cycleBattery(node [32]byte, name string) {
 // so padding by character count would push the columns after them out of line.
 func col(s string, w int) string {
 	if visibleWidth(s) > w {
-		s = ansi.Truncate(s, w, "…")
+		s = renderWidth.Truncate(s, w, "…")
 	}
 	return s + strings.Repeat(" ", max(w-visibleWidth(s), 0))
 }
