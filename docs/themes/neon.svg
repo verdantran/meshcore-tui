@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="716" height="104" viewBox="0 0 716 104">
+<rect x="0.5" y="0.5" width="715" height="103" rx="10" fill="#0d0717" stroke="#3b2560"/>
+<text x="20" y="30" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" font-weight="bold" fill="#ece6ff">neon</text>
+<rect x="20" y="44" width="40" height="40" rx="6" fill="#0d0717" stroke="#3b2560"><title>bg #0d0717</title></rect>
+<text x="20" y="98" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#9184b8">bg</text>
+<rect x="72" y="44" width="40" height="40" rx="6" fill="#160c26" stroke="#3b2560"><title>panel #160c26</title></rect>
+<text x="72" y="98" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#9184b8">panel</text>
+<rect x="124" y="44" width="40" height="40" rx="6" fill="#24123d" stroke="#3b2560"><title>raised #24123d</title></rect>
+<text x="124" y="98" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#9184b8">raised</text>
+<rect x="176" y="44" width="40" height="40" rx="6" fill="#3b2560" stroke="#3b2560"><title>line #3b2560</title></rect>
+<text x="176" y="98" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#9184b8">line</text>
+<rect x="228" y="44" width="40" height="40" rx="6" fill="#ece6ff" stroke="#3b2560"><title>text #ece6ff</title></rect>
+<text x="228" y="98" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#9184b8">text</text>
+<rect x="280" y="44" width="40" height="40" rx="6" fill="#9184b8" stroke="#3b2560"><title>muted #9184b8</title></rect>
+<text x="280" y="98" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#9184b8">muted</text>
+<rect x="332" y="44" width="40" height="40" rx="6" fill="#6a5d90" stroke="#3b2560"><title>dim #6a5d90</title></rect>
+<text x="332" y="98" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#9184b8">dim</text>
+<rect x="384" y="44" width="40" height="40" rx="6" fill="#ff2ec4" stroke="#3b2560"><title>magenta #ff2ec4</title></rect>
+<text x="384" y="98" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#9184b8">magenta</text>
+<rect x="436" y="44" width="40" height="40" rx="6" fill="#23e5ff" stroke="#3b2560"><title>cyan #23e5ff</title></rect>
+<text x="436" y="98" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#9184b8">cyan</text>
+<rect x="488" y="44" width="40" height="40" rx="6" fill="#a26bff" stroke="#3b2560"><title>violet #a26bff</title></rect>
+<text x="488" y="98" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#9184b8">violet</text>
+<rect x="540" y="44" width="40" height="40" rx="6" fill="#3dff9e" stroke="#3b2560"><title>green #3dff9e</title></rect>
+<text x="540" y="98" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#9184b8">green</text>
+<rect x="592" y="44" width="40" height="40" rx="6" fill="#ffd23f" stroke="#3b2560"><title>yellow #ffd23f</title></rect>
+<text x="592" y="98" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#9184b8">yellow</text>
+<rect x="644" y="44" width="40" height="40" rx="6" fill="#ff3d6b" stroke="#3b2560"><title>red #ff3d6b</title></rect>
+<text x="644" y="98" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="10" fill="#9184b8">red</text>
+</svg>

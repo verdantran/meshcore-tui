@@ -1,0 +1,131 @@
+# meshcore-tui
+
+A terminal client for [MeshCore](https://meshcore.io) radios: chats, contacts, a map of the mesh drawn in braille, a live packet inspector, and remote administration of repeaters and room servers. It connects over USB serial, Bluetooth or WiFi, runs happily over SSH and in tmux, and ships as a single binary.
+
+![Chats](docs/screenshots/chats.png)
+
+All the screenshots here come from `--demo`, a simulated mesh with made-up nodes, so you can try the app without a radio. They use the `ice` theme.
+
+## Screens
+
+**1 Chats.** Channels and direct messages, with unread counts, delivery state (sent, heard repeating, delivered), hops and signal on every message, and replies. Incoming DMs and mentions show as toasts, and can ring the bell or raise a desktop notification.
+
+**2 Contacts.** Everyone your radio knows, sortable and filterable, with each contact's key, location, route and advert path. From here you can message, trace, discover or set a route, pin a signing key, share a contact as a QR code or link, and import one.
+
+![Contacts](docs/screenshots/contacts.png)
+
+**3 Map.** Nodes placed where they advertise, and the routes packets actually took, hop by hop. Traffic animates across the map as it's heard, and the busiest links stay drawn; `f` picks out one node's links at a time, and `space` switches kinds of node, routes and layers off when it gets busy. The world map is built in and works offline; street detail for your area can be downloaded from OpenFreeMap with one key press.
+
+![Map](docs/screenshots/map.png)
+
+**4 Packets.** What the radio hears on the open mesh, decoded: route, type, hops, path, signal and how many copies arrived. Select a packet to step through its fields, with each field's bytes highlighted in the hex dump. It shows adverts and messages on channels anyone can join (Public and hashtag channels); other people's direct messages and private channels are only counted, never shown.
+
+![Packets](docs/screenshots/packets.png)
+
+**5 Admin.** Log in to repeaters and room servers over the mesh for status, health history, every setting, neighbours, access lists, regions, telemetry, the log and a raw console. A fleet view and a watch list keep an eye on several nodes at once. A repeater plugged in by USB opens straight onto its console with `--repeater`.
+
+**6 Device.** Your own radio's settings: name and location, radio presets, TX power, tuning, telemetry sharing, BLE PIN, clock sync, key export and import, reboot and factory reset. Changes go to the radio as soon as you enter them.
+
+**7 Stats.** Uptime, battery, noise floor, airtime and packet counters with sparklines, and an overview of the mesh from what you've heard: busiest repeaters, hop counts, signal spread and channel activity.
+
+![Stats](docs/screenshots/stats.png)
+
+### Several at once
+
+Any screens can share the view, split side by side or stacked as in tmux: `ctrl+w` then `v` or `s`, arrows to move between them, `ctrl+w q` to close one. Each keeps working while it's on show, so you can read a channel while its packets cross the map. The layout is remembered.
+
+![Chats above, with the map and packets below](docs/screenshots/panes.png)
+
+## Install
+
+You need Go 1.26.9 or later. On a Mac, the build needs cgo for listing serial ports and for Bluetooth, which works out of the box once the Xcode command line tools are installed.
+
+```sh
+go install github.com/verdantran/meshcore-tui/cmd/meshcore-tui@latest
+```
+
+Or from a checkout:
+
+```sh
+git clone https://github.com/verdantran/meshcore-tui
+cd meshcore-tui
+go build -trimpath -o meshcore-tui ./cmd/meshcore-tui
+```
+
+`-trimpath` keeps your own folder names out of the binary. Linux and Windows builds are fully static and can be cross-compiled from anywhere with `CGO_ENABLED=0 GOOS=linux go build -trimpath ./cmd/meshcore-tui`. `meshcore-tui --version` says which version or commit a binary was built from.
+
+## Connecting
+
+Run `meshcore-tui` on its own to open the connect screen. It lists your saved devices first, then likely radios among the serial ports. Press `b` to scan for Bluetooth radios, or enter a TCP address for a WiFi companion. Devices are saved once connected, and one can be set to connect automatically.
+
+You can also connect straight away:
+
+```sh
+meshcore-tui --serial /dev/cu.usbmodem1101    # or /dev/ttyACM0, or COM3
+meshcore-tui --ble AA:BB:CC:DD:EE:FF          # as the connect screen's scan shows it; a UUID on macOS
+meshcore-tui --tcp 192.168.1.40               # port 5000 unless you give one
+meshcore-tui --serial /dev/ttyUSB0 --repeater # a repeater's own console
+meshcore-tui --demo                           # a simulated mesh
+```
+
+Heltec V4 radios ship separate firmware for USB, Bluetooth and WiFi companions. If a connection fails in a way that suggests the wrong build, the app says so.
+
+Over Bluetooth, the first connection may ask for the radio's PIN (`123456` on a Heltec unless you've changed it). On Linux, BlueZ has no agent to ask for it, so pair once with `bluetoothctl` first; on Windows, pair once in Settings → Bluetooth.
+
+## Getting around
+
+| Key | Does |
+|---|---|
+| `1`–`7` | Switch screens (`tab` and `shift+tab` too) |
+| `j` `k`, arrows, `g` `G` | Move in lists, and jump to the top or bottom |
+| `enter`, `esc` | Act on the selected row, and back out one level |
+| `/` | Filter |
+| `:` | Command palette: `:msg Bob hello`, `:trace Dundry`, `:channel share #bristol`, `:map update` |
+| `ctrl+f` | Search messages |
+| `ctrl+w` then `v` or `s` | Split the screen side by side or stacked, as in tmux |
+| `T` | Cycle themes |
+| `v` | Cycle motion: full, reduced, off |
+| `?` | Every key on the current screen |
+| `q` | Quit |
+
+Letters keep their meaning from screen to screen: `y` copies, `e` shares, `x` removes (after asking), `u` refreshes, `n` adds, `o` sorts, `F` cycles a quick filter, `M` shows something on the map and `L` logs in or out. Anything that deletes data or changes another node asks for `y` first, and rebooting or replacing an identity has you type a word.
+
+The mouse works too: click a screen's name to go to it, or a pane to focus it, and the wheel scrolls.
+
+Any key can be rebound in `keys.toml`, apart from `ctrl+c` and what you type into a text field; see [Configuration](docs/configuration.md#keys).
+
+## Looks
+
+The default theme is `neon`. There are twelve others: `dusk`, `vapor`, `ice`, `midnight`, `ember`, `amber`, `toxic`, `phosphor`, `light`, `paper`, `high-contrast`, and `mono`, which is used automatically when `NO_COLOR` is set. Choose one with `--theme`, in the config file, or with `T` as you go.
+
+Each theme is the same thirteen colours, so every screen works in all of them:
+
+<img src="docs/themes/neon.svg" alt="neon" width="716">
+<img src="docs/themes/dusk.svg" alt="dusk" width="716">
+<img src="docs/themes/vapor.svg" alt="vapor" width="716">
+<img src="docs/themes/ice.svg" alt="ice" width="716">
+<img src="docs/themes/midnight.svg" alt="midnight" width="716">
+<img src="docs/themes/ember.svg" alt="ember" width="716">
+<img src="docs/themes/amber.svg" alt="amber" width="716">
+<img src="docs/themes/toxic.svg" alt="toxic" width="716">
+<img src="docs/themes/phosphor.svg" alt="phosphor" width="716">
+<img src="docs/themes/light.svg" alt="light" width="716">
+<img src="docs/themes/paper.svg" alt="paper" width="716">
+<img src="docs/themes/high-contrast.svg" alt="high-contrast" width="716">
+<img src="docs/themes/mono.svg" alt="mono" width="716">
+
+`go run ./scripts/swatches` redraws these from the themes themselves.
+
+The app animates every event the radio reports. Motion drops to `reduced` over SSH, and `--motion off` stills it entirely. For terminals without braille or box drawing, `--ascii` redraws everything in plain ASCII and keeps the colours.
+
+A truecolor terminal looks best. Ghostty, iTerm2, kitty, WezTerm, Alacritty and Windows Terminal all work. On Windows, the old console host can't draw braille or some symbols, so use Windows Terminal.
+
+## Configuration
+
+Settings live in `~/.config/meshcore-tui/config.toml`, and data (message history, contacts, watched nodes' status, map detail and exports) in `~/.local/share/meshcore-tui/`, readable only by you. On Windows they're in `%APPDATA%\meshcore-tui\` and `%LOCALAPPDATA%\meshcore-tui\`. Repeater passwords go in the OS keychain, or in `passwords.json` beside the config where there isn't one, and are only ever sent to a radio that has proved it's yours. [docs/privacy.md](docs/privacy.md) says what's kept and for how long.
+
+The file is optional; everything has a default. [docs/configuration.md](docs/configuration.md) covers every setting.
+
+## Licence
+
+MIT; see [LICENSE](LICENSE). The app is built on [meshcore-go](https://github.com/OwlShack/meshcore-go) and [Charm](https://charm.land)'s Bubble Tea and Lip Gloss. [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) lists the licences of everything compiled in, and the map data's sources: Natural Earth for the built-in world map, and OpenFreeMap, OpenMapTiles and OpenStreetMap for downloaded street detail.
