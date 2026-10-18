@@ -1,6 +1,6 @@
 module github.com/verdantran/meshcore-tui
 
-go 1.26.7
+go 1.26.9
 
 require (
 	charm.land/bubbletea/v2 v2.1.0
