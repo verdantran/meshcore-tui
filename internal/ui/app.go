@@ -119,6 +119,7 @@ type Model struct {
 	help          bool
 	quitting      bool
 	tickerOn      bool
+	beaconOn      bool
 	mouseOn       bool
 	extraCommands []command
 }
@@ -155,11 +156,11 @@ func New(opt Options) *Model {
 	if opt.Clock == nil {
 		opt.Clock = time.Now
 	}
-	m := &Model{opt: opt, th: opt.Theme, themeTo: opt.Theme, level: opt.Motion, now: opt.Clock(), tickerOn: true, mouseOn: true}
+	m := &Model{opt: opt, th: opt.Theme, themeTo: opt.Theme, level: opt.Motion, now: opt.Clock(), tickerOn: true, beaconOn: true, mouseOn: true}
 	m.lay, m.tab = m.savedLayout()
 	retries, flood := 3, true
 	if opt.Config != nil {
-		m.tickerOn, m.mouseOn = opt.Config.UI.PacketTicker, opt.Config.UI.Mouse
+		m.tickerOn, m.beaconOn, m.mouseOn = opt.Config.UI.PacketTicker, opt.Config.UI.Beacon, opt.Config.UI.Mouse
 		retries, flood = opt.Config.Messages.DMRetries, opt.Config.Messages.FloodFallback
 	}
 	if opt.Store != nil {

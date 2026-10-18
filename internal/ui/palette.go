@@ -63,6 +63,16 @@ func commands() []command {
 				return nil
 			},
 			complete: func(*Model) []string { return []string{"on", "off"} }},
+		{name: "beacon", args: "on|off", help: "show or hide the rings pulsing around you on the map",
+			run: func(m *Model, a []string) error {
+				m.beaconOn = len(a) == 0 && !m.beaconOn || len(a) > 0 && a[0] == "on"
+				if m.opt.Config != nil {
+					m.opt.Config.UI.Beacon = m.beaconOn
+					m.saveConfig()
+				}
+				return nil
+			},
+			complete: func(*Model) []string { return []string{"on", "off"} }},
 		{name: "mouse", args: "on|off", help: "let clicks pick screens and panes, or leave the mouse to the terminal for selecting text",
 			run: func(m *Model, a []string) error {
 				m.mouseOn = len(a) == 0 && !m.mouseOn || len(a) > 0 && a[0] == "on"

@@ -689,7 +689,7 @@ func (m *Model) mapAnimating() bool {
 
 // mapBeaconOn reports the beacon pulsing around us, which runs whenever the map shows at full motion.
 func (m *Model) mapBeaconOn() bool {
-	return m.visible(2) && m.mapv.world != nil && m.mapv.path == nil && m.level == motion.Full && m.phase == phaseMain &&
+	return m.beaconOn && m.visible(2) && m.mapv.world != nil && m.mapv.path == nil && m.level == motion.Full && m.phase == phaseMain &&
 		!(mapview.LatLon{Lat: m.ready.Self.Lat, Lon: m.ready.Self.Lon}).Unplaced()
 }
 
@@ -760,7 +760,10 @@ func (m *Model) renderMap(w, h int) []string {
 		mv.rows, mv.cacheKey = mv.cache.Render(!th.Mono), key
 	}
 	c := mv.cache.Clone()
-	self := mapview.LatLon{Lat: m.ready.Self.Lat, Lon: m.ready.Self.Lon}
+	var self mapview.LatLon // unplaced draws no beacon
+	if m.beaconOn {
+		self = mapview.LatLon{Lat: m.ready.Self.Lat, Lon: m.ready.Self.Lon}
+	}
 	mapview.DrawAnims(c, v, mv.anims, self, m.level, m.now, pal)
 	out := append([]string(nil), mv.rows...)
 	for y := range out {

@@ -27,6 +27,7 @@ type Config struct {
 		Theme        string `toml:"theme"`
 		Motion       string `toml:"motion"` // empty means the default: full, or reduced over SSH
 		PacketTicker bool   `toml:"packet_ticker"`
+		Beacon       bool   `toml:"beacon"` // the rings pulsing around us on the map at full motion
 		Mouse        bool   `toml:"mouse"`  // clicks pick screens and panes; off leaves the mouse to the terminal, for selecting text
 		Layout       string `toml:"layout"` // split panes, e.g. "right 50 (*chats, packets)"; empty is one screen
 		ASCII        bool   `toml:"ascii"`  // plain ASCII for terminals without braille or box drawing
@@ -65,6 +66,7 @@ func Default() *Config {
 	c := &Config{}
 	c.UI.Theme = "neon"
 	c.UI.PacketTicker = true
+	c.UI.Beacon = true
 	c.UI.Mouse = true
 	c.Connection.TimeSyncDrift = 5
 	c.Messages.DMRetries = 3

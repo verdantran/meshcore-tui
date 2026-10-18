@@ -414,3 +414,25 @@ func TestStartupNotes(t *testing.T) {
 		t.Errorf("log = %+v", m.log)
 	}
 }
+
+func TestBeaconChoicePersists(t *testing.T) {
+	path := t.TempDir() + "/config.toml"
+	cfg, _ := config.Load(path)
+	if !cfg.UI.Beacon {
+		t.Fatal("the beacon is on by default")
+	}
+	m, c := newTestModel(t, motion.Full, 100, 30)
+	m.opt.Config = cfg
+	boot(m, c)
+	bootDone(t, m, c)
+	typeKeys(m, ":beacon off")
+	key(m, tea.KeyEnter)
+	back, _ := config.Load(path)
+	if back.UI.Beacon {
+		t.Fatal(":beacon off wasn't saved")
+	}
+	m2 := New(Options{Theme: theme.Neon, Motion: motion.Full, Clock: c.now, Config: back})
+	if m2.beaconOn {
+		t.Error("a saved beacon = false should start with it off")
+	}
+}

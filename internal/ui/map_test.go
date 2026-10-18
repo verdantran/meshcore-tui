@@ -67,6 +67,14 @@ func TestMapScreen(t *testing.T) {
 	if cmd := h.m.ensureTick(); cmd == nil {
 		t.Error("the beacon keeps the clock going, at its slower rate")
 	}
+	h.keys(":beacon off")
+	h.key(tea.KeyEnter)
+	h.m.ticking = false
+	if h.m.mapBeaconOn() || h.m.ensureTick() != nil {
+		t.Error(":beacon off stops the beacon and its clock")
+	}
+	h.keys(":beacon on")
+	h.key(tea.KeyEnter)
 
 	// A message on Public comes in by Kelston or Lansdown, then Purdown; a stranger advertises from Bath.
 	h.hear(channelPacket(t, h, "Public", "Bob", "hello all", []byte{0x5F, 0x77}), 6)
