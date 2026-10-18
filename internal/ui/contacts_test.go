@@ -227,6 +227,7 @@ func TestContactsShareRemoveImport(t *testing.T) {
 	h.keys("I")
 	h.keys(link)
 	h.key(tea.KeyEnter)
+	h.keys("y")
 	h.until("imported", func() bool { return len(h.m.chat.Contacts()) == 15 })
 }
 

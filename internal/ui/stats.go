@@ -216,6 +216,8 @@ type meshTally struct {
 	channels map[string]int
 }
 
+const maxAdvertNames = 4096 // per hour: names cost nothing to make up
+
 func newMeshTally() meshTally {
 	return meshTally{adverts: map[time.Time]map[string]bool{}, hops: map[int]int{}, hashes: map[byte]int{}, channels: map[string]int{}}
 }
@@ -232,9 +234,15 @@ func (t *meshTally) add(d packets.Decoded, snr float32, first, open bool, now ti
 		h := now.Truncate(time.Hour)
 		if t.adverts[h] == nil {
 			t.adverts[h] = map[string]bool{}
-			delete(t.adverts, h.Add(-24*time.Hour))
+			for at := range t.adverts {
+				if !at.After(h.Add(-24 * time.Hour)) {
+					delete(t.adverts, at)
+				}
+			}
 		}
-		t.adverts[h][d.Name] = true
+		if len(t.adverts[h]) < maxAdvertNames {
+			t.adverts[h][d.Name] = true
+		}
 	}
 	if d.Err == nil && d.Flood {
 		size := max(d.HashSize, 1)

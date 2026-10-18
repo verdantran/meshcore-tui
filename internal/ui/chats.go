@@ -44,8 +44,7 @@ type chatsModel struct {
 	reading bool  // moving through the open conversation's messages, to reply to one or see its route
 	cur     int64 // the message picked while reading
 
-	heard  []heardMessage      // message packets heard lately, for giving messages their paths
-	routed map[int64]time.Time // when a message was given its path
+	heard []heardMessage // message packets heard lately, for giving messages their paths
 
 	sigs     []pendingSig         // signatures waiting for their message
 	signFlip bool                 // ctrl+s: sign, or don't, against the channel's setting, for this message
@@ -75,7 +74,7 @@ type chatsModel struct {
 
 func newChats() chatsModel {
 	return chatsModel{arrived: map[int64]time.Time{}, acked: map[int64]time.Time{}, failed: map[int64]time.Time{}, echoed: map[int64]time.Time{},
-		routed: map[int64]time.Time{}, signedMsgs: map[string]store.Message{}, usedSigs: map[[64]byte]usedSig{}, popped: map[store.Convo]time.Time{}}
+		signedMsgs: map[string]store.Message{}, usedSigs: map[[64]byte]usedSig{}, popped: map[store.Convo]time.Time{}}
 }
 
 type sendResultMsg struct {
@@ -191,7 +190,7 @@ func (m *Model) chatEvent(e radio.Event) tea.Cmd {
 			m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 			return nil
 		}
-		m.chats.arrived[msg.ID] = m.now
+		flash(m.chats.arrived, msg.ID, m.now, arriveDur)
 		m.routeArrived(msg)
 		m.sigArrived(msg)
 		title := m.chat.Title(msg.Convo)
@@ -215,7 +214,7 @@ func (m *Model) chatEvent(e radio.Event) tea.Cmd {
 	case radio.Acked:
 		msg, ok, _ := m.chat.Acked(e)
 		if ok {
-			m.chats.acked[msg.ID] = m.now
+			flash(m.chats.acked, msg.ID, m.now, popDur)
 			m.addLog(m.now, fmt.Sprintf("DELIVERED  ✓ %s  %s", m.chat.Title(msg.Convo), seconds(msg.RTT)), radio.ToneOK)
 			m.refreshChats()
 		}
@@ -229,7 +228,7 @@ func (m *Model) chatResult(r sendResultMsg) tea.Cmd {
 		m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 	}
 	if msg.State == store.Failed && msg.ID != 0 {
-		m.chats.failed[msg.ID] = m.now
+		flash(m.chats.failed, msg.ID, m.now, glitchDur*3)
 		m.fail(fmt.Sprintf("SEND FAILED  %s: %s", m.chat.Title(msg.Convo), radio.Explain(r.err)))
 	}
 	m.refreshChats()
@@ -254,7 +253,7 @@ func (m *Model) chatTimeout(t ackTimeoutMsg) tea.Cmd {
 		m.addLog(m.now, fmt.Sprintf("NO ACK  %s  %s (try %d)", m.chat.Title(msg.Convo), how, next.Attempt+1), radio.ToneWarn)
 		return m.sendCmd(*next)
 	case msg.State == store.Failed:
-		m.chats.failed[msg.ID] = m.now
+		flash(m.chats.failed, msg.ID, m.now, glitchDur*3)
 		m.fail(fmt.Sprintf("NOT DELIVERED  %s after %d tries", m.chat.Title(msg.Convo), msg.Attempts))
 	}
 	return nil
@@ -504,7 +503,7 @@ func (m *Model) readingKey(s string) (tea.Cmd, bool) {
 	case "y":
 		msg := c.msgs[i]
 		m.addLog(m.now, "COPIED  "+msg.Sender+"'s message, to the clipboard", radio.ToneOK)
-		return tea.SetClipboard(msg.Text), true
+		return m.copyText(msg.Text), true
 	default:
 		return nil, false
 	}
@@ -513,6 +512,30 @@ func (m *Model) readingKey(s string) (tea.Cmd, bool) {
 		c.scroll = below // it was hidden under the bottom of the pane
 	}
 	return nil, true
+}
+
+// flash marks a message for an animation lasting d, dropping marks whose animation is over.
+func flash(marks map[int64]time.Time, id int64, now time.Time, d time.Duration) {
+	for k, at := range marks {
+		if now.Sub(at) >= d {
+			delete(marks, k)
+		}
+	}
+	marks[id] = now
+}
+
+const maxSignedMsgs = 2000
+
+// trimSigned forgets which message old signatures were for, once there are many.
+func (m *Model) trimSigned() {
+	if len(m.chats.signedMsgs) <= maxSignedMsgs {
+		return
+	}
+	for k, msg := range m.chats.signedMsgs {
+		if m.now.Sub(msg.RecvAt) > time.Hour {
+			delete(m.chats.signedMsgs, k)
+		}
+	}
 }
 
 func (m *Model) chatsAnimating() bool {
@@ -937,7 +960,7 @@ func (m *Model) heardEcho(dec packets.Decoded) {
 		m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 	}
 	if ok {
-		m.chats.echoed[id] = m.now
+		flash(m.chats.echoed, id, m.now, popDur)
 		m.refreshChats()
 	}
 }

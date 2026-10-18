@@ -103,3 +103,19 @@ func TestParseReplies(t *testing.T) {
 		t.Error("set replies")
 	}
 }
+
+func TestValidateRefusesNonFiniteNumbers(t *testing.T) {
+	lat, _ := Lookup("lat")
+	radioSt, _ := Lookup("radio")
+	for _, v := range []string{"NaN", "nan", "Inf", "+Inf", "-Inf", "infinity"} {
+		if lat.Validate(v) == nil {
+			t.Errorf("lat %q accepted", v)
+		}
+		if radioSt.Validate(v+",62.5,8,8") == nil {
+			t.Errorf("radio frequency %q accepted", v)
+		}
+	}
+	if lat.Validate("51.45") != nil {
+		t.Error("a real latitude is refused")
+	}
+}

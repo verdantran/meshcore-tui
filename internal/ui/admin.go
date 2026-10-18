@@ -466,7 +466,7 @@ func (m *Model) adminKey(s string) (tea.Cmd, bool) {
 			return nil, true
 		}
 		if sess.State != admin.LoggedIn {
-			a.prompt, a.input = promptPassword, lineEdit{}
+			m.openLogin()
 			return nil, true
 		}
 		return m.logout(ct), true
@@ -486,7 +486,7 @@ func (m *Model) adminKey(s string) (tea.Cmd, bool) {
 	}
 	if sess.State != admin.LoggedIn {
 		if s == "enter" {
-			a.prompt, a.input = promptPassword, lineEdit{}
+			m.openLogin()
 			return nil, true
 		}
 		return nil, false
@@ -532,7 +532,7 @@ func (m *Model) nodeListKey(s string) (tea.Cmd, bool) {
 			if pw, ok := m.opt.Keychain.Get(ct.Key); ok && sess.State != admin.LoginFailed {
 				return m.startJob(m.admin.Login(ct, pw, m.now)), true
 			}
-			a.prompt, a.input, a.remember = promptPassword, lineEdit{}, false
+			m.openLogin()
 			return nil, true
 		}
 		return m.setPane(a.pane), true
@@ -598,6 +598,11 @@ func (m *Model) nodeListKey(s string) (tea.Cmd, bool) {
 		return nil, false
 	}
 	return nil, true
+}
+
+// openLogin asks for a password, with remember-it off so a password is only saved for the node it was ticked for.
+func (m *Model) openLogin() {
+	m.adm.prompt, m.adm.input, m.adm.remember = promptPassword, lineEdit{}, false
 }
 
 func (m *Model) logout(ct radio.Contact) tea.Cmd {
@@ -939,22 +944,40 @@ func (m *Model) logKey(s string, ct radio.Contact, sess *admin.Session) (tea.Cmd
 }
 
 // dangerous reports why a console command needs the node's name typed before it's sent: it takes the node
-// off the air, strands it, or replaces its identity or password. Erasing data asks for y instead.
+// off the air, strands it, wipes it, or replaces its identity or password. Erasing the log asks for y instead.
+// Commands are matched by prefix, ignoring case and extra spaces, since the firmware matches on prefixes too.
 func dangerous(cmd string) string {
-	f := strings.Fields(cmd)
-	switch {
-	case len(f) == 0:
+	f := strings.Fields(strings.ToLower(cmd))
+	if len(f) == 0 {
 		return ""
-	case f[0] == "reboot", f[0] == "poweroff", f[0] == "shutdown":
+	}
+	line := strings.Join(f, " ")
+	has := func(p string) bool { return strings.HasPrefix(line, p) }
+	switch {
+	case has("reboot"), has("clkreboot"), has("poweroff"), has("shutdown"):
 		return "The node goes off the mesh until it restarts."
-	case cmd == "start ota":
+	case has("start ota"):
 		return "The node stops routing and waits for a firmware upload."
-	case f[0] == "password":
+	case has("erase"):
+		return "This erases data on the node, and it can't be undone."
+	case has("password"):
 		return "This changes the admin password. Note it down: there's no recovery over the air."
-	case len(f) > 1 && f[0] == "set" && f[1] == "prv.key":
+	case f[0] != "set" || len(f) < 2:
+		return ""
+	}
+	switch key := f[1]; key {
+	case "prv.key":
 		return "This replaces the node's identity. Every contact will see it as a new node."
-	case len(f) > 1 && f[0] == "set" && f[1] == "radio":
+	case "radio", "freq", "bw", "sf", "cr":
 		return "A wrong value strands the node off-frequency, out of reach. Try `tempradio` first: it reverts by itself."
+	case "password", "guest.password":
+		return "This changes a password on the node. Note it down: there's no recovery over the air."
+	default:
+		if st, ok := admin.Lookup(key); !ok {
+			return "This app doesn't know what " + key + " does, so check the value before it goes to the node."
+		} else if st.Dangerous {
+			return st.Help
+		}
 	}
 	return ""
 }
@@ -979,13 +1002,15 @@ func (m *Model) consoleKey(s string, ct radio.Contact, sess *admin.Session) (tea
 			m.fail("CONSOLE  needs an admin login")
 			return nil, true
 		}
-		a.history = append(a.history, cmd)
+		if !admin.Secret(cmd) {
+			a.history = append(a.history, cmd)
+		}
 		a.histAt, a.console = len(a.history), lineEdit{}
 		if why := dangerous(cmd); why != "" {
 			m.askConfirm(confirmAction{title: strings.ToUpper(cmd) + " ON " + strings.ToUpper(ct.Name), warning: why, commands: []string{cmd}})
 			return nil, true
 		}
-		if f := strings.Fields(cmd); f[0] == "erase" || cmd == "log erase" {
+		if cmd == "log erase" {
 			m.ask(cmd+" on "+ct.Name+"? it deletes data on the node", "send", func() tea.Cmd { return m.cli(ct.Key, cmd, purposeOf(cmd)) })
 			return nil, true
 		}
@@ -1124,16 +1149,29 @@ func (m *Model) adminPromptKey(s string) tea.Cmd {
 	case promptDiff:
 		switch s {
 		case "y", "Y":
-			reboot := s == "Y"
-			for _, ch := range m.admin.Changes(ct.Key) {
+			changes := m.admin.Changes(ct.Key)
+			if s == "Y" && slices.ContainsFunc(changes, func(ch admin.Change) bool { return ch.Setting.Reboot }) {
+				warning := "It drops off the mesh for a minute and you'll need to log in again."
+				for _, ch := range changes {
+					if ch.Setting.Dangerous {
+						warning = ch.Setting.Help + " " + warning
+					}
+				}
+				m.askConfirm(confirmAction{title: "APPLY SETTINGS TO " + strings.ToUpper(ct.Name) + " AND REBOOT IT", apply: true, commands: []string{"reboot"}, warning: warning})
+				return nil
+			}
+			if s == "Y" {
+				a.prompt = noPrompt
+				return nil
+			}
+			for _, ch := range changes {
 				if ch.Setting.Dangerous {
-					m.askConfirm(confirmAction{title: "APPLY SETTINGS TO " + strings.ToUpper(ct.Name), warning: ch.Setting.Help, apply: true,
-						commands: map[bool][]string{true: {"reboot"}}[reboot]})
+					m.askConfirm(confirmAction{title: "APPLY SETTINGS TO " + strings.ToUpper(ct.Name), warning: ch.Setting.Help, apply: true})
 					return nil
 				}
 			}
 			a.prompt = noPrompt
-			return m.applySettings(ct, reboot)
+			return m.applySettings(ct, false)
 		default:
 			a.prompt = noPrompt
 		}
@@ -1258,7 +1296,7 @@ func (m *Model) loginFromChats(ct radio.Contact) {
 		}
 	}
 	m.adm.open, m.adm.opened, m.adm.pane = ct.Key, true, paneStatus
-	m.adm.prompt, m.adm.input = promptPassword, lineEdit{}
+	m.openLogin()
 	key := ct.Key
 	m.adm.returnTo = &key
 }

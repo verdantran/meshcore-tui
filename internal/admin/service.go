@@ -126,6 +126,7 @@ type Session struct {
 
 	inflight *Command
 	queue    []*Command
+	late     time.Time // until when a reply may still be the one a timed-out command never got
 }
 
 func (s *Session) Latest() (StatusPoint, bool) {
@@ -392,7 +393,7 @@ func (s *Service) Command(key [32]byte, text, purpose string, now time.Time) *Co
 	}
 	s.nextID++
 	cmd := &Command{ID: s.nextID, Key: key, Text: text, Purpose: purpose, Silent: Silent(text)}
-	sess.Console = appendLine(sess.Console, Line{At: now, Out: true, Text: text})
+	sess.Console = appendLine(sess.Console, Line{At: now, Out: true, Text: redact(text)})
 	if strings.HasPrefix(purpose, "get ") {
 		k := strings.TrimPrefix(purpose, "get ")
 		v := sess.Settings[k]
@@ -401,6 +402,32 @@ func (s *Service) Command(key [32]byte, text, purpose string, now time.Time) *Co
 	}
 	sess.queue = append(sess.queue, cmd)
 	return s.nextCommand(sess, now)
+}
+
+// Secret reports whether a console command carries a password or key, which is never shown or kept.
+func Secret(text string) bool {
+	f := strings.Fields(strings.ToLower(text))
+	switch {
+	case len(f) == 0:
+		return false
+	case strings.HasPrefix(f[0], "password"):
+		return true
+	case f[0] != "set" || len(f) < 2:
+		return false
+	}
+	st, ok := Lookup(f[1])
+	return f[1] == "prv.key" || f[1] == "password" || ok && st.Kind == KindPassword
+}
+
+func redact(text string) string {
+	if !Secret(text) {
+		return text
+	}
+	f := strings.Fields(text)
+	if strings.EqualFold(f[0], "set") {
+		return f[0] + " " + f[1] + " ••••••"
+	}
+	return f[0] + " ••••••"
 }
 
 // Silent reports whether a command makes the node go away without replying.
@@ -454,6 +481,11 @@ func (s *Service) OnReply(from [6]byte, text string, now time.Time) (sess *Sessi
 	if !ok {
 		return nil, nil, nil
 	}
+	if !sess.late.IsZero() && now.Before(sess.late) {
+		sess.late = time.Time{}
+		sess.Console = appendLine(sess.Console, Line{At: now, Text: "late reply, not taken as an answer: " + text, Error: true})
+		return sess, nil, nil
+	}
 	if sess.inflight == nil {
 		sess.Console = appendLine(sess.Console, Line{At: now, Text: text}) // unsolicited, keep it anyway
 		return sess, nil, nil
@@ -470,6 +502,7 @@ func (s *Service) CommandTimedOut(key [32]byte, id int, now time.Time) *Command 
 		return nil
 	}
 	s.settle(sess, fmt.Sprintf("no reply after %s", CommandTimeout), true, now)
+	sess.late = now.Add(CommandTimeout) // replies carry no ID, so its answer could still come and be taken for the next command's
 	return s.nextCommand(sess, now)
 }
 
@@ -477,6 +510,9 @@ func (s *Service) settle(sess *Session, text string, failed bool, now time.Time)
 	c := sess.inflight
 	sess.inflight = nil
 	errLine := failed || strings.HasPrefix(text, "Error") || strings.HasPrefix(text, "Unknown")
+	if Secret(c.Text) && strings.HasPrefix(text, "password now:") {
+		text = "password now: ••••••" // the firmware echoes the new password
+	}
 	if c.Purpose == "log" && !failed {
 		pl := ParseLog(text)
 		sess.PacketLog, sess.PacketLogAt = &pl, now

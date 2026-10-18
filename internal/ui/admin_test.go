@@ -550,7 +550,12 @@ func TestAdminRendersSmall(t *testing.T) {
 
 func TestConsoleHelpers(t *testing.T) {
 	for cmd, risky := range map[string]bool{"reboot": true, "start ota": true, "password x": true, "log erase": false, "set prv.key ab": true,
-		"set radio 1,2,3,4": true, "set tx 20": false, "ver": false, "": false, "erase": false, "poweroff": true} {
+		"set radio 1,2,3,4": true, "set tx 20": false, "ver": false, "": false, "erase": true, "poweroff": true,
+		// The firmware matches on prefixes, so near misses are caught too.
+		"rebootnow": true, "REBOOT": true, "  reboot ": true, "eraseall": true, "start  ota": true, "start ota now": true,
+		"set freq 433": true, "set bw 125": true, "set sf 12": true, "set cr 5": true, "Set Radio 1,2,3,4": true,
+		"set guest.password x": true, "set password x": true, "set nonsense 1": true, "set repeat off": false,
+		"tempradio 869.5,62.5,8,8,5": false, "setperm ab 1": false, "get freq": false} {
 		if (dangerous(cmd) != "") != risky {
 			t.Errorf("dangerous(%q)", cmd)
 		}

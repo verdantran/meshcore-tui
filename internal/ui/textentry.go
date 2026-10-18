@@ -44,6 +44,49 @@ func (m *Model) typing() bool {
 	return false
 }
 
+// confirming reports a question answered with a single y, which a paste must never answer.
+func (m *Model) confirming() bool {
+	if m.asking != nil {
+		return true
+	}
+	if m.phase != phaseMain {
+		return false
+	}
+	switch m.tab {
+	case 0:
+		return m.chats.chanStage == chanRemove || m.chats.chanStage == chanShare
+	case 1:
+		switch m.contacts.overlay {
+		case shareOverlay, removeOverlay, pruneOverlay, importConfirmOverlay:
+			return true
+		}
+	case 4:
+		return m.adm.prompt == promptDiff
+	case 5:
+		dm := &m.device
+		return dm.prompt == devConfirm && dm.confirm.word == "" || dm.prompt == devShowKey
+	}
+	return false
+}
+
+// cancelConfirm closes what confirming found open.
+func (m *Model) cancelConfirm() {
+	if m.asking != nil {
+		m.asking = nil
+		return
+	}
+	switch m.tab {
+	case 0:
+		m.chats.chanStage = chanNone
+	case 1:
+		m.contacts.overlay = noOverlay
+	case 4:
+		m.adm.prompt = noPrompt
+	case 5:
+		m.device.prompt, m.device.key = devNone, ""
+	}
+}
+
 // typeText puts text into the field with the keyboard a character at a time, as if typed. That lets emoji
 // built from several characters (flags, skin tones, ❤️) through fields that take one character per key.
 // Line breaks and tabs become spaces, so a paste never sends a message by itself.
@@ -66,6 +109,11 @@ func (m *Model) typeText(text string) tea.Cmd {
 // paste puts pasted text into the field with the keyboard. In Chats, pasting with nowhere to type starts a
 // message with it.
 func (m *Model) paste(text string) tea.Cmd {
+	if !m.pal.open && m.confirming() {
+		m.cancelConfirm()
+		m.addLog(m.now, "PASTE  dropped, and the question cancelled: answer it with a key", radio.ToneWarn)
+		return nil
+	}
 	if !m.typing() && m.phase == phaseMain && m.tab == 0 && len(m.chats.infos) > 0 && m.chats.chanStage == chanNone {
 		m.chats.reading, m.chats.writing = false, true
 	}
@@ -74,6 +122,12 @@ func (m *Model) paste(text string) tea.Cmd {
 		return nil
 	}
 	return m.typeText(text)
+}
+
+// copyText is how every copy goes to the clipboard, so clipGen counts them.
+func (m *Model) copyText(text string) tea.Cmd {
+	m.clipGen++
+	return tea.SetClipboard(text)
 }
 
 // dropLast removes the last character as it's seen, for backspace: a whole emoji, flag or accented letter,

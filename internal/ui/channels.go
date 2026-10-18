@@ -177,7 +177,7 @@ func (m *Model) channelKey(s string) (tea.Cmd, bool) {
 	case chanShare:
 		if s == "y" {
 			m.addLog(m.now, "COPIED  link for "+c.shareCh.Name, radio.ToneOK)
-			return tea.SetClipboard(chat.ChannelLink(c.shareCh)), true
+			return m.copyText(chat.ChannelLink(c.shareCh)), true
 		}
 		c.chanStage = chanNone
 	case chanRemove:

@@ -122,6 +122,7 @@ type Model struct {
 	help          bool
 	helpScroll    int
 	asking        *question
+	clipGen       int // counts copies, so a timed clear never wipes something copied since
 	quitting      bool
 	tickerOn      bool
 	beaconOn      bool
@@ -311,7 +312,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	case jobSentMsg, jobTimeoutMsg, cmdSentMsg, cmdTimeoutMsg, autoStatusMsg, fleetPollMsg, keysCheckedMsg, watchTickMsg:
 		cmds = append(cmds, m.safely("a reply from a node", func() tea.Cmd { return m.adminMsg(msg) }))
-	case devLoadedMsg, devOpMsg, keyExportedMsg:
+	case devLoadedMsg, devOpMsg, keyExportedMsg, clipClearMsg:
 		cmds = append(cmds, m.deviceMsg(msg))
 	case statsMsg, statsTickMsg:
 		cmds = append(cmds, m.statsMsg(msg))

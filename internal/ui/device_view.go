@@ -178,7 +178,7 @@ func (m *Model) devConfirmLines(w int) []string {
 
 func (m *Model) keyLines(w int) []string {
 	th, dm := m.th, &m.device
-	out := []string{th.Fg(th.Red, true).Render("PRIVATE KEY") + th.Fg(th.Dim, false).Render("  ·  y copy · any other key hide it"), ""}
+	out := []string{th.Fg(th.Red, true).Render("PRIVATE KEY") + th.Fg(th.Dim, false).Render("  ·  y copy, cleared after 30 s · any other key hide it"), ""}
 	if dm.key == "" {
 		return append(out, m.waiting("reading it from the radio…"))
 	}

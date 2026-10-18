@@ -112,6 +112,11 @@ type keyExportedMsg struct {
 	err error
 }
 
+// clipClearMsg empties the clipboard after a private key was copied, unless something else was copied since.
+type clipClearMsg struct{ gen int }
+
+const keyClipFor = 30 * time.Second
+
 func (m *Model) dev() radio.Device {
 	if m.radio == nil {
 		return nil
@@ -179,6 +184,10 @@ func (m *Model) deviceMsg(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		dm.key = hex.EncodeToString(msg.key[:])
+	case clipClearMsg:
+		if msg.gen == m.clipGen {
+			return m.copyText("")
+		}
 	}
 	return nil
 }
@@ -398,7 +407,7 @@ func (m *Model) deviceRows() []devRow {
 	}
 	pin := fmt.Sprintf("%06d", s.Pin)
 	rows = append(rows,
-		devRow{id: "pin", group: "Security", label: "BLE PIN", value: pin, kind: rowEdit, initial: pin, hint: "Six digits, asked for when pairing over Bluetooth.",
+		devRow{id: "pin", group: "Security", label: "BLE PIN", value: "••••••", kind: rowEdit, initial: pin, hint: "Six digits, asked for when pairing over Bluetooth.",
 			apply: func(in string) (devOp, error) {
 				in = strings.TrimSpace(in)
 				n, err := strconv.Atoi(in)
@@ -411,8 +420,12 @@ func (m *Model) deviceRows() []devRow {
 		devRow{id: "export", group: "Security", label: "Export private key", value: "show", kind: rowAction,
 			hint: "Anyone with this key can be you on the mesh.",
 			press: func(m *Model) tea.Cmd {
+				warning := "Anyone who sees it can read your messages and send as you. It's shown once, never logged or saved."
+				if m.radio.Transport() == "TCP" {
+					warning += " This radio is connected over WiFi, so the key crosses your network unencrypted on its way here."
+				}
 				m.device.prompt, m.device.confirm = devConfirm, devConfirmation{title: "SHOW THE PRIVATE KEY",
-					warning: "Anyone who sees it can read your messages and send as you. It's shown once, never logged or saved.",
+					warning: warning,
 					after: func(m *Model) tea.Cmd {
 						d := m.dev()
 						m.device.prompt, m.device.key, m.device.busy["export"] = devShowKey, "", m.now
@@ -558,6 +571,8 @@ func (m *Model) devicePromptKey(s string) tea.Cmd {
 		dm.prompt = devNone
 		what := strings.ToUpper(r.label) + "  " + strings.TrimSpace(dm.input.text)
 		switch {
+		case r.id == "pin":
+			what = "BLE PIN CHANGED"
 		case r.id == "import":
 			what = "PRIVATE KEY IMPORTED"
 			dm.prompt, dm.input, dm.confirm = devConfirm, lineEdit{}, devConfirmation{title: "REPLACE THIS RADIO'S IDENTITY",
@@ -609,8 +624,10 @@ func (m *Model) devicePromptKey(s string) tea.Cmd {
 		return m.runOp(c.id, c.what, c.op, c.id != "reboot" && c.id != "reset")
 	case devShowKey:
 		if s == "y" && dm.key != "" {
-			m.addLog(m.now, "COPIED  private key to the clipboard", radio.ToneWarn)
-			return tea.SetClipboard(dm.key)
+			m.addLog(m.now, "COPIED  private key to the clipboard; it's cleared in 30 s", radio.ToneWarn)
+			cmd := m.copyText(dm.key)
+			gen := m.clipGen
+			return tea.Batch(cmd, tea.Tick(keyClipFor, func(time.Time) tea.Msg { return clipClearMsg{gen} }))
 		}
 		dm.prompt, dm.key = devNone, ""
 	}

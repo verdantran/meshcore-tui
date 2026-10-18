@@ -10,12 +10,14 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	meshcore "github.com/OwlShack/meshcore-go"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/store"
 	"github.com/verdantran/meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 const (
@@ -36,6 +38,7 @@ const (
 	removeOverlay
 	autoOverlay
 	pruneOverlay
+	importConfirmOverlay
 )
 
 var typeFilters = []struct {
@@ -85,6 +88,7 @@ type contactsModel struct {
 	editPath  []byte
 	editSel   int
 	importIn  lineEdit
+	importing linkContact // the link waiting for y, and who it says it is
 	placeIn   lineEdit
 	auto      radio.AutoAdd
 	autoSel   int
@@ -651,7 +655,7 @@ func (m *Model) overlayKey(s string) tea.Cmd {
 	case shareOverlay:
 		if s == "y" && c.link != "" {
 			m.addLog(m.now, "COPIED  link for "+ct.Name, radio.ToneOK)
-			return tea.SetClipboard(c.link)
+			return m.copyText(c.link)
 		}
 		c.overlay = noOverlay
 	case removeOverlay:
@@ -671,14 +675,25 @@ func (m *Model) overlayKey(s string) tea.Cmd {
 		case "enter":
 			link := strings.TrimSpace(c.importIn.text)
 			c.overlay = noOverlay
-			if _, err := radio.ParseLink(link); err != nil {
+			data, err := radio.ParseLink(link)
+			if err != nil {
 				m.fail("IMPORT  " + err.Error())
 				return nil
 			}
-			return m.contactOp("IMPORTED  contact from link", func(ctx context.Context, r radio.Radio) error { return r.ImportContact(ctx, link) })
+			c.importing, c.overlay = m.readLink(link, data), importConfirmOverlay
 		default:
 			c.importIn.key(s)
 		}
+	case importConfirmOverlay:
+		c.overlay = noOverlay
+		if s != "y" {
+			return nil
+		}
+		link, what := c.importing.link, "IMPORTED  contact from link"
+		if c.importing.name != "" {
+			what = "IMPORTED  " + c.importing.name
+		}
+		return m.contactOp(what, func(ctx context.Context, r radio.Radio) error { return r.ImportContact(ctx, link) })
 	case editorOverlay:
 		reps := m.repeaters()
 		switch s {
@@ -829,4 +844,33 @@ func (m *Model) saveLocations() {
 	if m.opt.Config != nil {
 		m.saveConfig()
 	}
+}
+
+// linkContact is who a contact link says it's for, read before anything goes to the radio.
+type linkContact struct {
+	link  string
+	name  string
+	key   []byte
+	clash string // a contact already called that, with another key
+}
+
+// readLink reads the advert in a link: the radio exports a whole packet, other apps sometimes the bare advert.
+func (m *Model) readLink(link string, data []byte) linkContact {
+	lc := linkContact{link: link}
+	advert := data
+	if p, err := meshcore.PacketFromBytes(data); err == nil && p.PayloadType() == meshcore.PayloadTypeAdvert {
+		advert = p.Payload
+	}
+	a, err := meshcore.AdvertFromBytes(advert)
+	if err != nil || a.AppDataErr() != nil {
+		return lc
+	}
+	key := a.PublicKey.PublicKey()
+	lc.name, lc.key = untrusted.Text(a.AppData().Name), key[:]
+	for _, ct := range m.chat.Contacts() {
+		if strings.EqualFold(ct.Name, lc.name) && ct.Key != key {
+			lc.clash = ct.Name
+		}
+	}
+	return lc
 }

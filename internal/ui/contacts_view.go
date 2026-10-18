@@ -24,6 +24,8 @@ func (m *Model) renderContacts(w, rows int) []string {
 		return m.editorLines(w, rows)
 	case importOverlay:
 		return m.importLines(w)
+	case importConfirmOverlay:
+		return m.importAskLines(w)
 	case placeOverlay:
 		return m.placeLines(w)
 	case removeOverlay:
@@ -202,7 +204,10 @@ func (m *Model) traceLine(ct radio.Contact) string {
 	for i := 0; i < steps && i < shown; i++ {
 		snr, to := float64(r.LastSNR), "me"
 		if i < len(r.SNRs) {
-			snr, to = float64(r.SNRs[i]), fmt.Sprintf("%02X", r.Hashes[i])
+			snr, to = float64(r.SNRs[i]), "??"
+			if i < len(r.Hashes) {
+				to = fmt.Sprintf("%02X", r.Hashes[i])
+			}
 		}
 		b.WriteString(th.Fg(th.Dim, false).Render(" ─"))
 		b.WriteString(th.Fg(th.SNR(snr), true).Render(fmt.Sprintf("%+.1f", snr)))
@@ -338,6 +343,20 @@ func (m *Model) importLines(w int) []string {
 		th.Fg(th.Muted, true).Render("IMPORT A CONTACT") + th.Fg(th.Dim, false).Render("  ·  paste a meshcore:// link · enter import · esc cancel"), "",
 		th.Fg(th.Magenta, true).Render("▸ ") + m.contacts.importIn.render(th, w-2, false),
 	}
+}
+
+func (m *Model) importAskLines(w int) []string {
+	th, lc := m.th, m.contacts.importing
+	out := []string{th.Fg(th.Muted, true).Render("IMPORT A CONTACT"), ""}
+	if lc.name == "" {
+		out = append(out, th.Fg(th.Yellow, false).Render(truncate("The link doesn't say who it's for in a way this app can read.", w)))
+	} else {
+		out = append(out, th.Fg(th.Text, true).Render(truncate(lc.name, w-20))+th.Fg(th.Muted, false).Render("  key "+radio.KeyHex(lc.key[:6])))
+	}
+	if lc.clash != "" {
+		out = append(out, "", th.Fg(th.Red, true).Render(truncate("⚠ You already have a "+lc.clash+" with a different key. This may be someone else using the name.", w)))
+	}
+	return append(out, "", th.Fg(th.Dim, false).Render("y import · any other key cancel"))
 }
 
 func (m *Model) placeLines(w int) []string {

@@ -300,6 +300,7 @@ func (m *Model) setSig(msg store.Message, channel string, ts uint32, sig store.S
 	}
 	msg.Sig, msg.SigKey = sig, key
 	m.chats.signedMsgs[sigKey(channel, ts)] = msg
+	m.trimSigned()
 }
 
 // sigArrived tries the signatures held for a channel message's timestamp on it.

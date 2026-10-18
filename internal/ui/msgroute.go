@@ -79,13 +79,12 @@ func (m *Model) messagePacket(dec packets.Decoded, raw []byte, snr float32) {
 		if h.from >= 0 {
 			window = directWindow
 		}
-		id, ok, err := m.chat.AttachPath(c, h.sender, h.text, m.now.Add(-window), h.path, h.hashSize)
+		_, ok, err := m.chat.AttachPath(c, h.sender, h.text, m.now.Add(-window), h.path, h.hashSize)
 		if err != nil {
 			m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 		}
 		if ok {
 			attached = true
-			m.chats.routed[id] = m.now
 			break
 		}
 	}

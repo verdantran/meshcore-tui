@@ -269,7 +269,7 @@ func (m *Model) inspectorKey(s string) (tea.Cmd, bool) {
 	case "y":
 		if r, ok := m.selectedPacket(); ok {
 			m.addLog(m.now, "COPIED  the packet's bytes, to the clipboard (hidden ones as ··)", radio.ToneOK)
-			return tea.SetClipboard(r.dec.MaskedHex()), true
+			return m.copyText(r.dec.MaskedHex()), true
 		}
 	case "esc":
 		if in.filter.text == "" {

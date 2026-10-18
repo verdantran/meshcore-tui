@@ -279,7 +279,7 @@ func (m *Model) promptLines(ct radio.Contact, sess *admin.Session, w, rows int) 
 			th.Fg(th.Dim, false).Render("enter log in · leave it empty to log in as a guest · esc cancel")}
 	case promptEdit:
 		st := m.settingRows(sess)[a.setSel]
-		out := []string{th.Fg(th.Muted, true).Render("EDIT " + strings.ToUpper(st.Label)), "", field(st.Key, false), ""}
+		out := []string{th.Fg(th.Muted, true).Render("EDIT " + strings.ToUpper(st.Label)), "", field(st.Key, st.Kind == admin.KindPassword), ""}
 		if st.Help != "" {
 			out = append(out, th.Fg(th.Dim, false).Render(clip(st.Help, w)))
 		}
@@ -323,7 +323,7 @@ func (m *Model) diffLines(ct radio.Contact, w int) []string {
 	out := []string{th.Fg(th.Muted, true).Render("REVIEW CHANGES TO " + strings.ToUpper(ct.Name)), ""}
 	reboot := false
 	for _, ch := range changes {
-		from := ch.From
+		from, to := shown(ch.Setting, ch.From), shown(ch.Setting, ch.To)
 		if from == "" {
 			from = "(not read)"
 		}
@@ -332,7 +332,7 @@ func (m *Model) diffLines(ct radio.Contact, w int) []string {
 			note, reboot = th.Fg(th.Yellow, false).Render("  needs a reboot"), true
 		}
 		out = append(out, clip(th.Fg(th.Text, false).Render(fmt.Sprintf("  %-28s ", ch.Setting.Label))+
-			th.Fg(th.Dim, false).Strikethrough(true).Render(from)+th.Fg(th.Dim, false).Render(" → ")+th.Fg(th.Cyan, true).Render(ch.To)+note, w))
+			th.Fg(th.Dim, false).Strikethrough(true).Render(from)+th.Fg(th.Dim, false).Render(" → ")+th.Fg(th.Cyan, true).Render(to)+note, w))
 	}
 	out = append(out, "")
 	hint := "y apply · any other key go back"
@@ -534,13 +534,13 @@ func (m *Model) settingsLines(sess *admin.Session, w, rows int) []string {
 			value = th.Fg(th.Red, false).Render(v.Err)
 		case v.At.IsZero():
 			value = th.Fg(th.Dim, false).Render("not read")
-		case st.Kind == admin.KindPassword && v.Value != "":
-			value = th.Fg(th.Text, false).Render("••••••")
+		case st.Kind == admin.KindPassword:
+			value = th.Fg(th.Text, false).Render(shown(st, v.Value))
 		default:
 			value = th.Fg(th.Text, false).Render(v.Value + unitText(st.Unit))
 		}
 		if p, ok := sess.Pending[st.Key]; ok {
-			value += th.Fg(th.Dim, false).Render(" → ") + th.Fg(th.Cyan, true).Render(p+unitText(st.Unit))
+			value += th.Fg(th.Dim, false).Render(" → ") + th.Fg(th.Cyan, true).Render(shown(st, p)+unitText(st.Unit))
 		}
 		flags := ""
 		if st.Reboot {
@@ -565,6 +565,14 @@ func (m *Model) settingsLines(sess *admin.Session, w, rows int) []string {
 	return out
 }
 
+// shown hides a password-like setting's value.
+func shown(st admin.Setting, v string) string {
+	if st.Kind == admin.KindPassword && v != "" {
+		return "••••••"
+	}
+	return v
+}
+
 func unitText(u string) string {
 	if u == "" {
 		return ""
@@ -581,18 +589,19 @@ func (m *Model) appliedLines(sess *admin.Session, w int) []string {
 	var out []string
 	for _, ch := range a.applied {
 		v := sess.Settings[ch.Setting.Key]
+		from, to := shown(ch.Setting, ch.From), shown(ch.Setting, ch.To)
 		line := th.Fg(th.Text, false).Render(fmt.Sprintf("  %-24s ", clip(ch.Setting.Label, 24)))
 		switch {
 		case v.At.Before(a.appliedAt) || v.Loading:
-			line += th.Fg(th.Dim, false).Render(ch.From) + " " + th.Fg(th.Yellow, false).Render(motion.RampBar(now, 3))
+			line += th.Fg(th.Dim, false).Render(from) + " " + th.Fg(th.Yellow, false).Render(motion.RampBar(now, 3))
 		case v.Err != "":
 			line += th.Fg(th.Red, true).Render("[FAIL] ") + th.Fg(th.Red, false).Render(v.Err)
 		default:
-			typed := ch.To
+			typed := to
 			if m.level.Allows(motion.Typing) {
-				typed, _ = motion.Typewriter(ch.To, v.At, applyCPS, now)
+				typed, _ = motion.Typewriter(to, v.At, applyCPS, now)
 			}
-			line += th.Fg(th.Dim, false).Strikethrough(true).Render(ch.From) + th.Fg(th.Dim, false).Render(" → ") + th.Fg(th.Green, true).Render(typed)
+			line += th.Fg(th.Dim, false).Strikethrough(true).Render(from) + th.Fg(th.Dim, false).Render(" → ") + th.Fg(th.Green, true).Render(typed)
 		}
 		out = append(out, clip(line, w))
 	}

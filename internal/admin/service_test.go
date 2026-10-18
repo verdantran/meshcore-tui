@@ -218,6 +218,10 @@ func TestConsoleRepliesInOrder(t *testing.T) {
 		t.Error("stale callbacks are ignored")
 	}
 
+	s.OnReply(prefix(dundry), "v1.9", t0)
+	if last := sess.Console[len(sess.Console)-1]; !strings.Contains(last.Text, "late reply") {
+		t.Errorf("a reply soon after a timeout is taken as the late one: %+v", last)
+	}
 	s.Command(dundry.Key, "region", "region", t0)
 	s.OnReply(prefix(dundry), "* F\n bristol^ F\n", t0)
 	if len(sess.Regions) != 2 || !sess.Regions[1].Home {
@@ -340,5 +344,58 @@ func TestReplyBeforeItsTag(t *testing.T) {
 	}
 	if len(s.early) > 17 {
 		t.Errorf("held replies are bounded: %d", len(s.early))
+	}
+}
+
+func TestLateReplyIsNotTakenForTheNextCommand(t *testing.T) {
+	s := newService()
+	s.Session(dundry)
+	sess, _ := s.Find(dundry.Key)
+	sess.Settings["repeat"] = Value{Value: "on"}
+	sess.Pending["repeat"] = "off"
+
+	slow := s.Command(dundry.Key, "clock sync", "", t0)
+	if s.CommandTimedOut(dundry.Key, slow.ID, t0) != nil {
+		t.Fatal("nothing else queued")
+	}
+	set := s.Command(dundry.Key, "set repeat off", "set repeat", t0.Add(time.Second))
+	_, done, _ := s.OnReply(prefix(dundry), "OK", t0.Add(2*time.Second)) // the clock sync's answer, late
+	if done != nil || sess.Settings["repeat"].Value != "on" || sess.Pending["repeat"] != "off" {
+		t.Fatalf("a late OK was taken as the set's: done %v, %+v pending %v", done, sess.Settings["repeat"], sess.Pending)
+	}
+	if last := sess.Console[len(sess.Console)-1]; !strings.Contains(last.Text, "late reply") {
+		t.Errorf("console: %+v", last)
+	}
+	if _, done, _ = s.OnReply(prefix(dundry), "OK", t0.Add(3*time.Second)); done != set || sess.Settings["repeat"].Value != "off" {
+		t.Fatalf("the set's own reply: done %v, %+v", done, sess.Settings["repeat"])
+	}
+
+	// Once the window has passed, a reply is the answer again.
+	slow = s.Command(dundry.Key, "ver", "", t0)
+	s.CommandTimedOut(dundry.Key, slow.ID, t0)
+	g := s.Command(dundry.Key, "get tx", "get tx", t0.Add(time.Minute))
+	if _, done, _ = s.OnReply(prefix(dundry), "> 20", t0.Add(time.Minute)); done != g || sess.Settings["tx"].Value != "20" {
+		t.Fatalf("after the window: done %v, %+v", done, sess.Settings["tx"])
+	}
+}
+
+func TestSecretsStayOffTheConsole(t *testing.T) {
+	s := newService()
+	s.Session(dundry)
+	sess, _ := s.Find(dundry.Key)
+	for _, cmd := range []string{"password hunter2", "set guest.password hunter2", "set bridge.secret hunter2", "set prv.key hunter2"} {
+		if !Secret(cmd) {
+			t.Errorf("%q isn't secret", cmd)
+		}
+		s.Command(dundry.Key, cmd, "", t0)
+		s.OnReply(prefix(dundry), "password now: hunter2", t0)
+	}
+	for _, l := range sess.Console {
+		if strings.Contains(l.Text, "hunter2") {
+			t.Errorf("console shows %q", l.Text)
+		}
+	}
+	if Secret("set tx 20") || Secret("ver") || Secret("") {
+		t.Error("ordinary commands aren't secret")
 	}
 }

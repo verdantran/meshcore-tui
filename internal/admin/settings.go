@@ -5,6 +5,7 @@ package admin
 import (
 	_ "embed"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -123,7 +124,7 @@ func (s Setting) Validate(v string) error {
 		return inRange(float64(n))
 	case KindFloat:
 		f, err := strconv.ParseFloat(v, 64)
-		if err != nil {
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
 			return fmt.Errorf("%s must be a number", s.Label)
 		}
 		return inRange(f)
@@ -151,7 +152,7 @@ func validRadio(v string) error {
 	sf, err3 := strconv.Atoi(parts[2])
 	cr, err4 := strconv.Atoi(parts[3])
 	switch {
-	case err1 != nil || err2 != nil || err3 != nil || err4 != nil:
+	case err1 != nil || err2 != nil || err3 != nil || err4 != nil || math.IsNaN(freq) || math.IsInf(freq, 0):
 		return fmt.Errorf("radio values must be numbers")
 	case freq < 137 || freq > 1020:
 		return fmt.Errorf("frequency %s MHz is outside what LoRa radios tune to", trim(freq))
