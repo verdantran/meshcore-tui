@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -455,23 +457,105 @@ func TestSilentRadioIsRedialled(t *testing.T) {
 	}
 }
 
+// stalledLink has no pump running yet, as if the UI had stopped reading; go l.pump() frees it.
+func stalledLink(t *testing.T) *Link {
+	l := &Link{events: make(chan Event, 256), kick: make(chan struct{}, 1), done: make(chan struct{})}
+	t.Cleanup(func() { close(l.done) })
+	return l
+}
+
 func TestEventsQueueWhileTheUIIsBusy(t *testing.T) {
-	l := newLink("x", "TCP", newFakeDevice())
-	defer l.Close()
-	for i := range maxPending + 500 {
+	l := stalledLink(t)
+	const extra = 500
+	for i := range maxPending + extra {
 		l.emit(Frame{Code: byte(i)})
+		l.emit(Heard{})
 		l.emit(Log{Text: "kept"})
+		l.emit(Incoming{Text: "hi"})
 	}
-	logs := 0
-	for logs < maxPending+500 {
+	if n := len(l.pending); n != maxPending+maxPending+extra {
+		t.Fatalf("%d pending, want droppable ones capped at %d and every message kept", n, maxPending)
+	}
+	go l.pump()
+	msgs, note := 0, ""
+	for note == "" {
 		select {
 		case e := <-l.Events():
-			if _, ok := e.(Log); ok {
-				logs++
+			switch e := e.(type) {
+			case Incoming:
+				msgs++
+			case Log:
+				if strings.HasPrefix(e.Text, "DROPPED") {
+					note = e.Text
+				}
 			}
 		case <-time.After(2 * time.Second):
-			t.Fatalf("only %d of the log events arrived", logs)
+			t.Fatalf("no drop note; %d messages arrived", msgs)
 		}
+	}
+	if msgs != maxPending+extra || note != fmt.Sprintf("DROPPED  %d events while the screen was busy", 3*(maxPending+extra)-maxPending) {
+		t.Errorf("%d messages, note %q", msgs, note)
+	}
+}
+
+func TestBacklogIsBounded(t *testing.T) {
+	l := stalledLink(t)
+	for range maxBacklog + 10 {
+		l.emit(Incoming{Text: "hi"})
+	}
+	if len(l.pending) != maxBacklog || l.lostMsgs != 10 {
+		t.Fatalf("%d pending, %d lost", len(l.pending), l.lostMsgs)
+	}
+	go l.pump()
+	for {
+		select {
+		case e := <-l.Events():
+			if lg, ok := e.(Log); ok {
+				if lg.Text != "DROPPED  10 messages while the screen was busy" {
+					t.Errorf("note %q", lg.Text)
+				}
+				return
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("lost messages weren't logged")
+		}
+	}
+}
+
+func TestPushFloodDoesNotPileUpGoroutines(t *testing.T) {
+	f := newFakeDevice()
+	l := startLink(t, f)
+	next[Ready](t, l, nil)
+	go func() {
+		for range l.Events() {
+		}
+	}()
+	f.mu.Lock()
+	f.mute[companion.CmdGetContactByKey] = true
+	f.mu.Unlock()
+	before := runtime.NumGoroutine()
+	for i := range 2000 {
+		key := [32]byte{byte(i), byte(i >> 8)}
+		f.push(companion.PushAdvertResponse{PublicKey: key}.ToBytes())
+		f.push(companion.PushPathUpdatedResponse{PublicKey: key}.ToBytes())
+	}
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		l.refreshMu.Lock()
+		n := len(l.refreshQ)
+		l.refreshMu.Unlock()
+		if n == maxRefresh {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if n := runtime.NumGoroutine(); n > before+5 {
+		t.Errorf("%d goroutines after the flood, %d before", n, before)
+	}
+	l.refreshMu.Lock()
+	defer l.refreshMu.Unlock()
+	if len(l.refreshQ) > maxRefresh || len(l.refreshing) != len(l.refreshQ) {
+		t.Errorf("%d queued, %d in the set", len(l.refreshQ), len(l.refreshing))
 	}
 }
 

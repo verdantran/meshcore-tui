@@ -57,10 +57,18 @@ type Link struct {
 	slots          atomic.Int32 // how many channels the radio holds, from DEVICE_QUERY
 	waiting        chan struct{}
 
-	pendMu  sync.Mutex
-	pending []Event
-	kick    chan struct{}
-	done    chan struct{}
+	pendMu   sync.Mutex
+	pending  []Event
+	light    int // droppable events in pending
+	dropped  int
+	lostMsgs int
+	kick     chan struct{}
+	done     chan struct{}
+
+	refreshMu  sync.Mutex
+	refreshing map[[32]byte]bool
+	refreshQ   [][32]byte
+	refreshNow chan struct{}
 }
 
 func NewSerial(port string) *Link {
@@ -76,7 +84,7 @@ func NewTCP(addr string) *Link {
 
 func newLink(describe, kind string, t sdkTransport) *Link {
 	l := &Link{describe: describe, kind: kind, raw: t, events: make(chan Event, 256), waiting: make(chan struct{}, 1),
-		kick: make(chan struct{}, 1), done: make(chan struct{})}
+		kick: make(chan struct{}, 1), done: make(chan struct{}), refreshing: map[[32]byte]bool{}, refreshNow: make(chan struct{}, 1)}
 	go l.pump()
 	l.tap = &tap{inner: t, emit: l.emit}
 	l.client = client.New(l.tap)
@@ -99,18 +107,40 @@ func (l *Link) Close() error {
 	return err
 }
 
-// maxPending bounds the backlog when the UI falls behind; past it only frames and raw packets are dropped.
-const maxPending = 4096
+// maxPending bounds the backlog of droppable events when the UI falls behind; maxBacklog bounds everything.
+const (
+	maxPending = 4096
+	maxBacklog = 1 << 16
+)
 
-// emit never blocks the reading goroutines, and never loses a message: pump hands events on in order.
+func droppable(e Event) bool {
+	switch e.(type) {
+	case Frame, Packet, Transmit, Heard, Log, AdvertPath:
+		return true
+	}
+	return false
+}
+
+// emit never blocks the reading goroutines; pump hands events on in order. Only a backlog past
+// maxBacklog loses messages, and pump then logs how many.
 func (l *Link) emit(e Event) {
 	l.pendMu.Lock()
-	switch e.(type) {
-	case Frame, Packet, Transmit:
-		if len(l.pending) >= maxPending {
+	switch {
+	case len(l.pending) >= maxBacklog:
+		if _, ok := e.(Incoming); ok {
+			l.lostMsgs++
+		} else {
+			l.dropped++
+		}
+		l.pendMu.Unlock()
+		return
+	case droppable(e):
+		if l.light >= maxPending {
+			l.dropped++
 			l.pendMu.Unlock()
 			return
 		}
+		l.light++
 	}
 	l.pending = append(l.pending, e)
 	l.pendMu.Unlock()
@@ -129,8 +159,15 @@ func (l *Link) pump() {
 		}
 		l.pendMu.Lock()
 		batch := l.pending
-		l.pending = nil
+		dropped, lost := l.dropped, l.lostMsgs
+		l.pending, l.light, l.dropped, l.lostMsgs = nil, 0, 0, 0
 		l.pendMu.Unlock()
+		if lost > 0 {
+			batch = append(batch, Log{At: time.Now(), Text: fmt.Sprintf("DROPPED  %d messages while the screen was busy", lost), Tone: ToneFail})
+		}
+		if dropped > 0 {
+			batch = append(batch, Log{At: time.Now(), Text: fmt.Sprintf("DROPPED  %d events while the screen was busy", dropped), Tone: ToneWarn})
+		}
 		for _, e := range batch {
 			select {
 			case l.events <- e:
@@ -144,6 +181,7 @@ func (l *Link) pump() {
 func (l *Link) Start(ctx context.Context) {
 	ctx, l.cancel = context.WithCancel(ctx)
 	l.registerPushes()
+	go l.refresher(ctx)
 	l.raw.SetDisconnectHandler(func() { l.emit(Lost{Err: errors.New("connection dropped")}) })
 	l.raw.SetReconnectHandler(func() {
 		l.emit(Restored{})
@@ -360,8 +398,47 @@ func late(r companion.Response) (client.WaitingMessage, bool) {
 	return client.WaitingMessage{}, false
 }
 
-func (l *Link) refreshContact(key [32]byte) {
-	ctx, cancel := context.WithTimeout(context.Background(), stepTimeout)
+// maxRefresh bounds the contacts waiting to be re-read after a push; past it pushes are ignored.
+const maxRefresh = 256
+
+// queueRefresh asks the refresher to re-read a contact; push handlers run on the SDK's dispatch
+// goroutine, so the command has to be sent from elsewhere.
+func (l *Link) queueRefresh(key [32]byte) {
+	l.refreshMu.Lock()
+	if !l.refreshing[key] && len(l.refreshQ) < maxRefresh {
+		l.refreshing[key] = true
+		l.refreshQ = append(l.refreshQ, key)
+	}
+	l.refreshMu.Unlock()
+	select {
+	case l.refreshNow <- struct{}{}:
+	default:
+	}
+}
+
+// refresher re-reads one contact at a time, so a flood of pushes can't queue commands without limit.
+func (l *Link) refresher(ctx context.Context) {
+	for {
+		l.refreshMu.Lock()
+		if len(l.refreshQ) == 0 {
+			l.refreshMu.Unlock()
+			select {
+			case <-ctx.Done():
+				return
+			case <-l.refreshNow:
+			}
+			continue
+		}
+		key := l.refreshQ[0]
+		l.refreshQ = l.refreshQ[1:]
+		delete(l.refreshing, key)
+		l.refreshMu.Unlock()
+		l.refreshContact(ctx, key)
+	}
+}
+
+func (l *Link) refreshContact(ctx context.Context, key [32]byte) {
+	ctx, cancel := context.WithTimeout(ctx, stepTimeout)
 	defer cancel()
 	ct, err := l.client.GetContactByKey(ctx, meshcore.NewIdentity(key))
 	if err != nil {
@@ -481,7 +558,7 @@ func (l *Link) registerPushes() {
 	c.OnPush(companion.PushAdvert, func(r companion.Response) {
 		if p, ok := r.Data.(companion.PushAdvertResponse); ok {
 			l.emit(Log{At: time.Now(), Text: fmt.Sprintf("ADVERT  %s", hexPrefix(p.PublicKey[:6]))})
-			go l.refreshContact(p.PublicKey)
+			l.queueRefresh(p.PublicKey)
 		}
 	})
 	c.OnPush(companion.PushContactDeleted, func(r companion.Response) {
@@ -506,7 +583,7 @@ func (l *Link) registerPushes() {
 	c.OnPush(companion.PushPathUpdated, func(r companion.Response) {
 		if p, ok := r.Data.(companion.PushPathUpdatedResponse); ok {
 			l.emit(Log{At: time.Now(), Text: fmt.Sprintf("PATH UPDATED  %s", hexPrefix(p.PublicKey[:6]))})
-			go l.refreshContact(p.PublicKey) // handlers run on the SDK's dispatch goroutine, so commands go elsewhere
+			l.queueRefresh(p.PublicKey)
 		}
 	})
 	c.OnPush(companion.PushSendConfirmed, func(r companion.Response) {

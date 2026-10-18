@@ -37,13 +37,29 @@ func NewConsole(rw io.ReadWriteCloser) *Console {
 	return c
 }
 
+// A node can print faster than the baud rate suggests, so what's kept of its output is capped.
+const (
+	maxLine  = 4096
+	maxReply = 1 << 20
+)
+
+// read splits the port into lines, cutting each at maxLine and dropping the rest of it.
 func (c *Console) read() {
-	sc := bufio.NewScanner(c.rw)
-	sc.Buffer(make([]byte, 4096), 1<<20)
-	for sc.Scan() {
-		c.lines <- strings.TrimRight(sc.Text(), "\r")
+	defer close(c.lines)
+	br := bufio.NewReaderSize(c.rw, maxLine)
+	for {
+		b, more, err := br.ReadLine()
+		if err != nil {
+			return
+		}
+		l := strings.TrimRight(string(b), "\r")
+		for more {
+			if _, more, err = br.ReadLine(); err != nil {
+				return
+			}
+		}
+		c.lines <- l
 	}
-	close(c.lines)
 }
 
 func (c *Console) Close() error { return c.rw.Close() }
@@ -67,7 +83,7 @@ func (c *Console) Run(ctx context.Context, cmd string, until func(string) bool) 
 		return nil, err
 	}
 	var out []string
-	heard := false
+	heard, size, full := false, 0, false
 	timer := time.NewTimer(echoWait)
 	defer timer.Stop()
 	for {
@@ -77,7 +93,12 @@ func (c *Console) Run(ctx context.Context, cmd string, until func(string) bool) 
 				return out, ErrClosed
 			}
 			if heard || strings.TrimSpace(l) != strings.TrimSpace(cmd) { // the first line is normally the echo
-				out = append(out, l)
+				if size += len(l); size > maxReply && !full {
+					out, full = append(out, "… output cut at 1 MB"), true
+				}
+				if !full {
+					out = append(out, l)
+				}
 				if until != nil && until(l) {
 					return out, nil
 				}

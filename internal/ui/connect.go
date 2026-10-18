@@ -26,7 +26,8 @@ type connectModel struct {
 
 	scanning bool
 	stop     context.CancelFunc
-	found    []Target // Bluetooth radios from the latest scan
+	scanCh   <-chan scanMsg // the running scan's; messages from a stopped one are ignored
+	found    []Target       // Bluetooth radios from the latest scan
 	scanErr  string
 }
 
@@ -51,18 +52,24 @@ func (m *Model) startScan() tea.Cmd {
 	if c.scanning {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), bleScanFor)
-	c.scanning, c.stop, c.scanErr = true, cancel, ""
+	stopped, stop := context.WithCancel(context.Background())
 	ch := make(chan scanMsg, 16)
+	c.scanning, c.stop, c.scanCh, c.scanErr = true, stop, ch, ""
 	scan := m.opt.Scan
 	go func() {
+		defer close(ch) // frees a waitScan left waiting on a stopped scan
+		ctx, cancel := context.WithTimeout(stopped, bleScanFor)
+		defer cancel()
 		err := scan(ctx, func(t Target) {
 			select {
 			case ch <- scanMsg{t: t}:
 			case <-ctx.Done():
 			}
 		})
-		ch <- scanMsg{err: err, done: true}
+		select {
+		case ch <- scanMsg{err: err, done: true}:
+		case <-stopped.Done():
+		}
 	}()
 	return waitScan(ch)
 }
@@ -71,11 +78,14 @@ func (c *connectModel) stopScan() {
 	if c.stop != nil {
 		c.stop()
 	}
+	c.scanning, c.scanCh = false, nil
 }
 
 func (c *connectModel) scanned(msg scanMsg) tea.Cmd {
+	if msg.next != c.scanCh {
+		return nil
+	}
 	if msg.done {
-		c.scanning = false
 		c.stopScan()
 		if msg.err != nil {
 			c.scanErr = msg.err.Error()

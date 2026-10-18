@@ -169,6 +169,7 @@ func TestSecretsNeverReachTheFramesPanel(t *testing.T) {
 		{companion.SendLoginCommand{PublicKey: [32]byte{0xA3}, Password: "hunter2"}.ToBytes(), 33, 40},
 		{companion.SetChannelCommand{ChannelIdx: 2, Name: "Family", Secret: [16]byte{7, 7}}.ToBytes(), 34, 50},
 		{companion.SendTxtMsgCommand{TxtType: companion.TxtTypeCLIData, PubKeyPrefix: [6]byte{0xA3}, Text: "password hunter2"}.ToBytes(), 13, 29},
+		{companion.RunCLICommand{Command: "password hunter2"}.ToBytes(), 1, 17},
 	} {
 		f := CommandFrame(time.Now(), c.cmd)
 		if f.Hidden != [2]int{c.start, c.end} {
@@ -192,6 +193,8 @@ func TestSecretsNeverReachTheFramesPanel(t *testing.T) {
 		{companion.ChannelInfoResponse{ChannelIdx: 2, Name: "Family", Secret: [16]byte{7, 7}}.ToBytes(), 34, 50},
 		{companion.ContactMsgRecvV3Response{TxtType: companion.TxtTypeCLIData, Text: "password now: hunter2"}.ToBytes(), 16, 37},
 		{companion.ContactMsgRecvResponse{TxtType: companion.TxtTypeCLIData, Text: "password now: hunter2"}.ToBytes(), 13, 34},
+		{companion.CLIReplyResponse{Text: "password now: hunter2"}.ToBytes(), 1, 22},
+		{companion.DeviceInfoResponse{FirmwareVersion: 9, MaxContacts: 350, MaxChannels: 40, BLEPin: 123456, Model: "T1000"}.ToBytes(), 4, 8},
 	} {
 		f := ResponseFrame(time.Now(), c.raw)
 		if f.Dir != FromRadio || f.Hidden != [2]int{c.start, c.end} {
@@ -206,6 +209,10 @@ func TestSecretsNeverReachTheFramesPanel(t *testing.T) {
 		if c.raw[c.start] == 0 && c.raw[c.end-1] == 0 {
 			t.Errorf("%s: the test should carry a secret", f.Name)
 		}
+	}
+	info := ResponseFrame(time.Now(), companion.DeviceInfoResponse{FirmwareVersion: 9, BLEPin: 123456, Model: "T1000"}.ToBytes())
+	if d, err := companion.ParseDeviceInfoResponse(info.Bytes[1:]); err != nil || d.BLEPin != 0 || d.Model != "T1000" {
+		t.Errorf("device info: %+v %v, want the PIN gone and the rest kept", d, err)
 	}
 	dm := companion.ContactMsgRecvV3Response{TxtType: companion.TxtTypePlain, Text: "hello"}.ToBytes()
 	if f := ResponseFrame(time.Now(), dm); f.Hidden != [2]int{} || f.Bytes[len(f.Bytes)-1] != 'o' {

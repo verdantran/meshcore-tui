@@ -71,8 +71,8 @@ func TestDesktopAndPlatforms(t *testing.T) {
 	if Detect(env(nil)) != OS {
 		t.Error("Linux with notify-send uses it")
 	}
-	Desktop("Alice", "hi\x07")
-	if calls[1][0] != "notify-send" || calls[1][3] != "hi" {
+	Desktop("--wait", "hi\x07 <b>&'\"")
+	if !slices.Equal(calls[1], []string{"notify-send", "--app-name=meshcore-tui", "--", "--wait", "hi &lt;b&gt;&amp;&apos;&quot;"}) {
 		t.Errorf("notify-send call = %q", calls[1])
 	}
 	lookPath = func(string) (string, error) { return "", errNotFound }

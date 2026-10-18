@@ -421,7 +421,7 @@ func ResponseFrame(at time.Time, raw []byte) Frame {
 	return f
 }
 
-// responseSecret is where a response carries a private key, channel secret or console reply.
+// responseSecret is where a response carries a private key, BLE PIN, channel secret or console reply.
 func responseSecret(raw []byte) (int, int) {
 	cli := func(typeAt, textAt int) (int, int) {
 		if len(raw) > typeAt && raw[typeAt] == companion.TxtTypeCLIData {
@@ -430,8 +430,12 @@ func responseSecret(raw []byte) (int, int) {
 		return 0, 0
 	}
 	switch raw[0] {
-	case companion.RespPrivateKey:
+	case companion.RespPrivateKey, companion.RespCLIReply:
 		return 1, len(raw)
+	case companion.RespDeviceInfo:
+		if len(raw) > 1 && raw[1] >= 3 {
+			return 4, 8 // the PIN, after the version and the contact and channel counts
+		}
 	case companion.RespChannelInfo:
 		return 34, 50 // after the slot and the name
 	case companion.RespContactMsgRecv:
@@ -445,7 +449,7 @@ func responseSecret(raw []byte) (int, int) {
 // secretBytes is where a command carries a private key, PIN, password, channel secret or console text.
 func secretBytes(cmd []byte) (int, int) {
 	switch cmd[0] {
-	case companion.CmdImportPrivateKey, companion.CmdSetDevicePin:
+	case companion.CmdImportPrivateKey, companion.CmdSetDevicePin, companion.CmdRunCLICommand:
 		return 1, len(cmd)
 	case companion.CmdSendLogin:
 		return 33, len(cmd) // after the node's public key

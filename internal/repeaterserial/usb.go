@@ -81,8 +81,8 @@ func (u *USB) watch(ctx context.Context, comp radio.Radio) {
 			return
 		}
 		if step, ok := e.(radio.BootStep); ok && step.State == radio.StepFail {
-			if held != nil {
-				u.events <- *held
+			if held != nil && !u.send(ctx, *held) {
+				return
 			}
 			held = &step
 			continue
@@ -90,23 +90,42 @@ func (u *USB) watch(ctx context.Context, comp radio.Radio) {
 		if f, ok := e.(radio.Fatal); ok {
 			comp.Close()
 			if rep := u.probe(ctx); rep != nil {
-				u.events <- radio.BootStep{Key: "hello", Label: "HELLO", Detail: "no companion here; found a repeater console", State: radio.StepOK}
+				if !u.send(ctx, radio.BootStep{Key: "hello", Label: "HELLO", Detail: "no companion here; found a repeater console", State: radio.StepOK}) {
+					rep.Close()
+					return
+				}
 				u.set(rep)
 				rep.Start(ctx)
 				u.forward(ctx, rep)
 				return
 			}
-			if held != nil {
-				u.events <- *held
+			if held != nil && !u.send(ctx, *held) {
+				return
 			}
-			u.events <- f
+			if !u.send(ctx, f) {
+				return
+			}
 			continue
 		}
 		if held != nil {
-			u.events <- *held
+			if !u.send(ctx, *held) {
+				return
+			}
 			held = nil
 		}
-		u.events <- e
+		if !u.send(ctx, e) {
+			return
+		}
+	}
+}
+
+// send passes an event on unless ctx ends first, so a closed link leaves no goroutine behind.
+func (u *USB) send(ctx context.Context, e radio.Event) bool {
+	select {
+	case u.events <- e:
+		return true
+	case <-ctx.Done():
+		return false
 	}
 }
 
@@ -127,7 +146,9 @@ func (u *USB) forward(ctx context.Context, r radio.Radio) {
 	for {
 		select {
 		case e := <-r.Events():
-			u.events <- e
+			if !u.send(ctx, e) {
+				return
+			}
 		case <-ctx.Done():
 			return
 		}

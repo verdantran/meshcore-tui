@@ -96,6 +96,60 @@ func TestProbeSilentPort(t *testing.T) {
 	}
 }
 
+// flood is a port that echoes a command and then never stops printing, starting with one huge line.
+type flood struct {
+	mu     sync.Mutex
+	buf    []byte
+	closed bool
+}
+
+func (f *flood) Write(p []byte) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.buf = append(f.buf, strings.TrimSpace(string(p))+"\r\n"+strings.Repeat("x", 3*maxLine)+"\r\n"...)
+	return len(p), nil
+}
+
+func (f *flood) Read(p []byte) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.closed {
+		return 0, io.EOF
+	}
+	for len(f.buf) < len(p) {
+		f.buf = append(f.buf, strings.Repeat("y", 99)+"\n"...)
+	}
+	n := copy(p, f.buf)
+	f.buf = f.buf[n:]
+	return n, nil
+}
+
+func (f *flood) Close() error {
+	f.mu.Lock()
+	f.closed = true
+	f.mu.Unlock()
+	return nil
+}
+
+func TestConsoleCapsWhatItKeeps(t *testing.T) {
+	c := NewConsole(&flood{})
+	defer c.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	out, _ := c.Run(ctx, "log", nil)
+	size := 0
+	for _, l := range out {
+		size += len(l)
+	}
+	if len(out) < 2 || len(out[0]) != maxLine || size > maxReply || out[len(out)-1] != "… output cut at 1 MB" {
+		t.Fatalf("%d lines, %d bytes, first %d long, last %q", len(out), size, len(out[0]), out[len(out)-1])
+	}
+	out, err := c.Run(context.Background(), "ver", func(l string) bool { return l[0] == 'x' })
+	if err != nil || len(out[len(out)-1]) != maxLine {
+		t.Errorf("the console still works after a long line: %v", err)
+	}
+}
+
 func TestParsers(t *testing.T) {
 	nr := ParseNeighbours("A3010203:60:30\n1E0A0B0C:600:-8\nbad\nZZ:1:2\n-none-")
 	if nr.Total != 2 || nr.Neighbours[1].SNR != -8 || nr.Neighbours[0].HeardSecsAgo != 60 {
@@ -288,6 +342,28 @@ func (f *fakeCompanion) Start(context.Context) {
 func (f *fakeCompanion) Events() <-chan radio.Event { return f.events }
 func (f *fakeCompanion) Close() error               { f.closed = true; return nil }
 func (f *fakeCompanion) Describe() string           { return "/dev/cu.test" }
+
+func TestUSBStopsWhenNobodyReads(t *testing.T) {
+	for _, pass := range []func(u *USB, ctx context.Context, r radio.Radio){
+		func(u *USB, ctx context.Context, r radio.Radio) { u.watch(ctx, r) },
+		func(u *USB, ctx context.Context, r radio.Radio) { u.forward(ctx, r) },
+	} {
+		comp := &fakeCompanion{events: make(chan radio.Event, 4)}
+		comp.events <- radio.Log{}
+		comp.events <- radio.Log{}
+		u := &USB{events: make(chan radio.Event)}
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { pass(u, ctx, comp); close(done) }()
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("still blocked on the events channel after the link closed")
+		}
+	}
+}
 
 func TestUSBPrefersACompanion(t *testing.T) {
 	comp := &fakeCompanion{events: make(chan radio.Event, 16)}

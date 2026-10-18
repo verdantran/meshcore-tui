@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -201,6 +202,32 @@ func TestChatEdges(t *testing.T) {
 	key(m, tea.KeyEscape)
 	if m.chats.filter.text != "" {
 		t.Error("esc clears the filter")
+	}
+}
+
+func TestStoppedScanLeavesNothingRunning(t *testing.T) {
+	returned := make(chan struct{})
+	m := New(Options{Theme: theme.Neon, Motion: motion.Full,
+		Scan: func(ctx context.Context, found func(Target)) error {
+			defer close(returned)
+			for i := range 40 { // more than the channel holds, and nobody reading
+				found(Target{Addr: fmt.Sprintf("AA:%02d", i)})
+			}
+			return ctx.Err()
+		}})
+	before := runtime.NumGoroutine()
+	cmd := m.startScan()
+	m.connect.stopScan()
+	<-returned
+	deadline := time.Now().Add(2 * time.Second)
+	for runtime.NumGoroutine() > before && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if n := runtime.NumGoroutine(); n > before {
+		t.Errorf("%d goroutines after the scan stopped, %d before", n, before)
+	}
+	if m.connect.scanning || m.connect.scanned(cmd().(scanMsg)) != nil || len(m.connect.found) != 0 {
+		t.Error("what a stopped scan heard is ignored")
 	}
 }
 

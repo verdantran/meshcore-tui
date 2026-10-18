@@ -105,7 +105,7 @@ func Desktop(title, body string) error {
 	case "darwin":
 		return run(nil, "osascript", "-e", `display notification `+appleQuote(body)+` with title `+appleQuote(title))
 	case "linux":
-		return run(nil, "notify-send", "--app-name=meshcore-tui", clean(title), clean(body))
+		return run(nil, "notify-send", "--app-name=meshcore-tui", "--", clean(title), markupEscaper.Replace(clean(body)))
 	case "windows":
 		// The text goes in the environment, never the script: PowerShell ends a quoted string at curly
 		// quotes as well as straight ones, so no quoting of it inside the script can be trusted.
@@ -123,6 +123,9 @@ $t = $x.GetElementsByTagName('text')
 $t.Item(0).AppendChild($x.CreateTextNode($env:MESHCORE_TUI_TITLE)) > $null
 $t.Item(1).AppendChild($x.CreateTextNode($env:MESHCORE_TUI_BODY)) > $null
 $n::CreateToastNotifier('{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe').Show([Windows.UI.Notifications.ToastNotification]::new($x))`
+
+// markupEscaper escapes a notify-send body, which daemons may read as markup.
+var markupEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "'", "&apos;", `"`, "&quot;")
 
 func appleQuote(s string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(clean(s)) + `"`
