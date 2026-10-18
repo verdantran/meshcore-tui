@@ -376,7 +376,7 @@ func TestBracketMentionsAreHighlighted(t *testing.T) {
 	if !strings.Contains(scr, "@MeshCore-k4 are you hearing @Bob Smith?") || strings.Contains(scr, "@[") {
 		t.Fatalf("mentions shown without brackets:\n%s", scr)
 	}
-	line := h.m.highlight("@[MeshCore-k4] and @[Bob Smith]", "", h.m.th.Text)
+	line := h.m.highlight("@[MeshCore-k4] and @[Bob Smith]", "", h.m.th.Text, nil)
 	you := h.m.th.Block(h.m.th.Text, h.m.th.Tint(h.m.th.Magenta)).Render("@MeshCore-k4")
 	other := h.m.th.Block(h.m.th.Text, h.m.th.Tint(h.m.th.Violet)).Render("@Bob Smith")
 	if !strings.Contains(line, you) || !strings.Contains(line, other) {

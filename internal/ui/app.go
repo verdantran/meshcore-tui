@@ -895,6 +895,7 @@ func (m *Model) screenKeys() []string {
 	}
 	if m.tab == 0 {
 		return []string{key("↑↓ j k", "choose a conversation; g G the first or last"), key("enter i", "write a message; enter sends"), key("tab", "while writing, complete an @name; again for the next match"),
+			key("*bold*", "in messages, *bold*, _italic_, ~struck~ and `code` are drawn that way, as the chat apps write them"),
 			key(":name:", "while writing, an emoji: :joy: becomes 😂, and :jo offers a list; ↑↓ choose, tab or enter insert, esc closes it"),
 			key("esc", "stop writing, or clear the filter"), key("/", "filter this conversation"),
 			key("pgup pgdn", "scroll history; ctrl+u ctrl+d too"),

@@ -786,18 +786,19 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 			th.Fg(th.Cyan, true).Render("y") + th.Fg(th.Dim, false).Render(" copy   ") + meta
 	}
 
-	text := msg.Text
+	text, marks := emphasis(msg.Text)
 	if at, ok := m.chats.arrived[msg.ID]; ok && m.level.Allows(motion.Decode) && motion.Running(at, decodeDur, now) {
-		text = motion.DecodeText(text, msg.ID, motion.Progress(at, decodeDur, now))
+		text, marks = motion.DecodeText(text, msg.ID, motion.Progress(at, decodeDur, now)), nil
 	}
 	if at, ok := m.chats.failed[msg.ID]; ok && m.level.Allows(motion.Glitch) && motion.Running(at, glitchDur*3, now) {
-		text = motion.GlitchText(text, msg.ID, int(now.Sub(at)/motion.FrameDur))
+		text, marks = motion.GlitchText(text, msg.ID, int(now.Sub(at)/motion.FrameDur)), nil
 	}
 	headLine := bar + stamp + name
 	gap := w - visibleWidth(headLine) - visibleWidth(meta)
 	out := []string{headLine + strings.Repeat(" ", max(gap, 1)) + meta}
-	for _, l := range strings.Split(ansi.Wrap(text, max(w-8, 10), ""), "\n") {
-		out = append(out, bar+"      "+m.highlight(l, m.chats.filter.text, th.Text))
+	lines, lineMarks := wrapEmph(text, marks, max(w-8, 10), func(s string, w int) string { return ansi.Wrap(s, w, "") })
+	for i, l := range lines {
+		out = append(out, bar+"      "+m.highlight(l, m.chats.filter.text, th.Text, lineMarks[i]))
 	}
 	if picked {
 		for i := range out {

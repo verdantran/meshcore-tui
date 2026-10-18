@@ -92,7 +92,7 @@ func (m *Model) searchLines(w, rows int) []string {
 		where := m.chat.Title(r.Convo)
 		line := th.Fg(th.Dim, false).Render(r.RecvAt.Local().Format("02 Jan 15:04")+"  ") +
 			th.Fg(th.Cyan, false).Render(col(where, 14)) + " " +
-			th.Fg(th.Muted, true).Render(r.Sender+": ") + m.highlight(r.Text, s.query.text, th.Text)
+			th.Fg(th.Muted, true).Render(r.Sender+": ") + m.highlight(r.Text, s.query.text, th.Text, nil)
 		if i == s.sel {
 			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(" "+plainResult(r, where), w-1)))
 			continue
@@ -113,7 +113,7 @@ type span struct {
 }
 
 // highlight styles one line of message text: search matches, @you and other @names.
-func (m *Model) highlight(line, query string, base theme.RGB) string {
+func (m *Model) highlight(line, query string, base theme.RGB, marks []emph) string {
 	th := m.th
 	var spans []span
 	if q := strings.ToLower(strings.TrimSpace(query)); q != "" {
@@ -141,12 +141,11 @@ func (m *Model) highlight(line, query string, base theme.RGB) string {
 	sort.SliceStable(spans, func(i, j int) bool { return spans[i].start < spans[j].start })
 	var b strings.Builder
 	pos := 0
-	plain := th.Fg(base, false)
 	for _, sp := range spans {
 		if sp.start < pos {
 			continue // overlaps a span already drawn
 		}
-		b.WriteString(plain.Render(line[pos:sp.start]))
+		b.WriteString(emphRender(th, base, line[pos:sp.start], marksIn(marks, pos, sp.start)))
 		seg := line[sp.start:sp.end]
 		switch sp.kind {
 		case 0:
@@ -158,7 +157,7 @@ func (m *Model) highlight(line, query string, base theme.RGB) string {
 		}
 		pos = sp.end
 	}
-	b.WriteString(plain.Render(line[pos:]))
+	b.WriteString(emphRender(th, base, line[pos:], marksIn(marks, pos, len(line))))
 	return b.String()
 }
 
