@@ -21,8 +21,21 @@ vector tiles from OpenFreeMap (https://openfreemap.org) in the OpenMapTiles sche
 © OpenStreetMap contributors, available under the Open Database License (ODbL).
 The map credits them whenever that detail is on screen.
 
-The Go modules below are compiled into the app. Each one's licence follows in full.
+The table of look-alike characters in internal/untrusted/confusables.txt is drawn from
+Unicode's confusables.txt (https://www.unicode.org/Public/security/), under the
+Unicode License v3, which follows.
+
 EOF
+	cat internal/untrusted/UNICODE-LICENSE
+	cat <<'EOF'
+
+The Go standard library is compiled into the app under the licence below, followed by
+the Go modules the app uses, each with its licence in full.
+EOF
+	printf '\n\n================================================================================\n%s (%s)\n================================================================================\n\n' "Go standard library" "LICENSE"
+	golicence="$(go env GOROOT)/LICENSE"
+	[ -f "$golicence" ] || golicence="$(go env GOROOT)/../LICENSE" # Homebrew keeps it beside libexec
+	cat "$golicence"
 	for mv in $mods; do
 		path=${mv%@*}
 		dir="$cache/$(printf '%s' "$path" | perl -pe 's/([A-Z])/"!".lc($1)/ge')@${mv#*@}"
