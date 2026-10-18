@@ -898,3 +898,28 @@ func TestMapPicksOutABusyNode(t *testing.T) {
 		t.Error("esc shows everything again")
 	}
 }
+
+func TestMapShowMenu(t *testing.T) {
+	h := newHarness(t)
+	h.openMap()
+	h.screen()
+	h.keys(" ")
+	if scr := h.screen(); !strings.Contains(scr, "SHOW") || !strings.Contains(scr, "[x] ● companions") {
+		t.Fatalf("space opens the show menu:\n%s", scr)
+	}
+	h.keys("j ")
+	if !h.m.mapv.layers.Hidden[mapview.KindChat] || !strings.Contains(h.screen(), "SOME HIDDEN") {
+		t.Errorf("space hides companions, and the title says so:\n%s", h.screen())
+	}
+	h.keys("jjjj ")
+	if h.m.mapv.layers.Traffic {
+		t.Error("traffic switched off from the menu")
+	}
+	h.key(tea.KeyEscape)
+	if h.m.mapv.showing || h.m.tab != 2 {
+		t.Error("esc closes the menu and stays on the map")
+	}
+	if !strings.Contains(h.screen(), "d download streets") {
+		t.Error("the hint says what d does")
+	}
+}

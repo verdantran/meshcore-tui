@@ -121,7 +121,7 @@ func (m *Model) renderPath(w, mapH int) []string {
 	v := m.mapCurrent()
 	v.W, v.H = w*2, mapH*4
 	drawn := m.traceSoFar(r)
-	layers := mapview.Layers{Labels: true, Roads: mv.layers.Roads, Selected: 0, PathOnly: true}
+	layers := mapview.Layers{Labels: true, Roads: mv.layers.Roads, Routes: true, Selected: 0, PathOnly: true}
 	pal := mapview.PaletteFor(th)
 	key := fmt.Sprintf("path|%.6f|%.6f|%.4f|%d|%d|%v|%v|%p|%d|%s", v.Center.Lat, v.Center.Lon, v.Zoom, w, mapH, th, layers,
 		mv.detail, len(nodes), routeKey([]mapview.Route{drawn}, m.now)) + fmt.Sprint(drawn.Links)

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -268,7 +269,7 @@ func TestDrawAndAnimate(t *testing.T) {
 	w, h := 100, 30
 	v := View{W: w * 2, H: h * 4}.Fit(pts, 0.12)
 	pal := PaletteFor(theme.Neon)
-	layers := Layers{Labels: true, Roads: true, Selected: -1}
+	layers := Layers{Labels: true, Roads: true, Routes: true, Selected: -1}
 	world := LoadWorld()
 	plain := func(c *Canvas) string { return ansi.Strip(strings.Join(c.Render(true), "\n")) }
 	c := Draw(Input{World: world, Nodes: nodes, Routes: routes, Layers: layers}, v, w, h, pal)
@@ -334,7 +335,7 @@ func TestDrawAndAnimate(t *testing.T) {
 	d.index()
 	tb := tl.box()
 	zv := View{Center: LatLon{(tb[1] + tb[3]) / 2, (tb[0] + tb[2]) / 2}, Zoom: 10, W: w * 2, H: h * 4}
-	withDetail := Draw(Input{World: world, Detail: d, Nodes: nodes, Layers: Layers{Labels: true, Roads: true, Selected: -1}}, zv, w, h, pal)
+	withDetail := Draw(Input{World: world, Detail: d, Nodes: nodes, Layers: Layers{Labels: true, Roads: true, Routes: true, Selected: -1}}, zv, w, h, pal)
 	if !strings.Contains(plain(withDetail), "TOKYO") {
 		t.Errorf("detail towns:\n%s", plain(withDetail))
 	}
@@ -384,7 +385,7 @@ func TestRoutesFadeAndTraffic(t *testing.T) {
 		routes = append(routes, Route{At: now.Add(-time.Duration(i) * time.Second), Stops: Stops(5, [][]byte{{0x77}}, nodes, 0), Links: []Link{{}, {Known: true}}})
 	}
 	routes = append(routes, Route{At: now.Add(-time.Hour), Stops: Stops(6, nil, nodes, 0), Links: []Link{{}}})
-	in := Input{World: LoadWorld(), Nodes: nodes, Routes: routes, Now: now, Layers: Layers{Selected: -1}}
+	in := Input{World: LoadWorld(), Nodes: nodes, Routes: routes, Now: now, Layers: Layers{Selected: -1, Routes: true}}
 	v := View{W: 200, H: 120, Center: LatLon{51.44, -2.6}, Zoom: 10}
 	count := func(in Input) (n int) {
 		for _, l := range buildScene(in, v, PaletteFor(theme.Neon)).lines {
@@ -397,11 +398,27 @@ func TestRoutesFadeAndTraffic(t *testing.T) {
 	if got := count(in); got != RoutesShown*2 {
 		t.Errorf("only the newest routes are drawn: %d segments", got)
 	}
+	in.Layers.Routes = false
+	if got := count(in); got != 0 {
+		t.Errorf("routes switched off: %d segments", got)
+	}
+	in.Layers.Routes = true
+	in.Layers.Hidden[KindRepeater] = true
+	for _, m := range buildScene(in, v, PaletteFor(theme.Neon)).marks {
+		if m.glyph == '▲' {
+			t.Errorf("a hidden repeater is drawn: %+v", m)
+		}
+	}
+	in.Layers.Hidden[KindSelf] = true
+	if !slices.ContainsFunc(buildScene(in, v, PaletteFor(theme.Neon)).marks, func(m sMark) bool { return m.glyph == '◉' }) {
+		t.Error("we're always drawn")
+	}
+	in.Layers.Hidden = [KindOther + 1]bool{}
 	in.Layers.Selected = len(routes) - 1
 	if count(in) != 1 {
 		t.Error("a picked route is drawn however old")
 	}
-	in.Layers = Layers{Selected: -1, Traffic: true}
+	in.Layers = Layers{Selected: -1, Routes: true, Traffic: true}
 	in.Routes = nil
 	in.Flows = []Flow{{A: nodes[0].Pos, B: nodes[1].Pos, Level: 1}, {A: nodes[1].Pos, B: nodes[2].Pos, Level: 0.2}}
 	var traffic []sLine
@@ -550,7 +567,7 @@ func TestProjectorMatchesProject(t *testing.T) {
 // BenchmarkDraw is a full redraw, as during a pan or zoom: run with go test -bench Draw ./internal/mapview.
 func BenchmarkDraw(b *testing.B) {
 	nodes := bristol()
-	in := Input{World: LoadWorld(), Nodes: nodes, Layers: Layers{Labels: true, Roads: true, Traffic: true, Selected: -1}, Now: time.Now()}
+	in := Input{World: LoadWorld(), Nodes: nodes, Layers: Layers{Labels: true, Roads: true, Routes: true, Traffic: true, Selected: -1}, Now: time.Now()}
 	v := View{Center: LatLon{51.44, -2.6}, Zoom: 9, W: 392, H: 224}
 	pal := PaletteFor(theme.Neon)
 	for b.Loop() {

@@ -108,9 +108,11 @@ func (r Route) Km(nodes []Node) float64 {
 // Layers are what the map shows.
 type Layers struct {
 	Labels, Roads, Traffic bool
-	Selected               int    // a route to pick out, or -1
-	PathOnly               bool   // show only the picked route: its nodes, named, and each hop's signal
-	Hub                    LatLon // a node whose traffic is picked out, the rest faded; unplaced for none
+	Routes                 bool                // recent routes; one picked with Selected is drawn regardless
+	Hidden                 [KindOther + 1]bool // kinds of node left off, unless picked out
+	Selected               int                 // a route to pick out, or -1
+	PathOnly               bool                // show only the picked route: its nodes, named, and each hop's signal
+	Hub                    LatLon              // a node whose traffic is picked out, the rest faded; unplaced for none
 }
 
 // Flow is recent traffic over a link, for the traffic layer. Level runs from 0 to 1, the busiest link.
@@ -321,7 +323,7 @@ func buildScene(in Input, v View, pal Palette) scene {
 			continue
 		}
 		age := RouteFade(r.At, in.Now)
-		if !sel && (i >= RoutesShown || age >= 1) {
+		if !sel && (!l.Routes || i >= RoutesShown || age >= 1) {
 			continue
 		}
 		if !sel && (focus || !hub.Unplaced() && !r.passes(hub, in.Nodes)) {
@@ -411,6 +413,9 @@ func buildScene(in Input, v View, pal Palette) scene {
 			} else {
 				m.col = pal.Faded
 			}
+		}
+		if l.Hidden[n.Kind] && !m.force {
+			continue
 		}
 		if !l.Labels && !m.force {
 			m.label = ""

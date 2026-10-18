@@ -149,6 +149,8 @@ type mapModel struct {
 	fitted  bool
 	auto    bool // showing the whole mesh, so a new pane size refits it; moving the map by hand stops that
 	layers  mapview.Layers
+	showing bool // the show menu, for switching kinds of node and layers off
+	showSel int
 
 	routes  []mapRoute // newest first
 	anims   []mapview.Anim
@@ -175,7 +177,7 @@ type mapModel struct {
 }
 
 func newMapModel() mapModel {
-	return mapModel{layers: mapview.Layers{Labels: true, Roads: true, Traffic: true, Selected: -1}, links: map[[2]byte]linkReading{},
+	return mapModel{layers: mapview.Layers{Labels: true, Roads: true, Routes: true, Traffic: true, Selected: -1}, links: map[[2]byte]linkReading{},
 		flows: map[string]*flow{}, fetchDone: &atomic.Int32{}}
 }
 
@@ -681,8 +683,11 @@ func (m *Model) mapKey(s string) (tea.Cmd, bool) {
 	if mv.world == nil {
 		return nil, false
 	}
+	if mv.showing && m.showKey(s) {
+		return nil, true
+	}
 	v := mv.view
-	if s != "m" && s != "]" && s != "[" && s != "n" && s != "r" && s != "t" && s != "f" && s != "F" && s != "d" && s != "esc" {
+	if s != "m" && s != "]" && s != "[" && s != "n" && s != "r" && s != "t" && s != "f" && s != "F" && s != "d" && s != "esc" && s != "space" {
 		mv.auto = false
 	}
 	switch s {
@@ -722,6 +727,8 @@ func (m *Model) mapKey(s string) (tea.Cmd, bool) {
 		}
 	case "f", "F":
 		m.stepHub(s == "f")
+	case "space":
+		mv.showing, mv.showSel = true, 0
 	case "d":
 		return m.fetchDetail(false), true
 	case "esc":
@@ -858,6 +865,9 @@ func (m *Model) mapTitle() string {
 	} else if _, busiest := m.drawnFlows(); busiest != nil && mv.layers.Traffic {
 		t += " · " + trafficWindows[mv.window].busiest + " " + strings.ToUpper(busiest.aName+"–"+busiest.bName)
 	}
+	if m.mapFiltered() {
+		t += " · SOME HIDDEN"
+	}
 	if mv.fetching {
 		t += " · DOWNLOADING"
 	}
@@ -928,7 +938,10 @@ func (m *Model) renderMap(w, h int) []string {
 		}
 	}
 
-	hint := "←↑↓→ hjkl move · + - zoom · m whole mesh · [ ] routes · t traffic · f F focus · d street detail · n names · r roads"
+	if mv.showing {
+		m.overlayShow(out, w)
+	}
+	hint := "←↑↓→ hjkl move · + - zoom · m whole mesh · space show · [ ] routes · t traffic · f F focus · d download streets"
 	if mv.hub != "" || mv.layers.Selected >= 0 {
 		hint = "esc show all · " + hint
 	}
