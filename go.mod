@@ -9,6 +9,7 @@ require (
 	github.com/OwlShack/meshcore-go v1.9.0
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/clipperhouse/uax29/v2 v2.7.0
+	github.com/kyokomi/emoji/v2 v2.2.14
 	github.com/rivo/uniseg v0.4.7
 	github.com/zalando/go-keyring v0.2.8
 	go.bug.st/serial v1.8.0

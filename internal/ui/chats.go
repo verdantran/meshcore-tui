@@ -61,7 +61,9 @@ type chatsModel struct {
 
 	draft store.Convo // a conversation started from Contacts, listed until it's left without a message
 
-	mention *mentionCycle // tab completing an @name in the compose box
+	mention  *mentionCycle // tab completing an @name in the compose box
+	emoji    *emojiPick    // the emoji offered for a :shortcode being typed
+	emojiOff int           // 1 + where a shortcode's list was closed with esc, so it stays closed
 
 	chanStage chanStage // adding, sharing or removing a channel
 	chanInput lineEdit
@@ -271,7 +273,7 @@ func (m *Model) composeSend() tea.Cmd {
 		m.fail(err.Error())
 		return nil
 	}
-	m.chats.input, m.chats.scroll, m.chats.signFlip = lineEdit{}, 0, false
+	m.chats.input, m.chats.scroll, m.chats.signFlip, m.chats.emoji = lineEdit{}, 0, false, nil
 	m.refreshChats()
 	if sign {
 		return m.signedSendCmd(send, cur.Title)
@@ -336,19 +338,23 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		}
 	}
 	if c.writing {
+		if m.emojiKey(s) {
+			return nil, true
+		}
 		switch s {
 		case "ctrl+s":
 			if cur, ok := m.selectedConvo(); ok && cur.Kind == chat.KindChannel {
 				c.signFlip = !c.signFlip
 			}
 		case "esc":
-			c.writing, c.signFlip = false, false
+			c.writing, c.signFlip, c.emoji = false, false, nil
 		case "tab":
 			m.completeMention()
 		case "enter":
 			return m.composeSend(), true
 		default:
 			c.input.key(s)
+			m.updateEmoji()
 		}
 		return nil, true
 	}
@@ -739,6 +745,12 @@ func (m *Model) convoPane(w, rows int) []string {
 		out = append(out, "")
 	}
 	out = append(out, body...)
+	if c.writing && c.emoji != nil {
+		pick := m.emojiLines(w)
+		if len(pick) < len(out)-2 {
+			out = append(out[:len(out)-len(pick)], pick...)
+		}
+	}
 	return append(out, compose)
 }
 
