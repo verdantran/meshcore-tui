@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"slices"
 	"sync"
 	"time"
 
@@ -237,7 +238,20 @@ func (f *fakeDevice) Send(cmd []byte) error {
 			}
 		}
 		f.push(companion.ErrResponse{ErrorCode: companion.ErrCodeNotFound, HasErrorCode: true}.ToBytes())
-	case companion.AddUpdateContactCommand, companion.RemoveContactCommand, companion.ResetPathCommand,
+	case companion.AddUpdateContactCommand:
+		ct := companion.ContactResponse{PublicKey: c.PublicKey, Type: c.Type, Flags: c.Flags, OutPathLen: c.OutPathLen, AdvertName: c.Name,
+			LastAdvert: c.LastAdvert, AdvertLatitude: c.Latitude, AdvertLongitude: c.Longitude, LastModified: c.LastModified}
+		copy(ct.OutPath[:], c.OutPath)
+		f.mu.Lock()
+		i := slices.IndexFunc(f.contacts, func(o companion.ContactResponse) bool { return o.PublicKey == c.PublicKey })
+		if i < 0 {
+			f.contacts = append(f.contacts, ct)
+		} else {
+			f.contacts[i] = ct
+		}
+		f.mu.Unlock()
+		f.push(ok)
+	case companion.RemoveContactCommand, companion.ResetPathCommand,
 		companion.ImportContactCommand, companion.SendChannelTxtMsgCommand,
 		companion.SetAdvertNameCommand, companion.SetAdvertLatLonCommand, companion.SendSelfAdvertCommand, companion.SetRadioParamsCommand,
 		companion.SetTxPowerCommand, companion.SetTuningParamsCommand, companion.SetOtherParamsCommand, companion.SetPathHashModeCommand,

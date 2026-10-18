@@ -169,6 +169,7 @@ type Contact struct {
 	Flags      byte
 	PathLen    int // hops on the stored direct route; -1 means none, so sends flood
 	Path       []byte
+	HashSize   int // bytes per hop in Path; 0 reads as 1
 	LastAdvert time.Time
 	Lat, Lon   float64
 }

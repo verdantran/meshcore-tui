@@ -683,3 +683,61 @@ func TestLinkSigning(t *testing.T) {
 		t.Error("sign start refused")
 	}
 }
+
+func TestSaveContactKeepsPathHashSize(t *testing.T) {
+	f := newFakeDevice()
+	f.queue = nil
+	var path [64]byte
+	copy(path[:], []byte{1, 2, 3, 4, 5, 6})
+	f.contacts = []companion.ContactResponse{
+		{PublicKey: [32]byte{1}, Type: 1, OutPathLen: meshcore.MakePathLen(1, 3), OutPath: path, AdvertName: "One"},
+		{PublicKey: [32]byte{2}, Type: 1, OutPathLen: meshcore.MakePathLen(2, 3), OutPath: path, AdvertName: "Two"},
+		{PublicKey: [32]byte{3}, Type: 1, OutPathLen: meshcore.MakePathLen(3, 2), OutPath: path, AdvertName: "Three"},
+		{PublicKey: [32]byte{4}, Type: 1, OutPathLen: meshcore.MakePathLen(2, 0), AdvertName: "Zero"},
+	}
+	want := map[[32]byte]byte{}
+	for _, c := range f.contacts {
+		want[c.PublicKey] = c.OutPathLen
+	}
+	l := startLink(t, f)
+	next[Ready](t, l, nil)
+	ctx := context.Background()
+	before, err := l.SyncContacts(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range before {
+		c.Flags = FlagFavourite
+		if err := l.SaveContact(ctx, c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, c := range f.commands() {
+		if u, ok := c.(companion.AddUpdateContactCommand); ok && u.OutPathLen != want[u.PublicKey] {
+			t.Errorf("%s written with path_len %#x, want %#x", u.Name, u.OutPathLen, want[u.PublicKey])
+		}
+	}
+	after, err := l.SyncContacts(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range before {
+		b, a := before[i], after[i]
+		if a.PathLen != b.PathLen || a.HashSize != b.HashSize || !bytes.Equal(a.Path, b.Path) || a.Flags != FlagFavourite {
+			t.Errorf("%s: route %d×%d %X came back as %d×%d %X", b.Name, b.PathLen, b.HashSize, b.Path, a.PathLen, a.HashSize, a.Path)
+		}
+	}
+	if after[1].HashSize != 2 || len(after[1].Path) != 6 || after[2].HashSize != 3 || len(after[2].Path) != 6 {
+		t.Fatalf("hash sizes read as %+v", after)
+	}
+
+	edited := after[1]
+	edited.PathLen, edited.Path = 2, []byte{0xAA, 0xBB}
+	if err := l.SaveContact(ctx, edited); err != nil {
+		t.Fatal(err)
+	}
+	cmds := f.commands()
+	if u := cmds[len(cmds)-1].(companion.AddUpdateContactCommand); u.OutPathLen != meshcore.MakePathLen(1, 2) {
+		t.Fatalf("an edited 1-byte route was written with path_len %#x", u.OutPathLen)
+	}
+}

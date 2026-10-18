@@ -286,7 +286,7 @@ func contactFrom(key [32]byte, name string, typ, flags, pathLen byte, path []byt
 	if pathLen != 0xFF {
 		size, hops := meshcore.PathLenFields(pathLen)
 		n := min(int(size)*int(hops), len(path))
-		c.PathLen, c.Path = int(hops), append([]byte(nil), path[:n]...)
+		c.PathLen, c.Path, c.HashSize = int(hops), append([]byte(nil), path[:n]...), int(size)
 	}
 	return c
 }
@@ -705,9 +705,19 @@ func (l *Link) SaveContact(ctx context.Context, c Contact) error {
 		LastModified: uint32(time.Now().Unix()),
 	}
 	if c.PathLen >= 0 {
-		cmd.OutPathLen, cmd.OutPath = meshcore.MakePathLen(1, uint8(len(c.Path))), c.Path
+		size := pathHashSize(c)
+		cmd.OutPathLen, cmd.OutPath = meshcore.MakePathLen(uint8(size), uint8(c.PathLen)), c.Path
 	}
 	return l.client.AddUpdateContactFull(ctx, cmd)
+}
+
+// pathHashSize trusts HashSize unless the path was edited to a different shape since it was read.
+func pathHashSize(c Contact) int {
+	size := max(c.HashSize, 1)
+	if c.PathLen > 0 && len(c.Path) != size*c.PathLen && len(c.Path)%c.PathLen == 0 {
+		size = len(c.Path) / c.PathLen
+	}
+	return min(size, 4)
 }
 
 func (l *Link) RemoveContact(ctx context.Context, key [32]byte) error {
