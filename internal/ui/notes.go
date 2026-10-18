@@ -24,6 +24,7 @@ type notifyFlushMsg struct{}
 
 type notifier struct {
 	method  notify.Method
+	show    string // message, sender or nothing: how much of it leaves the app
 	bell    bool
 	events  []string
 	env     func(string) string
@@ -32,9 +33,12 @@ type notifier struct {
 }
 
 func newNotifier(o Options) notifier {
-	n := notifier{method: notify.Resolve("auto", o.Env), bell: true, events: []string{"dm", "mention"}, env: o.Env}
+	n := notifier{method: notify.Resolve("auto", o.Env), show: "message", bell: true, events: []string{"dm", "mention"}, env: o.Env}
 	if c := o.Config; c != nil {
 		n.method = notify.Resolve(c.Notifications.Desktop, o.Env)
+		if slices.Contains(showLevels, c.Notifications.Show) {
+			n.show = c.Notifications.Show
+		}
 		n.bell = c.Notifications.Bell
 		n.events = c.Notifications.Events
 	}
@@ -81,13 +85,25 @@ func (m *Model) flushNotes() tea.Cmd {
 		title = fmt.Sprintf("meshcore-tui · %d new messages", len(n.pending))
 		body = strings.Join(who, ", ")
 	}
+	count := len(n.pending)
 	n.pending = nil
 	m.pushToast(strings.TrimPrefix(title, "meshcore-tui · "), body)
 	if n.method == notify.Off {
 		return nil
 	}
+	switch {
+	case n.show == "nothing":
+		title, body = "meshcore-tui", "New message"
+		if count > 1 {
+			body = fmt.Sprintf("%d new messages", count)
+		}
+	case n.show == "sender" && count == 1:
+		body = "New message"
+	}
 	return m.sendNote(title, body)
 }
+
+var showLevels = []string{"message", "sender", "nothing"}
 
 // sendNote writes a notification now, and logs it, so it's visible even if the terminal swallows it.
 func (m *Model) sendNote(title, body string) tea.Cmd {
@@ -109,8 +125,20 @@ func (n *notifier) describe() string {
 }
 
 func notifyCommand() command {
-	return command{name: "notify", help: "send a test notification, to check your terminal shows it",
-		run: func(m *Model, _ []string) error {
+	return command{name: "notify", args: "[show message|sender|nothing]", help: "send a test notification, or choose how much of a message reaches the desktop and lock screen",
+		run: func(m *Model, a []string) error {
+			if len(a) > 0 {
+				if len(a) != 2 || a[0] != "show" || !slices.Contains(showLevels, a[1]) {
+					return fmt.Errorf("notify show takes message, sender or nothing")
+				}
+				m.notes.show = a[1]
+				m.addLog(m.now, "NOTIFICATIONS  show "+a[1], radio.ToneInfo)
+				if m.opt.Config != nil {
+					m.opt.Config.Notifications.Show = a[1]
+					m.saveConfig()
+				}
+				return nil
+			}
 			if m.notes.method == notify.Off {
 				return fmt.Errorf("notifications are off; set desktop in [notifications] to turn them on")
 			}

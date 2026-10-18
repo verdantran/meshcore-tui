@@ -170,3 +170,26 @@ func TestNotifyCommand(t *testing.T) {
 		t.Fatalf("log = %q", l.text)
 	}
 }
+
+func TestNotificationsCanKeepTheTextBack(t *testing.T) {
+	m, c, _ := newChatModel(t)
+	typeKeys(m, ":notify show sender")
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	send(m, c, 0, aliceSays(c, "the door code is 4471"))
+	if got := flushed(m); got != "\a\x1b]9;meshcore-tui · Alice: New message\a" {
+		t.Errorf("sender only = %q", got)
+	}
+	if !strings.Contains(m.toasts[len(m.toasts)-1].body, "4471") {
+		t.Error("the app's own toast still shows the message")
+	}
+	m.notes.show = "nothing"
+	send(m, c, 0, aliceSays(c, "and the alarm is off"))
+	if got := flushed(m); got != "\a\x1b]9;meshcore-tui: New message\a" {
+		t.Errorf("nothing = %q", got)
+	}
+	typeKeys(m, ":notify show loud")
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.notes.show != "nothing" {
+		t.Error("an unknown level is refused")
+	}
+}

@@ -52,6 +52,7 @@ type Config struct {
 		Events  []string `toml:"events"` // dm, mention
 		Bell    bool     `toml:"bell"`
 		Desktop string   `toml:"desktop"` // auto, terminal, os, bell or off
+		Show    string   `toml:"show"`    // what reaches the desktop and lock screen: message, sender or nothing
 	} `toml:"notifications"`
 	Admin struct {
 		StatusPoll   int      `toml:"status_poll_s"` // the auto-refresh interval on a node's status
@@ -81,6 +82,7 @@ func Default() *Config {
 	c.Notifications.Events = []string{"dm", "mention"}
 	c.Notifications.Bell = true
 	c.Notifications.Desktop = "auto"
+	c.Notifications.Show = "message"
 	c.Admin.StatusPoll = 60
 	c.Admin.FleetSpacing = 20
 	c.Admin.BatteryAlert = 3.5
