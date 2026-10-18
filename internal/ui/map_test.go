@@ -656,7 +656,7 @@ func TestMapBusiestStaysPut(t *testing.T) {
 	m, _ := newTestModel(t, motion.Full, 100, 30)
 	mv := &m.mapv
 	for _, name := range []string{"Hilltop", "Dundry", "Shed", "Mast"} {
-		mv.flows[name] = &flow{aName: name, bName: "Base", count: 5, at: m.now}
+		mv.flows[name] = &flow{aID: name, bID: "Base", aName: name, bName: "Base", count: [2]float64{5, 5}, at: m.now}
 	}
 	first := ""
 	for range 50 {
@@ -668,11 +668,11 @@ func TestMapBusiestStaysPut(t *testing.T) {
 			t.Fatalf("busiest moved from %s to %s with nothing changing", first, b.aName)
 		}
 	}
-	mv.flows["Shed"].count = 5.2
+	mv.flows["Shed"].count[0] = 5.2
 	if _, b := m.mapFlows(); b.aName != first && first != "Shed" {
 		t.Error("a link a little busier doesn't take over")
 	}
-	mv.flows["Mast"].count = 9
+	mv.flows["Mast"].count[0] = 9
 	if _, b := m.mapFlows(); b.aName != "Mast" {
 		t.Errorf("busiest = %s, want Mast, now clearly busiest", b.aName)
 	}
@@ -686,13 +686,13 @@ func TestMapTraffic(t *testing.T) {
 	}
 	h.hear(channelPacket(t, h, "Public", "Bob", "hi", []byte{0x5F, 0x77}), 6) // 5F is Kelston or Lansdown
 	flows, busiest := h.m.mapFlows()
-	if busiest == nil || busiest.count != 3 {
+	if busiest == nil || busiest.count[0] != 3 {
 		t.Fatalf("busiest = %+v", busiest)
 	}
 	shared := 0.0
 	for _, f := range h.m.mapv.flows {
 		if f.aName == "Bob" || f.bName == "Bob" {
-			shared += f.count
+			shared += f.count[0]
 		}
 	}
 	if math.Abs(shared-1) > 1e-9 {
@@ -709,18 +709,30 @@ func TestMapTraffic(t *testing.T) {
 		t.Errorf("title = %s", h.m.mapTitle())
 	}
 
-	// An hour later the counts have halved; a day later they've gone.
+	if !strings.Contains(h.m.mapTitle(), "BUSIEST LATELY") {
+		t.Errorf("title = %s", h.m.mapTitle())
+	}
+
+	// An hour later the hour's counts have halved, and the recent ones have halved four times; a day later
+	// they've gone.
 	h.clk.t = h.clk.t.Add(time.Hour)
 	h.m.now = h.clk.t
-	if _, b := h.m.mapFlows(); math.Abs(b.now(h.m.now)-1.5) > 1e-9 {
-		t.Errorf("after an hour = %v", b.now(h.m.now))
+	if _, b := h.m.mapFlows(); math.Abs(b.now(h.m.now, 1)-1.5) > 1e-9 || math.Abs(b.now(h.m.now, 0)-3.0/16) > 1e-9 {
+		t.Errorf("after an hour = %v, %v", b.now(h.m.now, 0), b.now(h.m.now, 1))
+	}
+	h.keys("t")
+	if h.m.mapv.window != 1 || !strings.Contains(h.m.mapTitle(), "BUSIEST THIS HOUR") {
+		t.Errorf("t counts the last hour: %s", h.m.mapTitle())
 	}
 	before := h.screen()
 	h.keys("t")
 	if h.m.mapv.layers.Traffic || h.screen() == before || strings.Contains(h.m.mapTitle(), "BUSIEST") {
-		t.Error("t hides the traffic layer")
+		t.Error("a third t hides the traffic layer")
 	}
 	h.keys("t")
+	if !h.m.mapv.layers.Traffic || h.m.mapv.window != 0 {
+		t.Error("and t shows it again, counting recent traffic")
+	}
 	h.clk.t = h.clk.t.Add(24 * time.Hour)
 	h.m.now = h.clk.t
 	if flows, b := h.m.mapFlows(); len(flows) != 0 || b != nil || len(h.m.mapv.flows) != 0 {
@@ -808,5 +820,77 @@ func TestPathReplays(t *testing.T) {
 	h.m.level = motion.Off
 	if h.m.mapAnimating() {
 		t.Error("no replay with motion off")
+	}
+}
+
+func TestMapTrafficKeepsToTheBusiest(t *testing.T) {
+	m, _ := newTestModel(t, motion.Full, 100, 30)
+	mv := &m.mapv
+	add := func(name string, count float64, unsure bool) {
+		f := &flow{aID: name, bID: "Base", aName: name, bName: "Base", a: mapview.LatLon{Lat: 51, Lon: count}, b: mapview.LatLon{Lat: 52, Lon: 0}, at: m.now}
+		f.add(m.now, count, unsure)
+		mv.flows[name] = f
+	}
+	add("Busiest", 100, false)
+	for i := range 20 {
+		add(fmt.Sprint("Link ", i), float64(20+i), false)
+	}
+	add("Quiet", 5, false)
+	add("Guess", 50, true)
+	flows, _ := m.mapFlows()
+	if len(flows) != trafficLinks {
+		t.Fatalf("%d links drawn, want the busiest %d", len(flows), trafficLinks)
+	}
+	for _, f := range flows {
+		if f.A.Lon == 5 {
+			t.Error("a link with under a tenth of the busiest's traffic isn't drawn")
+		}
+		if f.A.Lon == 50 && !f.Uncertain || f.A.Lon != 50 && f.Uncertain {
+			t.Errorf("only the guessed link is uncertain: %+v", f)
+		}
+		if f.A.Lon == 100 && f.Level != 1 || f.A.Lon == 25 && f.Level != 0.5 {
+			t.Errorf("levels follow the square root of the share: %+v", f)
+		}
+	}
+
+	if st := sureStop(mapview.Stop{Nodes: []int{3, 4}, Weights: []float64{0.8, 0.2}}); len(st.Nodes) != 1 || st.Weights[0] != 1 {
+		t.Errorf("a clear favourite takes the whole hop: %+v", st)
+	}
+	if st := sureStop(mapview.Stop{Nodes: []int{3, 4}, Weights: []float64{0.6, 0.4}}); len(st.Nodes) != 2 {
+		t.Errorf("a close call stays shared: %+v", st)
+	}
+}
+
+func TestMapPicksOutABusyNode(t *testing.T) {
+	h := newHarness(t)
+	h.openMap()
+	for range 3 {
+		h.hear(channelPacket(t, h, "Public", "Carol", "busy", []byte{0x4D, 0x1E}), 4) // Carol, Clevedon, Cabot Tower, me
+	}
+	h.hear(channelPacket(t, h, "Public", "Dan", "hi", []byte{0x08}), 6) // Dan, Twmbarlwm, me
+	hubs := h.m.hubs()
+	if len(hubs) < 3 || hubs[0].total < hubs[len(hubs)-2].total || hubs[len(hubs)-1].name != "me" {
+		t.Fatalf("busiest first, and us last though every route ends with us: %+v", hubs)
+	}
+	h.keys("f")
+	if h.m.mapv.hub != hubs[0].id || !strings.Contains(h.m.mapTitle(), strings.ToUpper(hubs[0].name)+" · ") {
+		t.Errorf("f picks out the busiest node first: %s", h.m.mapTitle())
+	}
+	h.keys("f")
+	if h.m.mapv.hub != hubs[1].id {
+		t.Error("f again, the next")
+	}
+	h.keys("F")
+	if h.m.mapv.hub != hubs[0].id {
+		t.Error("F goes back")
+	}
+	h.keys("F")
+	if h.m.mapv.hub != "" || !strings.Contains(h.m.mapTitle(), "BUSIEST") {
+		t.Error("past the first, everything shows again")
+	}
+	h.keys("f")
+	h.key(tea.KeyEscape)
+	if h.m.mapv.hub != "" {
+		t.Error("esc shows everything again")
 	}
 }

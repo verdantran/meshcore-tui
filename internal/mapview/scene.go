@@ -51,6 +51,18 @@ type Route struct {
 	Links []Link // one per hop: Links[i] is the signal from Stops[i] to Stops[i+1]
 }
 
+// passes reports whether the route goes through a node at pos, or could have.
+func (r Route) passes(pos LatLon, nodes []Node) bool {
+	for _, s := range r.Stops {
+		for _, n := range s.Nodes {
+			if nodes[n].Pos == pos {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Placed lists the route's stops that have a position, with the links between them; a hop through an
 // unplaced repeater, or an ambiguous one, comes back as uncertain.
 func (r Route) Placed(nodes []Node) (pts []LatLon, links []Link, uncertain []bool) {
@@ -96,14 +108,16 @@ func (r Route) Km(nodes []Node) float64 {
 // Layers are what the map shows.
 type Layers struct {
 	Labels, Roads, Traffic bool
-	Selected               int  // a route to pick out, or -1
-	PathOnly               bool // show only the picked route: its nodes, named, and each hop's signal
+	Selected               int    // a route to pick out, or -1
+	PathOnly               bool   // show only the picked route: its nodes, named, and each hop's signal
+	Hub                    LatLon // a node whose traffic is picked out, the rest faded; unplaced for none
 }
 
 // Flow is recent traffic over a link, for the traffic layer. Level runs from 0 to 1, the busiest link.
 type Flow struct {
-	A, B  LatLon
-	Level float64
+	A, B      LatLon
+	Level     float64
+	Uncertain bool // most of its count came from hops that could be one of several repeaters
 }
 
 type Input struct {
@@ -273,11 +287,30 @@ func buildScene(in Input, v View, pal Palette) scene {
 	}
 
 	only := l.PathOnly && focus
+	hub := l.Hub
+	if !l.Traffic || only {
+		hub = LatLon{}
+	}
+	neighbour := map[LatLon]bool{}
+	for _, f := range in.Flows {
+		if f.A == hub || f.B == hub {
+			neighbour[f.A], neighbour[f.B] = true, true
+		}
+	}
 	if l.Traffic && !only {
 		// Saturation is the whole story here, in one hue, so it never reads as the signal colours routes use.
 		for _, f := range in.Flows {
-			col := pal.Land.Lerp(pal.Violet, 0.2+0.8*f.Level)
-			s.lines = append(s.lines, sLine{pts: []LatLon{f.A, f.B}, col: fade(col), prio: prioTraffic, bold: f.Level >= 0.6})
+			level := f.Level
+			if f.Uncertain {
+				level *= 0.6
+			}
+			col := pal.Land.Lerp(pal.Violet, 0.2+0.8*level)
+			lit := hub.Unplaced() || f.A == hub || f.B == hub
+			if !lit {
+				col = pal.Land.Lerp(pal.Violet, 0.12)
+			}
+			s.lines = append(s.lines, sLine{pts: []LatLon{f.A, f.B}, col: fade(col), prio: prioTraffic, dash: f.Uncertain,
+				bold: lit && !f.Uncertain && f.Level >= 0.6})
 		}
 	}
 
@@ -291,7 +324,7 @@ func buildScene(in Input, v View, pal Palette) scene {
 		if !sel && (i >= RoutesShown || age >= 1) {
 			continue
 		}
-		if focus && !sel {
+		if !sel && (focus || !hub.Unplaced() && !r.passes(hub, in.Nodes)) {
 			pts, _, _ := r.Placed(in.Nodes)
 			if len(pts) > 1 {
 				s.lines = append(s.lines, sLine{pts: pts, col: pal.Unknown.Lerp(pal.Land, 0.4+0.5*age), prio: prioRouteDim})
@@ -360,6 +393,14 @@ func buildScene(in Input, v View, pal Palette) scene {
 			m.glyph, m.col = '■', pal.Room
 		default:
 			m.glyph, m.col = '●', pal.Chat
+		}
+		if !hub.Unplaced() && !focus {
+			switch {
+			case n.Pos == hub:
+				m.force, m.bold = true, true
+			case !neighbour[n.Pos]:
+				m.col, m.label = pal.Faded, ""
+			}
 		}
 		if focus {
 			if onRoute[i] {

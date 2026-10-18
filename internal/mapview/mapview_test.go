@@ -413,6 +413,53 @@ func TestRoutesFadeAndTraffic(t *testing.T) {
 	if len(traffic) != 2 || !traffic[0].bold || traffic[1].bold || traffic[0].col == traffic[1].col {
 		t.Errorf("busier links are bolder and more saturated: %+v", traffic)
 	}
+
+	// A guessed link is dashed and dimmer; picking out a node fades the links and nodes away from it.
+	in.Flows = append(in.Flows, Flow{A: nodes[2].Pos, B: nodes[3].Pos, Level: 1, Uncertain: true})
+	in.Layers.Hub = nodes[0].Pos
+	sc := buildScene(in, v, PaletteFor(theme.Neon))
+	traffic = nil
+	for _, l := range sc.lines {
+		if l.prio == prioTraffic {
+			traffic = append(traffic, l)
+		}
+	}
+	if len(traffic) != 3 || !traffic[0].bold || traffic[1].col != traffic[2].col || !traffic[2].dash || traffic[2].bold {
+		t.Errorf("only the hub's link stays lit, and the guess is dashed: %+v", traffic)
+	}
+	for _, m := range sc.marks {
+		switch m.pos {
+		case nodes[0].Pos:
+			if !m.force || !m.bold {
+				t.Errorf("the hub is named and bold: %+v", m)
+			}
+		case nodes[1].Pos:
+			if m.col == PaletteFor(theme.Neon).Faded {
+				t.Error("its neighbour stays lit")
+			}
+		case nodes[3].Pos:
+			if m.col != PaletteFor(theme.Neon).Faded || m.label != "" {
+				t.Errorf("a node away from it fades: %+v", m)
+			}
+		}
+	}
+
+	// Recent routes away from the picked-out node dim too, unless picked themselves.
+	in.Routes = []Route{{At: now, Stops: Stops(5, [][]byte{{0x77}}, nodes, 0), Links: []Link{{}, {Known: true}}}}
+	in.Layers.Hub = LatLon{Lat: 1, Lon: 1}
+	if count(in) != 0 {
+		t.Error("a route away from the node is dimmed")
+	}
+	in.Layers.Hub = in.Nodes[in.Routes[0].Stops[1].Nodes[0]].Pos
+	if count(in) != 2 {
+		t.Error("a route through it isn't")
+	}
+	in.Layers.Hub, in.Layers.Selected = LatLon{Lat: 1, Lon: 1}, 0
+	if count(in) != 2 {
+		t.Error("nor is a picked route")
+	}
+	in.Layers.Selected = -1
+
 	in.Layers.Traffic = false
 	for _, l := range buildScene(in, v, PaletteFor(theme.Neon)).lines {
 		if l.prio == prioTraffic {

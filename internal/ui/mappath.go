@@ -76,7 +76,7 @@ func (m *Model) pathKey(s string) (tea.Cmd, bool) {
 		p.play = true
 	case "m":
 		p.fit = true
-	case "t", "d":
+	case "t", "f", "F", "d":
 		return nil, true // the traffic layer and the download belong to the full map
 	default:
 		return nil, false

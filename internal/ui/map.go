@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -29,9 +30,17 @@ const (
 	mapMargin  = 0.12
 	linkMaxAge = 24 * time.Hour // older trace readings no longer colour a link
 
-	trafficHalfLife = time.Hour // a link's traffic count halves every hour, so the layer shows what's busy now
-	trafficFloor    = 0.1       // below this a link has gone quiet and isn't drawn
+	trafficFloor = 0.1 // below this a link has gone quiet and isn't drawn
+	trafficShare = 0.1 // nor is one with less than this share of the busiest link's traffic
+	trafficLinks = 15  // the busiest links drawn, at most
+	trafficSure  = 0.7 // a hop this likely to be one repeater is credited to it alone
 )
+
+// trafficWindows are the half-lives t steps through. Every link keeps a count for each, so switching is instant.
+var trafficWindows = []struct {
+	halfLife time.Duration
+	busiest  string // how the title names the busiest link
+}{{15 * time.Minute, "BUSIEST LATELY"}, {time.Hour, "BUSIEST THIS HOUR"}}
 
 // mapRoute is a packet's journey as heard. It's resolved against the nodes each time it's drawn, so a
 // repeater added later, or a trace run later, still places and colours it.
@@ -105,13 +114,28 @@ type linkReading struct {
 // flow is the traffic seen crossing one link: a count that decays, as of when it was last added to.
 type flow struct {
 	a, b         mapview.LatLon
+	aID, bID     string
 	aName, bName string
-	count        float64
+	count        [2]float64 // one per traffic window
+	unsure       [2]float64 // the part of count from hops that could be one of several repeaters
 	at           time.Time
 }
 
-func (f flow) now(t time.Time) float64 {
-	return f.count * math.Exp2(-t.Sub(f.at).Hours()/trafficHalfLife.Hours())
+func decayed(v float64, d time.Duration, w int) float64 {
+	return v * math.Exp2(-d.Hours()/trafficWindows[w].halfLife.Hours())
+}
+
+func (f *flow) now(t time.Time, w int) float64 { return decayed(f.count[w], t.Sub(f.at), w) }
+
+func (f *flow) add(t time.Time, n float64, unsure bool) {
+	for w := range trafficWindows {
+		f.count[w] = f.now(t, w) + n
+		f.unsure[w] = decayed(f.unsure[w], t.Sub(f.at), w)
+		if unsure {
+			f.unsure[w] += n
+		}
+	}
+	f.at = t
 }
 
 type mapModel struct {
@@ -142,6 +166,8 @@ type mapModel struct {
 	noteBad    bool
 
 	busiest  string        // the flow named in the title, kept until another is clearly busier
+	window   int           // which of trafficWindows the traffic layer shows
+	hub      string        // a node whose traffic is picked out with f, by nodeID
 	drawCost time.Duration // a full redraw, averaged; too slow for a frame and moves jump instead of gliding
 	cacheKey string
 	cache    *mapview.Canvas
@@ -468,11 +494,13 @@ func nodeID(n mapview.Node) string {
 }
 
 // countTraffic adds a heard route's hops to the traffic layer. A hop that could be one of several repeaters
-// is shared between them by how likely each is, rather than all credited to a guess.
+// is shared between them by how likely each is, rather than all credited to a guess, unless one is clearly
+// the likeliest.
 func (m *Model) countTraffic(r mapview.Route, nodes []mapview.Node) {
 	mv := &m.mapv
 	for i := 0; i+1 < len(r.Stops); i++ {
-		from, to := r.Stops[i], r.Stops[i+1]
+		from, to := sureStop(r.Stops[i]), sureStop(r.Stops[i+1])
+		unsure := len(from.Nodes) > 1 || len(to.Nodes) > 1
 		for ka, a := range from.Nodes {
 			for kb, b := range to.Nodes {
 				na, nb := nodes[a], nodes[b]
@@ -482,41 +510,75 @@ func (m *Model) countTraffic(r mapview.Route, nodes []mapview.Node) {
 				}
 				f, ok := mv.flows[ia+"|"+ib]
 				if !ok {
-					f = &flow{a: na.Pos, b: nb.Pos, aName: na.Name, bName: nb.Name}
+					f = &flow{a: na.Pos, b: nb.Pos, aID: ia, bID: ib, aName: na.Name, bName: nb.Name, at: m.now}
 					mv.flows[ia+"|"+ib] = f
 				}
-				f.count, f.at = f.now(m.now)+from.Weights[ka]*to.Weights[kb], m.now
+				f.add(m.now, from.Weights[ka]*to.Weights[kb], unsure)
 			}
 		}
 	}
 }
 
-// mapFlows are the links busy enough to draw, scaled so the busiest is 1. The scale is logarithmic, so one
-// heavy backbone link doesn't wash out the rest. It also names the busiest, and forgets links long quiet.
-func (m *Model) mapFlows() ([]mapview.Flow, *flow) {
+// sureStop narrows an ambiguous stop to its likeliest candidate when that one is likely enough.
+func sureStop(st mapview.Stop) mapview.Stop {
+	if len(st.Nodes) > 1 && st.Weights[0] >= trafficSure {
+		return mapview.Stop{Hash: st.Hash, Nodes: st.Nodes[:1], Weights: []float64{1}}
+	}
+	return st
+}
+
+// drawnFlows are the links busy enough to draw, busiest first: no more than trafficLinks, each with at least
+// trafficShare of the busiest one's traffic. It also names the busiest, and forgets links long quiet.
+func (m *Model) drawnFlows() (drawn []*flow, busiest *flow) {
 	mv := &m.mapv
+	w, slowest := mv.window, len(trafficWindows)-1
 	peak, top := 0.0, ""
 	for k, f := range mv.flows {
-		v := f.now(m.now)
-		if v < trafficFloor/10 {
+		if f.now(m.now, slowest) < trafficFloor/10 {
 			delete(mv.flows, k)
 			continue
 		}
-		if v > peak || v == peak && k < top {
+		if v := f.now(m.now, w); v > peak || v == peak && k < top {
 			peak, top = v, k
 		}
 	}
 	// Links that carried the same packets tie exactly, so without some stickiness the title flickers between them.
-	if cur, ok := mv.flows[mv.busiest]; !ok || cur.now(m.now) < 0.9*peak {
+	if cur, ok := mv.flows[mv.busiest]; !ok || cur.now(m.now, w) < 0.9*peak {
 		mv.busiest = top
 	}
-	busiest := mv.flows[mv.busiest]
-	var out []mapview.Flow
+	if peak < trafficFloor {
+		return nil, nil
+	}
 	for _, f := range mv.flows {
-		if v := f.now(m.now); v >= trafficFloor {
-			level := math.Log1p(v) / math.Log1p(peak)
-			out = append(out, mapview.Flow{A: f.a, B: f.b, Level: math.Round(level*20) / 20}) // steps, so the map isn't redrawn for every tiny fade
+		if v := f.now(m.now, w); v >= trafficFloor && v >= trafficShare*peak {
+			drawn = append(drawn, f)
 		}
+	}
+	sort.Slice(drawn, func(i, j int) bool {
+		a, b := drawn[i].now(m.now, w), drawn[j].now(m.now, w)
+		if a != b {
+			return a > b
+		}
+		return drawn[i].aID+drawn[i].bID < drawn[j].aID+drawn[j].bID
+	})
+	return drawn[:min(len(drawn), trafficLinks)], mv.flows[mv.busiest]
+}
+
+// mapFlows are the drawn links scaled so the busiest is 1. A square root lifts quiet links a little without
+// making them look busy.
+func (m *Model) mapFlows() ([]mapview.Flow, *flow) {
+	w := m.mapv.window
+	drawn, busiest := m.drawnFlows()
+	if len(drawn) == 0 {
+		return nil, busiest
+	}
+	peak := drawn[0].now(m.now, w)
+	var out []mapview.Flow
+	for _, f := range drawn {
+		v := f.now(m.now, w)
+		level := math.Sqrt(v / peak)
+		out = append(out, mapview.Flow{A: f.a, B: f.b, Level: math.Round(level*20) / 20, // steps, so the map isn't redrawn for every tiny fade
+			Uncertain: f.unsure[w] > f.count[w]/2})
 	}
 	// Busiest drawn last, on top. Ties are broken by position so the order, and the map's cache key with it,
 	// doesn't shuffle from frame to frame as Go's map order does.
@@ -620,7 +682,7 @@ func (m *Model) mapKey(s string) (tea.Cmd, bool) {
 		return nil, false
 	}
 	v := mv.view
-	if s != "m" && s != "]" && s != "[" && s != "L" && s != "r" && s != "t" && s != "d" && s != "esc" {
+	if s != "m" && s != "]" && s != "[" && s != "L" && s != "r" && s != "t" && s != "f" && s != "F" && s != "d" && s != "esc" {
 		mv.auto = false
 	}
 	switch s {
@@ -650,7 +712,16 @@ func (m *Model) mapKey(s string) (tea.Cmd, bool) {
 	case "r":
 		mv.layers.Roads = !mv.layers.Roads
 	case "t":
-		mv.layers.Traffic = !mv.layers.Traffic
+		switch {
+		case !mv.layers.Traffic:
+			mv.layers.Traffic, mv.window = true, 0
+		case mv.window < len(trafficWindows)-1:
+			mv.window++
+		default:
+			mv.layers.Traffic, mv.hub = false, ""
+		}
+	case "f", "F":
+		m.stepHub(s == "f")
 	case "d":
 		return m.fetchDetail(false), true
 	case "esc":
@@ -659,6 +730,8 @@ func (m *Model) mapKey(s string) (tea.Cmd, bool) {
 			mv.cancel()
 		case mv.layers.Selected >= 0:
 			mv.layers.Selected = -1
+		case mv.hub != "":
+			mv.hub = ""
 		default:
 			return nil, false
 		}
@@ -693,6 +766,83 @@ func (m *Model) mapBeaconOn() bool {
 		!(mapview.LatLon{Lat: m.ready.Self.Lat, Lon: m.ready.Self.Lon}).Unplaced()
 }
 
+// hubNode is a node with traffic drawn, for picking out with f.
+type hubNode struct {
+	id, name string
+	pos      mapview.LatLon
+	links    int
+	total    float64
+}
+
+// hubs are the nodes at either end of the drawn links, busiest first, and us last: every route ends with
+// us, so we'd always lead.
+func (m *Model) hubs() []hubNode {
+	me := nodeID(m.mapNodes()[0])
+	drawn, _ := m.drawnFlows()
+	by := map[string]*hubNode{}
+	var out []*hubNode
+	for _, f := range drawn {
+		v := f.now(m.now, m.mapv.window)
+		for _, end := range []hubNode{{id: f.aID, name: f.aName, pos: f.a}, {id: f.bID, name: f.bName, pos: f.b}} {
+			h, ok := by[end.id]
+			if !ok {
+				h = &end
+				by[end.id] = h
+				out = append(out, h)
+			}
+			h.links++
+			h.total += v
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if (out[i].id == me) != (out[j].id == me) {
+			return out[j].id == me
+		}
+		if out[i].total != out[j].total {
+			return out[i].total > out[j].total
+		}
+		return out[i].name < out[j].name
+	})
+	hubs := make([]hubNode, len(out))
+	for i, h := range out {
+		hubs[i] = *h
+	}
+	return hubs
+}
+
+// stepHub picks out the next node's traffic, busiest first, or the previous; past either end it shows all again.
+func (m *Model) stepHub(next bool) {
+	mv := &m.mapv
+	mv.layers.Traffic = true
+	hubs := m.hubs()
+	i := slices.IndexFunc(hubs, func(h hubNode) bool { return h.id == mv.hub })
+	switch {
+	case next:
+		i++
+	case i < 0:
+		i = len(hubs) - 1
+	default:
+		i--
+	}
+	mv.hub = ""
+	if i >= 0 && i < len(hubs) {
+		mv.hub = hubs[i].id
+	}
+}
+
+// hub is the node picked out with f, while it still has traffic drawn.
+func (m *Model) hub() (hubNode, bool) {
+	if !m.mapv.layers.Traffic || m.mapv.hub == "" {
+		return hubNode{}, false
+	}
+	for _, h := range m.hubs() {
+		if h.id == m.mapv.hub {
+			return h, true
+		}
+	}
+	return hubNode{}, false
+}
+
 func (m *Model) mapTitle() string {
 	mv := &m.mapv
 	if mv.path != nil {
@@ -703,8 +853,10 @@ func (m *Model) mapTitle() string {
 	if mv.layers.Selected >= 0 && mv.layers.Selected < len(mv.routes) {
 		t += fmt.Sprintf(" · ROUTE %d OF %d", mv.layers.Selected+1, len(mv.routes))
 	}
-	if _, busiest := m.mapFlows(); busiest != nil && mv.layers.Traffic {
-		t += " · BUSIEST " + strings.ToUpper(busiest.aName+"–"+busiest.bName)
+	if h, ok := m.hub(); ok {
+		t += fmt.Sprintf(" · %s · %s", strings.ToUpper(h.name), strings.ToUpper(plural(h.links, "link")))
+	} else if _, busiest := m.drawnFlows(); busiest != nil && mv.layers.Traffic {
+		t += " · " + trafficWindows[mv.window].busiest + " " + strings.ToUpper(busiest.aName+"–"+busiest.bName)
 	}
 	if mv.fetching {
 		t += " · DOWNLOADING"
@@ -745,13 +897,17 @@ func (m *Model) renderMap(w, h int) []string {
 		routes = append(routes, rr)
 	}
 	flows, _ := m.mapFlows()
+	layers := mv.layers
+	if h, ok := m.hub(); ok {
+		layers.Hub = h.pos
+	}
 	pal := mapview.PaletteFor(th)
 	// The theme's colours, not its name: mid-crossfade the blend already carries the new theme's name.
-	key := fmt.Sprintf("%.6f|%.6f|%.4f|%d|%d|%v|%v|%p|%d|%s", v.Center.Lat, v.Center.Lon, v.Zoom, w, mapH, th, mv.layers,
+	key := fmt.Sprintf("%.6f|%.6f|%.4f|%d|%d|%v|%v|%p|%d|%s", v.Center.Lat, v.Center.Lon, v.Zoom, w, mapH, th, layers,
 		mv.detail, len(nodes), routeKey(routes, m.now)) + fmt.Sprint(flows)
 	if key != mv.cacheKey || mv.cache == nil {
 		mv.cache = m.mapDraw(mapview.Input{World: mv.world, Detail: mv.detail, Nodes: nodes, Routes: routes, Flows: flows,
-			Layers: mv.layers, Now: m.now}, v, w, mapH, pal)
+			Layers: layers, Now: m.now}, v, w, mapH, pal)
 		credit := "Natural Earth"
 		if mv.detail != nil && v.Zoom >= 7 && mv.detail.Covers(v.Center) {
 			credit = mapview.DetailCredit
@@ -773,7 +929,7 @@ func (m *Model) renderMap(w, h int) []string {
 	}
 
 	out = append(out, clip(m.mapInfo(routes, nodes), w), clip(th.Fg(th.Dim, false).Render(
-		"←↑↓→ hjkl move · + - zoom · m whole mesh · [ ] routes · t traffic · d download street detail · L labels · r roads"), w))
+		"←↑↓→ hjkl move · + - zoom · m whole mesh · [ ] routes · t traffic · f focus · d street detail · L labels · r roads"), w))
 	return out
 }
 
