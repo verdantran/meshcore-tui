@@ -98,19 +98,25 @@ func TestProbeSilentPort(t *testing.T) {
 
 // flood is a port that echoes a command and then never stops printing, starting with one huge line.
 type flood struct {
-	mu     sync.Mutex
-	buf    []byte
-	closed bool
+	mu      sync.Mutex
+	buf     []byte
+	closed  bool
+	started chan struct{} // closed by the first command, so the huge line always comes first
+	once    sync.Once
 }
+
+func newFlood() *flood { return &flood{started: make(chan struct{})} }
 
 func (f *flood) Write(p []byte) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.buf = append(f.buf, strings.TrimSpace(string(p))+"\r\n"+strings.Repeat("x", 3*maxLine)+"\r\n"...)
+	f.once.Do(func() { close(f.started) })
 	return len(p), nil
 }
 
 func (f *flood) Read(p []byte) (int, error) {
+	<-f.started
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.closed {
@@ -128,11 +134,12 @@ func (f *flood) Close() error {
 	f.mu.Lock()
 	f.closed = true
 	f.mu.Unlock()
+	f.once.Do(func() { close(f.started) })
 	return nil
 }
 
 func TestConsoleCapsWhatItKeeps(t *testing.T) {
-	c := NewConsole(&flood{})
+	c := NewConsole(newFlood())
 	defer c.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
