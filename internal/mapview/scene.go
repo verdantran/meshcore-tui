@@ -378,11 +378,16 @@ func buildScene(in Input, v View, pal Palette) scene {
 			}
 		}
 	}
+	// Nodes well off screen are left out before clustering, which costs more the more marks there are.
+	around := view
+	if v.W > 0 && v.H > 0 {
+		around = v.Bounds().Grow(max(0.1, 2*clusterRadius/float64(min(v.W, v.H))))
+	}
 	for i, n := range in.Nodes {
 		if only && !onRoute[i] {
 			continue
 		}
-		if n.Pos.Unplaced() {
+		if n.Pos.Unplaced() || !around.Contains(n.Pos) {
 			continue
 		}
 		m := sMark{pos: n.Pos, label: n.Name}
@@ -467,52 +472,71 @@ func ambiguity(r Route, node int, nodes []Node) string {
 	return ""
 }
 
+const clusterRadius = 24.0 // dots
+
 // cluster merges nodes that would overlap when zoomed out into one counted marker.
 func cluster(marks []sMark, zoom float64, pal Palette) []sMark {
-	const radius = 24.0 // dots
-	type group struct {
-		x, y  float64
-		marks []sMark
-		self  bool
-	}
-	sort.SliceStable(marks, func(i, j int) bool { return marks[i].glyph == '◉' && marks[j].glyph != '◉' })
-	var groups []*group
-	for _, m := range marks {
-		x, y := worldXY(m.pos, zoom)
-		var g *group
-		for _, c := range groups {
-			if math.Hypot(c.x-x, c.y-y) <= radius {
-				g = c
-				break
-			}
-		}
-		if g == nil {
-			g = &group{x: x, y: y}
-			groups = append(groups, g)
-		}
-		g.marks = append(g.marks, m)
-		g.self = g.self || m.glyph == '◉'
-	}
 	var out []sMark
-	for _, g := range groups {
-		if len(g.marks) == 1 {
-			out = append(out, g.marks[0])
+	for _, g := range groupMarks(marks, zoom) {
+		if len(g) == 1 {
+			out = append(out, g[0])
 			continue
 		}
-		first := g.marks[0].pos
+		first := g[0].pos
 		var lat, lon float64
-		for _, m := range g.marks {
+		for _, m := range g {
 			lat += m.pos.Lat
 			lon += near(m.pos.Lon, first.Lon)
 		}
-		n := float64(len(g.marks))
+		n := float64(len(g))
 		c := sMark{pos: LatLon{lat / n, near(lon/n, 0)}, glyph: '▲', col: pal.Repeater, bold: true, force: true,
-			label: fmt.Sprintf("%d nodes", len(g.marks))}
-		if g.self {
+			label: fmt.Sprintf("%d nodes", len(g))}
+		if g[0].glyph == '◉' {
 			c.glyph, c.col = '◉', pal.Self
-			c.label = fmt.Sprintf("me + %d nodes", len(g.marks)-1)
+			c.label = fmt.Sprintf("me + %d nodes", len(g)-1)
 		}
 		out = append(out, c)
+	}
+	return out
+}
+
+// groupMarks puts each mark, us first, in the first group whose first mark is near enough, or starts a group.
+func groupMarks(marks []sMark, zoom float64) [][]sMark {
+	type group struct {
+		x, y  float64
+		marks []sMark
+		order int
+	}
+	sort.SliceStable(marks, func(i, j int) bool { return marks[i].glyph == '◉' && marks[j].glyph != '◉' })
+	var groups []*group
+	// Groups by the cell their first mark is in, so a mark only looks at groups in the cells around its own.
+	cells := map[[2]int][]*group{}
+	cellOf := func(x, y float64) [2]int {
+		return [2]int{int(math.Floor(x / clusterRadius)), int(math.Floor(y / clusterRadius))}
+	}
+	for _, m := range marks {
+		x, y := worldXY(m.pos, zoom)
+		at := cellOf(x, y)
+		var g *group
+		for dx := -1; dx <= 1; dx++ {
+			for dy := -1; dy <= 1; dy++ {
+				for _, c := range cells[[2]int{at[0] + dx, at[1] + dy}] {
+					if (g == nil || c.order < g.order) && math.Hypot(c.x-x, c.y-y) <= clusterRadius {
+						g = c
+					}
+				}
+			}
+		}
+		if g == nil {
+			g = &group{x: x, y: y, order: len(groups)}
+			groups = append(groups, g)
+			cells[at] = append(cells[at], g)
+		}
+		g.marks = append(g.marks, m)
+	}
+	out := make([][]sMark, len(groups))
+	for i, g := range groups {
+		out[i] = g.marks
 	}
 	return out
 }

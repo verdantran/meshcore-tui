@@ -173,3 +173,15 @@ func TestConfigSaveIgnoresPlantedFiles(t *testing.T) {
 		t.Error("saved into a folder anyone can write to")
 	}
 }
+
+func TestLoadDropsImpossibleLocations(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	os.WriteFile(path, []byte("[locations]\nAA = [51.4, -2.6]\nBB = [inf, 0.0]\nCC = [0.0, nan]\nDD = [91.0, 0.0]\nEE = [0.0, 1e300]\n"), 0o600)
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Locations) != 1 || c.Locations["AA"] != [2]float64{51.4, -2.6} {
+		t.Errorf("locations = %v", c.Locations)
+	}
+}

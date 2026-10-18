@@ -239,7 +239,7 @@ func parseFloat(in, what string, lo, hi float64) (float64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("%s must be a number", what)
 	}
-	if f < lo || f > hi {
+	if !(f >= lo && f <= hi) {
 		return 0, fmt.Errorf("%s must be between %s and %s", what, strconv.FormatFloat(lo, 'f', -1, 64), strconv.FormatFloat(hi, 'f', -1, 64))
 	}
 	return f, nil

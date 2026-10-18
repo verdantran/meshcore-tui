@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,6 +46,14 @@ type Repeater struct {
 }
 
 var errNotRepeater = fmt.Errorf("%w; for a companion radio, choose companion mode on the connect screen", ErrNoAnswer)
+
+// coord reads a latitude or longitude, or 0, which means none, if it isn't a real one.
+func coord(s string, limit float64) float64 {
+	if f, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil && math.Abs(f) <= limit {
+		return f
+	}
+	return 0
+}
 
 // Dial opens a repeater's console directly, for when it was chosen on the connect screen.
 func Dial(port string) *Repeater {
@@ -161,8 +170,7 @@ func (r *Repeater) Start(ctx context.Context) {
 		if k, err := hex.DecodeString(r.get(ctx, "public.key")); err == nil && len(k) == 32 {
 			self.Key = [32]byte(k)
 		}
-		self.Lat, _ = strconv.ParseFloat(r.get(ctx, "lat"), 64)
-		self.Lon, _ = strconv.ParseFloat(r.get(ctx, "lon"), 64)
+		self.Lat, self.Lon = coord(r.get(ctx, "lat"), 90), coord(r.get(ctx, "lon"), 180)
 		r.mu.Lock()
 		r.self = self
 		r.mu.Unlock()

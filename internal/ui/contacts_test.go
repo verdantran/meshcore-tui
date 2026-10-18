@@ -364,6 +364,12 @@ func TestContactsPlaceByHand(t *testing.T) {
 		t.Errorf("a bad location says what's wanted: %s", h.lastLog())
 	}
 	h.keys("l")
+	h.m.contacts.placeIn.set("NaN, -2.7")
+	h.key(tea.KeyEnter)
+	if p, _ := h.m.manualPlace(ct.Key); p.Lat != 51.40 || !strings.Contains(h.lastLog(), "latitude must be between") {
+		t.Errorf("NaN isn't a latitude: %v %s", p, h.lastLog())
+	}
+	h.keys("l")
 	h.m.contacts.placeIn.set("")
 	h.key(tea.KeyEnter)
 	if _, ok := h.m.manualPlace(ct.Key); ok || !strings.Contains(h.lastLog(), "back to what it shares") {

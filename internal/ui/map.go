@@ -2,8 +2,10 @@ package ui
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -34,6 +36,8 @@ const (
 	trafficShare = 0.1 // nor is one with less than this share of the busiest link's traffic
 	trafficLinks = 15  // the busiest links drawn, at most
 	trafficSure  = 0.7 // a hop this likely to be one repeater is credited to it alone
+	trafficHops  = 16  // the hops nearest us that are counted
+	trafficKeep  = 256 // links remembered, at most
 )
 
 // trafficWindows are the half-lives t steps through. Every link keeps a count for each, so switching is instant.
@@ -174,11 +178,13 @@ type mapModel struct {
 	cacheKey string
 	cache    *mapview.Canvas
 	rows     []string // the cached map as terminal rows; a frame re-renders only the rows animations touch
+
+	stops map[string][]mapview.Stop // routes' stops as last ranked, by hops, ends and candidates
 }
 
 func newMapModel() mapModel {
 	return mapModel{layers: mapview.Layers{Labels: true, Roads: true, Routes: true, Traffic: true, Selected: -1}, links: map[[2]byte]linkReading{},
-		flows: map[string]*flow{}, fetchDone: &atomic.Int32{}}
+		flows: map[string]*flow{}, stops: map[string][]mapview.Stop{}, fetchDone: &atomic.Int32{}}
 }
 
 type mapLoadedMsg struct {
@@ -306,33 +312,38 @@ func kindOf(t radio.ContactType) mapview.Kind {
 }
 
 // mapNodes are us and every contact, then nodes heard but not added; the map draws those with a location.
+// Each is where you put it, if you did, or else where it says it is.
 func (m *Model) mapNodes() []mapview.Node {
 	self := m.ready.Self
 	nodes := []mapview.Node{{Name: "me", Kind: mapview.KindSelf, Pos: mapview.LatLon{Lat: self.Lat, Lon: self.Lon}, Key: self.PubKey}}
 	seen := map[[32]byte]bool{self.PubKey: true}
+	manual := map[[32]byte]mapview.LatLon{}
+	for k, p := range m.adminConfig().Locations {
+		if b, err := hex.DecodeString(k); err == nil && len(b) == 32 {
+			manual[[32]byte(b)] = mapview.LatLon{Lat: p[0], Lon: p[1]}
+		}
+	}
+	placeOf := func(c radio.Contact) mapview.LatLon {
+		if p, ok := manual[c.Key]; ok {
+			return p
+		}
+		return mapview.LatLon{Lat: c.Lat, Lon: c.Lon}
+	}
 	if m.chat != nil {
 		for _, c := range m.chat.Contacts() {
 			if !seen[c.Key] {
 				seen[c.Key] = true
-				nodes = append(nodes, mapview.Node{Name: c.Name, Kind: kindOf(c.Type), Pos: m.placeOf(c), Key: c.Key})
+				nodes = append(nodes, mapview.Node{Name: c.Name, Kind: kindOf(c.Type), Pos: placeOf(c), Key: c.Key})
 			}
 		}
 	}
 	for _, h := range m.contacts.heard {
 		if !seen[h.c.Key] {
 			seen[h.c.Key] = true
-			nodes = append(nodes, mapview.Node{Name: h.c.Name, Kind: kindOf(h.c.Type), Pos: m.placeOf(h.c), Key: h.c.Key})
+			nodes = append(nodes, mapview.Node{Name: h.c.Name, Kind: kindOf(h.c.Type), Pos: placeOf(h.c), Key: h.c.Key})
 		}
 	}
 	return nodes
-}
-
-// placeOf is where a node is: where you put it, if you did, or else where it says it is.
-func (m *Model) placeOf(c radio.Contact) mapview.LatLon {
-	if p, ok := m.manualPlace(c.Key); ok {
-		return p
-	}
-	return mapview.LatLon{Lat: c.Lat, Lon: c.Lon}
 }
 
 func (m *Model) manualPlace(key [32]byte) (mapview.LatLon, bool) {
@@ -352,10 +363,17 @@ func (m *Model) placedPoints() []mapview.LatLon {
 
 // linkSNR is what's known of the signal between two nodes, from a trace or a repeater's neighbour list.
 func (m *Model) linkSNR(a, b byte) (float64, bool) {
-	pair := [2]byte{min(a, b), max(a, b)}
-	best, ok := linkReading{}, false
-	if r, has := m.mapv.links[pair]; has && m.now.Sub(r.at) < linkMaxAge {
-		best, ok = r, true
+	r, ok := m.linkTable()[[2]byte{min(a, b), max(a, b)}]
+	return r.snr, ok
+}
+
+// linkTable is every link's latest reading, by the first key bytes at either end, lowest first.
+func (m *Model) linkTable() map[[2]byte]linkReading {
+	t := map[[2]byte]linkReading{}
+	for pair, r := range m.mapv.links {
+		if m.now.Sub(r.at) < linkMaxAge {
+			t[pair] = r
+		}
 	}
 	for _, c := range m.allNodes() {
 		sess, has := m.admin.Find(c.Key)
@@ -363,12 +381,16 @@ func (m *Model) linkSNR(a, b byte) (float64, bool) {
 			continue
 		}
 		for _, n := range sess.Neighbours {
-			if len(n.Prefix) > 0 && [2]byte{min(c.Key[0], n.Prefix[0]), max(c.Key[0], n.Prefix[0])} == pair && sess.NeighbourAt.After(best.at) {
-				best, ok = linkReading{float64(n.SNR), sess.NeighbourAt}, true
+			if len(n.Prefix) == 0 {
+				continue
+			}
+			pair := [2]byte{min(c.Key[0], n.Prefix[0]), max(c.Key[0], n.Prefix[0])}
+			if best, ok := t[pair]; !ok || sess.NeighbourAt.After(best.at) {
+				t[pair] = linkReading{float64(n.SNR), sess.NeighbourAt}
 			}
 		}
 	}
-	return best.snr, ok
+	return t
 }
 
 func (m *Model) noteLink(a, b byte, snr float64) {
@@ -377,6 +399,25 @@ func (m *Model) noteLink(a, b byte, snr float64) {
 
 // resolve places a route against the nodes as they are now, adding an end that isn't a contact but has a location.
 func (m *Model) resolve(r mapRoute, nodes []mapview.Node) (mapview.Route, []mapview.Node) {
+	rs := m.resolver(nodes)
+	return rs.resolve(r), rs.nodes
+}
+
+// resolver places many routes against the same nodes, working out what they share once.
+type resolver struct {
+	m     *Model
+	nodes []mapview.Node
+	index mapview.Index
+	links map[[2]byte]linkReading
+}
+
+func (m *Model) resolver(nodes []mapview.Node) *resolver {
+	return &resolver{m: m, nodes: nodes}
+}
+
+func (rs *resolver) resolve(r mapRoute) mapview.Route {
+	m, nodes := rs.m, rs.nodes
+	defer func() { rs.nodes = nodes }()
 	place := func(e mapEnd) int {
 		switch {
 		case e.me:
@@ -403,7 +444,7 @@ func (m *Model) resolve(r mapRoute, nodes []mapview.Node) (mapview.Route, []mapv
 		return -1
 	}
 	from, to := place(r.from), place(r.to)
-	stops := mapview.Stops(from, r.hops, nodes, to)
+	stops := rs.stops(r, from, to, nodes)
 	// Each hop's link, by the first key byte at either end.
 	firsts := make([]byte, len(stops))
 	ok := make([]bool, len(stops))
@@ -437,12 +478,37 @@ func (m *Model) resolve(r mapRoute, nodes []mapview.Node) (mapview.Route, []mapv
 		case i == len(links)-1 && r.measured:
 			links[i] = mapview.Link{SNR: r.lastSNR, Known: true} // measured by our radio
 		case ok[i] && ok[i+1]:
-			if snr, known := m.linkSNR(firsts[i], firsts[i+1]); known {
-				links[i] = mapview.Link{SNR: snr, Known: true}
+			if rs.links == nil {
+				rs.links = m.linkTable()
+			}
+			if l, known := rs.links[[2]byte{min(firsts[i], firsts[i+1]), max(firsts[i], firsts[i+1])}]; known {
+				links[i] = mapview.Link{SNR: l.snr, Known: true}
 			}
 		}
 	}
-	return mapview.Route{ID: r.id, What: r.what, From: r.from.label(), At: r.at, Flood: r.flood, Stops: stops, Links: links}, nodes
+	return mapview.Route{ID: r.id, What: r.what, From: r.from.label(), At: r.at, Flood: r.flood, Stops: stops, Links: links}
+}
+
+// stops are kept from frame to frame while the candidates and the route's ends stay where they were, since
+// ranking a hop with many candidates is the costly part.
+func (rs *resolver) stops(r mapRoute, from, to int, nodes []mapview.Node) []mapview.Stop {
+	pos := func(i int) mapview.LatLon {
+		if i < 0 {
+			return mapview.LatLon{}
+		}
+		return nodes[i].Pos
+	}
+	key := fmt.Sprintf("%x|%d%v|%d%v|%x", r.hops, from, pos(from), to, pos(to), rs.index.Sum(nodes))
+	mv := &rs.m.mapv
+	if st, ok := mv.stops[key]; ok {
+		return st
+	}
+	st := rs.index.Stops(from, r.hops, nodes, to)
+	if len(mv.stops) >= 4*mapRoutes {
+		clear(mv.stops)
+	}
+	mv.stops[key] = st
+	return st
 }
 
 // mapHeard adds a packet the Packets screen shows to the map: its route, a comet along it, a ripple where a
@@ -497,14 +563,15 @@ func nodeID(n mapview.Node) string {
 
 // countTraffic adds a heard route's hops to the traffic layer. A hop that could be one of several repeaters
 // is shared between them by how likely each is, rather than all credited to a guess, unless one is clearly
-// the likeliest.
+// the likeliest. Only the hops nearest us are counted, and the quietest links are forgotten past trafficKeep.
 func (m *Model) countTraffic(r mapview.Route, nodes []mapview.Node) {
 	mv := &m.mapv
-	for i := 0; i+1 < len(r.Stops); i++ {
+	m.pruneFlows(0)
+	for i := max(len(r.Stops)-1-trafficHops, 0); i+1 < len(r.Stops); i++ {
 		from, to := sureStop(r.Stops[i]), sureStop(r.Stops[i+1])
 		unsure := len(from.Nodes) > 1 || len(to.Nodes) > 1
-		for ka, a := range from.Nodes {
-			for kb, b := range to.Nodes {
+		for ka, a := range from.Nodes[:min(len(from.Nodes), mapview.MaxCandidates)] {
+			for kb, b := range to.Nodes[:min(len(to.Nodes), mapview.MaxCandidates)] {
 				na, nb := nodes[a], nodes[b]
 				ia, ib := nodeID(na), nodeID(nb)
 				if ib < ia {
@@ -518,6 +585,31 @@ func (m *Model) countTraffic(r mapview.Route, nodes []mapview.Node) {
 				f.add(m.now, from.Weights[ka]*to.Weights[kb], unsure)
 			}
 		}
+	}
+	m.pruneFlows(trafficKeep)
+}
+
+// pruneFlows forgets links long quiet, then the quietest until no more than keep are left; 0 keeps any number.
+func (m *Model) pruneFlows(keep int) {
+	mv, slowest := &m.mapv, len(trafficWindows)-1
+	for k, f := range mv.flows {
+		if v := f.now(m.now, slowest); !(v >= trafficFloor/10) {
+			delete(mv.flows, k)
+		}
+	}
+	if keep == 0 || len(mv.flows) <= keep {
+		return
+	}
+	keys := slices.Collect(maps.Keys(mv.flows))
+	sort.Slice(keys, func(i, j int) bool {
+		a, b := mv.flows[keys[i]].now(m.now, slowest), mv.flows[keys[j]].now(m.now, slowest)
+		if a != b {
+			return a < b
+		}
+		return keys[i] < keys[j]
+	})
+	for _, k := range keys[:len(keys)-keep] {
+		delete(mv.flows, k)
 	}
 }
 
@@ -533,13 +625,10 @@ func sureStop(st mapview.Stop) mapview.Stop {
 // trafficShare of the busiest one's traffic. It also names the busiest, and forgets links long quiet.
 func (m *Model) drawnFlows() (drawn []*flow, busiest *flow) {
 	mv := &m.mapv
-	w, slowest := mv.window, len(trafficWindows)-1
+	w := mv.window
 	peak, top := 0.0, ""
+	m.pruneFlows(0)
 	for k, f := range mv.flows {
-		if f.now(m.now, slowest) < trafficFloor/10 {
-			delete(mv.flows, k)
-			continue
-		}
 		if v := f.now(m.now, w); v > peak || v == peak && k < top {
 			peak, top = v, k
 		}
@@ -899,13 +988,12 @@ func (m *Model) renderMap(w, h int) []string {
 	v := m.mapCurrent()
 	v.W, v.H = w*2, mapH*4
 
-	nodes := m.mapNodes()
+	rs := m.resolver(m.mapNodes())
 	routes := make([]mapview.Route, 0, len(mv.routes))
 	for _, r := range mv.routes {
-		var rr mapview.Route
-		rr, nodes = m.resolve(r, nodes)
-		routes = append(routes, rr)
+		routes = append(routes, rs.resolve(r))
 	}
+	nodes := rs.nodes
 	flows, _ := m.mapFlows()
 	layers := mv.layers
 	if h, ok := m.hub(); ok {

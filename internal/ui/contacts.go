@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -68,6 +69,7 @@ type contactsModel struct {
 	filtering  bool
 	heardView  bool
 	heard      []heardNode
+	heardIdx   map[[32]byte]int // where each key is in heard
 	heardSel   int
 	full       bool
 
@@ -92,7 +94,8 @@ type contactsModel struct {
 
 func newContacts() contactsModel {
 	return contactsModel{advert: map[[32]byte]radio.AdvertPath{}, traces: map[uint32]*traceRun{},
-		lastTrace: map[[32]byte]uint32{}, discovering: map[[32]byte]time.Time{}, arrived: map[[32]byte]entrance{}, found: map[[32]byte]radio.PathFound{}}
+		lastTrace: map[[32]byte]uint32{}, discovering: map[[32]byte]time.Time{}, arrived: map[[32]byte]entrance{}, found: map[[32]byte]radio.PathFound{},
+		heardIdx: map[[32]byte]int{}}
 }
 
 // Messages from radio calls made on the Contacts screen.
@@ -291,15 +294,24 @@ func (m *Model) contactsEvent(e radio.Event) tea.Cmd {
 	c := &m.contacts
 	switch e := e.(type) {
 	case radio.Heard:
-		for i, h := range c.heard {
-			if h.c.Key == e.Contact.Key {
-				c.heard[i] = heardNode{e.Contact, m.now}
-				c.arrived[e.Contact.Key] = entrance{at: m.now}
-				return nil
-			}
+		if i, ok := c.heardIdx[e.Contact.Key]; ok {
+			c.heard[i] = heardNode{e.Contact, m.now}
+			c.arrived[e.Contact.Key] = entrance{at: m.now}
+			return nil
 		}
+		if len(c.heard) >= heardMax {
+			oldest := 0
+			for i, h := range c.heard {
+				if h.at.Before(c.heard[oldest].at) {
+					oldest = i
+				}
+			}
+			c.unhear(oldest)
+		}
+		c.heardIdx[e.Contact.Key] = len(c.heard)
 		c.heard = append(c.heard, heardNode{e.Contact, m.now})
 		c.arrived[e.Contact.Key] = entrance{at: m.now, slide: true}
+		m.pruneArrived()
 	case radio.ContactRemoved:
 		if m.chat != nil {
 			m.chat.RemoveContact(e.Key)
@@ -570,8 +582,7 @@ func (m *Model) heardKey(s string) (tea.Cmd, bool) {
 	case "enter":
 		if c.heardSel < len(c.heard) {
 			h := c.heard[c.heardSel]
-			c.heard = append(c.heard[:c.heardSel], c.heard[c.heardSel+1:]...)
-			c.heardSel = max(min(c.heardSel, len(c.heard)-1), 0)
+			c.unhear(c.heardSel)
 			return m.contactOp("ADDED  "+h.c.Name, func(ctx context.Context, r radio.Radio) error {
 				return r.SaveContact(ctx, h.c)
 			}), true
@@ -580,6 +591,33 @@ func (m *Model) heardKey(s string) (tea.Cmd, bool) {
 		return nil, false
 	}
 	return nil, true
+}
+
+// heardMax is how many heard nodes are kept; the least recently heard goes first.
+const heardMax = 1000
+
+func (c *contactsModel) unhear(i int) {
+	delete(c.heardIdx, c.heard[i].c.Key)
+	c.heard = slices.Delete(c.heard, i, i+1)
+	for k := i; k < len(c.heard); k++ {
+		c.heardIdx[c.heard[k].c.Key] = k
+	}
+	if i < c.heardSel {
+		c.heardSel--
+	}
+	c.heardSel = max(min(c.heardSel, len(c.heard)-1), 0)
+}
+
+// pruneArrived forgets entrances that have finished, once there are many.
+func (m *Model) pruneArrived() {
+	if len(m.contacts.arrived) <= heardMax {
+		return
+	}
+	for k, a := range m.contacts.arrived {
+		if !motion.Running(a.at, arriveRowDur, m.now) {
+			delete(m.contacts.arrived, k)
+		}
+	}
 }
 
 func (m *Model) openPrune() {

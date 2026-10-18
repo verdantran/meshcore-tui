@@ -162,6 +162,11 @@ func TestParsers(t *testing.T) {
 	if Reply([]string{"  -> OK", "more"}) != "OK\nmore" {
 		t.Error("reply")
 	}
+	for in, want := range map[string]float64{"51.44": 51.44, " -2.6 ": -2.6, "NaN": 0, "Inf": 0, "-inf": 0, "1e308": 0, "91": 0, "x": 0} {
+		if got := coord(in, 90); got != want {
+			t.Errorf("coord(%q) = %v, want %v", in, got, want)
+		}
+	}
 }
 
 func startRepeater(t *testing.T, s *sim.Sim, name string) *Repeater {

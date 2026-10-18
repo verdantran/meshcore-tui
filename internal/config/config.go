@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -121,6 +122,11 @@ func Load(path string) (*Config, error) {
 	}
 	if _, err := toml.Decode(string(data), c); err != nil {
 		return c, err
+	}
+	for k, p := range c.Locations {
+		if !(math.Abs(p[0]) <= 90 && math.Abs(p[1]) <= 180) { // TOML has inf and nan
+			delete(c.Locations, k)
+		}
 	}
 	return c, nil
 }

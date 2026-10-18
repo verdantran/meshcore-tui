@@ -39,11 +39,14 @@ func fromWorld(x, y, zoom float64) LatLon {
 
 // near puts a longitude on the side of the world closest to ref, so a view across 180° stays joined up.
 func near(lon, ref float64) float64 {
-	for lon-ref > 180 {
-		lon -= 360
-	}
-	for lon-ref < -180 {
-		lon += 360
+	if d := lon - ref; d > 180 || d < -180 {
+		lon -= 360 * math.Round(d/360)
+		switch {
+		case lon-ref > 180:
+			lon -= 360
+		case lon-ref < -180:
+			lon += 360
+		}
 	}
 	return lon
 }
