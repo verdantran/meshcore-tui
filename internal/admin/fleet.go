@@ -3,6 +3,7 @@ package admin
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -60,15 +61,20 @@ func Check(sess *Session, lastAdvert time.Time, newest string, th Thresholds, no
 	return a
 }
 
-// Newest is the highest firmware version among the sessions.
+// Newest is the newest firmware that at least two nodes run, so one node claiming a made-up version
+// can't flag the rest as out of date.
 func (s *Service) Newest() string {
-	newest := ""
+	var versions []string
 	for _, sess := range s.sessions {
-		if sess.Owner != nil && CompareVersions(sess.Owner.FirmwareVersion, newest) > 0 {
-			newest = sess.Owner.FirmwareVersion
+		if sess.Owner != nil {
+			versions = append(versions, sess.Owner.FirmwareVersion)
 		}
 	}
-	return newest
+	if len(versions) < 2 {
+		return ""
+	}
+	slices.SortFunc(versions, func(a, b string) int { return CompareVersions(b, a) })
+	return versions[1]
 }
 
 // CompareVersions orders firmware versions such as "v1.17.1"; anything unparseable sorts first.

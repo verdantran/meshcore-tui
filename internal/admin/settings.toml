@@ -74,30 +74,36 @@ kind = "int"
 min = 1.0
 max = 22.0
 unit = "dBm"
+dangerous = true
 default = "22"
+help = "Less power shortens its reach: nodes that hear it now, and your way in to it, may lose it."
 
 [[setting]]
 key = "radio.rxgain"
 label = "Boosted receive gain"
 group = "Radio"
 kind = "bool"
+dangerous = true
 default = "on"
+help = "Off, it can't hear weaker signals, and yours may be one of them."
 
 [[setting]]
 key = "radio.fem.rxgain"
 label = "Front-end receive amplifier"
 group = "Radio"
 kind = "bool"
+dangerous = true
 default = "on"
-help = "Only on boards with an external front-end module."
+help = "Only on boards with an external front-end module. Off, it can't hear weaker signals, and yours may be one of them."
 
 [[setting]]
 key = "radio.fem.txgain"
 label = "Front-end transmit amplifier"
 group = "Radio"
 kind = "bool"
+dangerous = true
 default = "on"
-help = "Only on boards with an external front-end module."
+help = "Only on boards with an external front-end module. Off, its reach shrinks, and your way in to it may go."
 
 [[setting]]
 key = "repeat"
@@ -105,7 +111,9 @@ label = "Repeat packets"
 group = "Routing"
 kind = "bool"
 roles = ["repeater"]
+dangerous = true
 default = "on"
+help = "Off, it stops passing on other nodes' packets, so every link through it breaks."
 
 [[setting]]
 key = "path.hash.mode"
@@ -113,8 +121,9 @@ label = "Path hash size"
 group = "Routing"
 kind = "choice"
 options = ["0", "1", "2"]
+dangerous = true
 default = "0"
-help = "0, 1 or 2 for 1-, 2- or 3-byte hashes in advert paths. Older firmware only reads 1-byte hashes."
+help = "0, 1 or 2 for 1-, 2- or 3-byte hashes in advert paths. Older firmware only reads 1-byte hashes, so a larger size can cut the node off from nodes running it."
 
 [[setting]]
 key = "loop.detect"
@@ -214,7 +223,9 @@ group = "Flood"
 kind = "int"
 min = 0.0
 max = 64.0
+dangerous = true
 default = "64"
+help = "Too low and it stops passing on floods, which is how nodes find a way to each other."
 
 [[setting]]
 key = "flood.max.unscoped"

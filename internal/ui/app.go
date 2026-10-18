@@ -320,7 +320,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case contactsSyncedMsg, advertPathMsg, traceStartedMsg, traceTimeoutMsg, exportedMsg, autoAddMsg, opDoneMsg:
 		cmd, _ := m.contactsMsg(msg)
 		cmds = append(cmds, cmd)
-	case jobSentMsg, jobTimeoutMsg, cmdSentMsg, cmdTimeoutMsg, autoStatusMsg, fleetPollMsg, keysCheckedMsg, watchTickMsg:
+	case jobSentMsg, jobTimeoutMsg, cmdSentMsg, cmdTimeoutMsg, cmdLateMsg, autoStatusMsg, fleetPollMsg, keysCheckedMsg, watchTickMsg:
 		cmds = append(cmds, m.safely("a reply from a node", func() tea.Cmd { return m.adminMsg(msg) }))
 	case devLoadedMsg, devOpMsg, keyExportedMsg, clipClearMsg:
 		cmds = append(cmds, m.deviceMsg(msg))

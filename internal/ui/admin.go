@@ -122,6 +122,10 @@ type cmdTimeoutMsg struct {
 	key [32]byte
 	id  int
 }
+type cmdLateMsg struct {
+	key [32]byte
+	id  int
+}
 type autoStatusMsg struct{ key [32]byte }
 type watchTickMsg struct{ gen int }
 type fleetPollMsg struct{ key [32]byte }
@@ -374,7 +378,13 @@ func (m *Model) adminMsg(msg tea.Msg) tea.Cmd {
 	case cmdSentMsg:
 		return m.sendCommand(m.admin.CommandSent(msg.c, msg.err, now))
 	case cmdTimeoutMsg:
-		return m.sendCommand(m.admin.CommandTimedOut(msg.key, msg.id, now))
+		if !m.admin.CommandTimedOut(msg.key, msg.id, now) {
+			return nil
+		}
+		key, id := msg.key, msg.id
+		return tea.Tick(admin.LateWindow, func(time.Time) tea.Msg { return cmdLateMsg{key, id} })
+	case cmdLateMsg:
+		return m.sendCommand(m.admin.LateOver(msg.key, msg.id, now))
 	case keysCheckedMsg:
 		// nothing to do: the redraw that follows shows which nodes have a saved password
 	case watchTickMsg:
@@ -971,11 +981,11 @@ func (m *Model) logKey(s string, ct radio.Contact, sess *admin.Session) (tea.Cmd
 // off the air, strands it, wipes it, or replaces its identity or password. Erasing the log asks for y instead.
 // Commands are matched by prefix, ignoring case and extra spaces, since the firmware matches on prefixes too.
 func dangerous(cmd string) string {
-	f := strings.Fields(strings.ToLower(cmd))
+	line := consoleLine(cmd)
+	f := strings.Fields(line)
 	if len(f) == 0 {
 		return ""
 	}
-	line := strings.Join(f, " ")
 	has := func(p string) bool { return strings.HasPrefix(line, p) }
 	switch {
 	case has("reboot"), has("clkreboot"), has("poweroff"), has("shutdown"):
@@ -1006,6 +1016,8 @@ func dangerous(cmd string) string {
 	return ""
 }
 
+func consoleLine(cmd string) string { return strings.Join(strings.Fields(strings.ToLower(cmd)), " ") }
+
 func (m *Model) consoleKey(s string, ct radio.Contact, sess *admin.Session) (tea.Cmd, bool) {
 	a := &m.adm
 	switch s {
@@ -1034,7 +1046,7 @@ func (m *Model) consoleKey(s string, ct radio.Contact, sess *admin.Session) (tea
 			m.askConfirm(confirmAction{title: strings.ToUpper(cmd) + " ON " + strings.ToUpper(ct.Name), warning: why, commands: []string{cmd}})
 			return nil, true
 		}
-		if cmd == "log erase" {
+		if strings.HasPrefix(consoleLine(cmd), "log erase") {
 			m.ask(cmd+" on "+ct.Name+"? it deletes data on the node", "send", func() tea.Cmd { return m.cli(ct.Key, cmd, purposeOf(cmd)) })
 			return nil, true
 		}

@@ -126,7 +126,8 @@ type Session struct {
 
 	inflight *Command
 	queue    []*Command
-	late     time.Time // until when a reply may still be the one a timed-out command never got
+	held     int // the timed-out command whose late window is open; the queue waits until it shuts
+	owed     int // replies still due from commands that timed out
 }
 
 func (s *Session) Latest() (StatusPoint, bool) {
@@ -145,7 +146,8 @@ type Names func(prefix []byte) string
 const (
 	JobTimeout      = 25 * time.Second
 	CommandTimeout  = 20 * time.Second
-	historyKeep     = 288 // a day of five-minute polls
+	LateWindow      = 20 * time.Second // how long the console waits for a timed-out command's reply before moving on
+	historyKeep     = 288              // a day of five-minute polls
 	consoleKeep     = 500
 	neighbourPrefix = 4 // what a repeater's console prints, so local and remote lists match
 )
@@ -233,7 +235,7 @@ func (s *Service) Login(c radio.Contact, password string, now time.Time) *Job {
 func (s *Service) Logout(key [32]byte) {
 	if sess, ok := s.sessions[key]; ok {
 		sess.State, sess.Admin, sess.Level = LoggedOut, false, 0
-		sess.queue, sess.inflight = nil, nil
+		sess.queue, sess.inflight, sess.held, sess.owed = nil, nil, 0, 0
 	}
 }
 
@@ -439,9 +441,19 @@ func Silent(text string) bool {
 	return false
 }
 
+// purposeSync marks the "ver" sent to get back in step after a reply went missing.
+const purposeSync = "sync"
+
 func (s *Service) nextCommand(sess *Session, now time.Time) *Command {
-	if sess.inflight != nil || len(sess.queue) == 0 {
+	if sess.inflight != nil || sess.held != 0 || len(sess.queue) == 0 {
 		return nil
+	}
+	if sess.owed > 0 {
+		s.nextID++
+		sess.inflight = &Command{ID: s.nextID, Key: sess.Key, Text: "ver", Purpose: purposeSync, sentAt: now}
+		sess.Console = appendLine(sess.Console, Line{At: now, Text: "a reply is overdue, so asking for the version to tell the next replies apart"})
+		sess.Console = appendLine(sess.Console, Line{At: now, Out: true, Text: "ver"})
+		return sess.inflight
 	}
 	sess.inflight, sess.queue = sess.queue[0], sess.queue[1:]
 	sess.inflight.sentAt = now
@@ -481,28 +493,60 @@ func (s *Service) OnReply(from [6]byte, text string, now time.Time) (sess *Sessi
 	if !ok {
 		return nil, nil, nil
 	}
-	if !sess.late.IsZero() && now.Before(sess.late) {
-		sess.late = time.Time{}
-		sess.Console = appendLine(sess.Console, Line{At: now, Text: "late reply, not taken as an answer: " + text, Error: true})
-		return sess, nil, nil
-	}
-	if sess.inflight == nil {
+	c := sess.inflight
+	switch {
+	case c == nil && sess.owed > 0:
+		s.lateReply(sess, text, now)
+		if sess.owed == 0 {
+			sess.held = 0
+		}
+		return sess, nil, s.nextCommand(sess, now)
+	case c == nil:
 		sess.Console = appendLine(sess.Console, Line{At: now, Text: text}) // unsolicited, keep it anyway
 		return sess, nil, nil
+	case c.Purpose == purposeSync && !strings.Contains(text, "(Build"):
+		s.lateReply(sess, text, now)
+		return sess, nil, nil
+	case c.Purpose == purposeSync:
+		sess.owed = 0
 	}
-	done = sess.inflight
 	s.settle(sess, text, false, now)
-	return sess, done, s.nextCommand(sess, now)
+	return sess, c, s.nextCommand(sess, now)
 }
 
-// CommandTimedOut gives up on a command that got no reply.
-func (s *Service) CommandTimedOut(key [32]byte, id int, now time.Time) *Command {
+func (s *Service) lateReply(sess *Session, text string, now time.Time) {
+	sess.owed = max(sess.owed-1, 0)
+	sess.Console = appendLine(sess.Console, Line{At: now, Text: "late reply, not taken as an answer: " + text, Error: true})
+}
+
+// CommandTimedOut gives up on a command that got no reply, and reports whether it was still waiting.
+// Replies carry no ID, so the queue holds until its answer comes or LateWindow passes (see LateOver).
+func (s *Service) CommandTimedOut(key [32]byte, id int, now time.Time) bool {
 	sess, ok := s.sessions[key]
 	if !ok || sess.inflight == nil || sess.inflight.ID != id {
+		return false
+	}
+	sync := sess.inflight.Purpose == purposeSync
+	s.settle(sess, fmt.Sprintf("no reply after %s", CommandTimeout), true, now)
+	sess.held, sess.owed = id, sess.owed+1
+	if sync {
+		for _, c := range sess.queue {
+			sess.inflight = c
+			s.settle(sess, "not sent: the node isn't answering", true, now)
+		}
+		sess.queue = nil
+	}
+	return true
+}
+
+// LateOver ends the hold a timeout started. A reply may still be owed, so the next command goes out
+// behind a "ver", whose answer is told apart by its shape.
+func (s *Service) LateOver(key [32]byte, id int, now time.Time) *Command {
+	sess, ok := s.sessions[key]
+	if !ok || id == 0 || sess.held != id {
 		return nil
 	}
-	s.settle(sess, fmt.Sprintf("no reply after %s", CommandTimeout), true, now)
-	sess.late = now.Add(CommandTimeout) // replies carry no ID, so its answer could still come and be taken for the next command's
+	sess.held = 0
 	return s.nextCommand(sess, now)
 }
 

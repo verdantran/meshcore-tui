@@ -23,6 +23,9 @@ func TestSchemaIsSound(t *testing.T) {
 		if s.Kind == KindChoice && len(s.Options) == 0 {
 			t.Errorf("%s needs options", s.Key)
 		}
+		if s.Dangerous && s.Help == "" {
+			t.Errorf("%s is dangerous, so its help is the warning and can't be empty", s.Key)
+		}
 		// Every default must pass the setting's own checks, or the simulator would start invalid.
 		if !s.ReadOnly && s.Default != "" {
 			if err := s.Validate(s.Default); err != nil {
@@ -44,6 +47,11 @@ func TestSchemaIsSound(t *testing.T) {
 	}
 	if _, ok := Lookup("tx"); !ok {
 		t.Error("lookup")
+	}
+	for _, key := range []string{"radio", "tx", "radio.rxgain", "radio.fem.rxgain", "radio.fem.txgain", "repeat", "path.hash.mode", "flood.max"} {
+		if st, _ := Lookup(key); !st.Dangerous {
+			t.Errorf("%s can strand or silence a node, so it asks first", key)
+		}
 	}
 	if _, ok := Lookup("nope"); ok {
 		t.Error("unknown key found")

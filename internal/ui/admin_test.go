@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	meshcore "github.com/OwlShack/meshcore-go"
 
 	"github.com/verdantran/meshcore-tui/internal/admin"
 	"github.com/verdantran/meshcore-tui/internal/motion"
@@ -212,6 +213,10 @@ func TestAdminSettings(t *testing.T) {
 		t.Fatalf("diff:\n%s", scr)
 	}
 	h.keys("y")
+	if !strings.Contains(h.screen(), "Less power shortens its reach") {
+		t.Fatalf("lowering the power asks for the node's name:\n%s", h.screen())
+	}
+	h.typeLine("Dundry")
 	h.idle(sess)
 	if sess.Settings["tx"].Value != "20" || sess.Settings["repeat"].Value != "off" || len(sess.Pending) != 0 {
 		t.Fatalf("applied: %+v %+v", sess.Settings["tx"], sess.Pending)
@@ -427,6 +432,11 @@ func TestAdminPanes(t *testing.T) {
 		t.Errorf("shared prefix: %q", h.m.adm.console.text)
 	}
 	h.key(tea.KeyEscape)
+	h.typeLine("Log  Erase")
+	if h.m.asking == nil || !strings.Contains(h.m.asking.what, "deletes data") {
+		t.Fatalf("erasing the log asks first, however it's spaced: %+v", h.m.asking)
+	}
+	h.keys("n")
 	h.typeLine("password hunter2")
 	if !strings.Contains(h.screen(), "no recovery over the air") {
 		t.Fatalf("password asks first:\n%s", h.screen())
@@ -509,6 +519,11 @@ func TestAdminTimeoutsAndFailures(t *testing.T) {
 	if n := len(sess.Console); !sess.Console[n-1].Error || !strings.Contains(sess.Console[n-3].Text, "couldn't send") {
 		t.Errorf("console failures: %+v", sess.Console)
 	}
+	h.m.admin.Command(ct.Key, "clock", "", h.m.now)
+	h.m.Update(cmdLateMsg{ct.Key, c.ID})
+	if n := len(sess.Console); !strings.Contains(sess.Console[n-2].Text, "overdue") || sess.Console[n-1].Text != "ver" {
+		t.Errorf("once the late window shuts, the queue goes on behind a ver: %+v", sess.Console)
+	}
 
 	// Results for nodes nobody asked about change nothing.
 	h.m.Update(eventMsg{radio.LoginResult{Prefix: [6]byte{0xEE}}})
@@ -550,11 +565,12 @@ func TestAdminRendersSmall(t *testing.T) {
 
 func TestConsoleHelpers(t *testing.T) {
 	for cmd, risky := range map[string]bool{"reboot": true, "start ota": true, "password x": true, "log erase": false, "set prv.key ab": true,
-		"set radio 1,2,3,4": true, "set tx 20": false, "ver": false, "": false, "erase": true, "poweroff": true,
+		"set radio 1,2,3,4": true, "set tx 20": true, "ver": false, "": false, "erase": true, "poweroff": true,
 		// The firmware matches on prefixes, so near misses are caught too.
 		"rebootnow": true, "REBOOT": true, "  reboot ": true, "eraseall": true, "start  ota": true, "start ota now": true,
 		"set freq 433": true, "set bw 125": true, "set sf 12": true, "set cr 5": true, "Set Radio 1,2,3,4": true,
-		"set guest.password x": true, "set password x": true, "set nonsense 1": true, "set repeat off": false,
+		"set guest.password x": true, "set password x": true, "set nonsense 1": true, "set repeat off": true, "set radio.rxgain off": true, "set radio.fem.txgain off": true,
+		"set path.hash.mode 2": true, "set flood.max 0": true, "set name Dundry": false, "set dutycycle 50": false,
 		"tempradio 869.5,62.5,8,8,5": false, "setperm ab 1": false, "get freq": false} {
 		if (dangerous(cmd) != "") != risky {
 			t.Errorf("dangerous(%q)", cmd)
@@ -885,6 +901,7 @@ func TestKeychainAndFleet(t *testing.T) {
 	h.until("kelston polled", func() bool { return ks.State == admin.LoggedIn && len(ks.Status) > 0 && ks.Owner != nil })
 	h.until("dundry polled", func() bool { return len(sess.Status) > 1 })
 	ks.Owner.FirmwareVersion = "v1.15.0"
+	ps.Owner = &meshcore.OwnerInfo{FirmwareVersion: "v1.17.1"} // the bar is set by two nodes, not one
 	sess.Status = append(sess.Status, admin.StatusPoint{At: h.m.now, Stats: sess.Status[0].Stats})
 	sess.Status[len(sess.Status)-1].Stats.BattMilliVolts = 3400
 	scr := h.screen()

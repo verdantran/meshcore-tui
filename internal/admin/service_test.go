@@ -204,23 +204,24 @@ func TestConsoleRepliesInOrder(t *testing.T) {
 		t.Fatalf("after reboot: %+v", next)
 	}
 	s.Command(dundry.Key, "board", "", t0)
-	if s.CommandTimedOut(dundry.Key, 9999, t0) != nil {
+	if s.CommandTimedOut(dundry.Key, 9999, t0) {
 		t.Error("the wrong command can't time out")
 	}
-	next = s.CommandTimedOut(dundry.Key, next.ID, t0)
-	if next == nil || next.Text != "board" || !sess.Console[len(sess.Console)-1].Error {
-		t.Fatalf("after a timeout: %+v", next)
+	if !s.CommandTimedOut(dundry.Key, next.ID, t0) || !sess.Console[len(sess.Console)-1].Error {
+		t.Fatalf("after a timeout: %+v", sess.Console)
+	}
+	_, done, next = s.OnReply(prefix(dundry), "v1.9", t0)
+	if last := sess.Console[len(sess.Console)-1]; done != nil || !strings.Contains(last.Text, "late reply") {
+		t.Errorf("a reply soon after a timeout is taken as the late one: %+v", last)
+	}
+	if next == nil || next.Text != "board" {
+		t.Fatalf("the late reply lets the queue go on: %+v", next)
 	}
 	if s.CommandSent(next, errors.New("radio busy"), t0) != nil || !strings.Contains(sess.Console[len(sess.Console)-1].Text, "couldn't send") {
 		t.Error("a failed send is logged")
 	}
-	if s.CommandSent(&Command{Key: dundry.Key}, nil, t0) != nil || s.CommandTimedOut([32]byte{0xEE}, 1, t0) != nil {
+	if s.CommandSent(&Command{Key: dundry.Key}, nil, t0) != nil || s.CommandTimedOut([32]byte{0xEE}, 1, t0) {
 		t.Error("stale callbacks are ignored")
-	}
-
-	s.OnReply(prefix(dundry), "v1.9", t0)
-	if last := sess.Console[len(sess.Console)-1]; !strings.Contains(last.Text, "late reply") {
-		t.Errorf("a reply soon after a timeout is taken as the late one: %+v", last)
 	}
 	s.Command(dundry.Key, "region", "region", t0)
 	s.OnReply(prefix(dundry), "* F\n bristol^ F\n", t0)
@@ -355,27 +356,95 @@ func TestLateReplyIsNotTakenForTheNextCommand(t *testing.T) {
 	sess.Pending["repeat"] = "off"
 
 	slow := s.Command(dundry.Key, "clock sync", "", t0)
-	if s.CommandTimedOut(dundry.Key, slow.ID, t0) != nil {
-		t.Fatal("nothing else queued")
+	if !s.CommandTimedOut(dundry.Key, slow.ID, t0) {
+		t.Fatal("the command was waiting")
 	}
-	set := s.Command(dundry.Key, "set repeat off", "set repeat", t0.Add(time.Second))
-	_, done, _ := s.OnReply(prefix(dundry), "OK", t0.Add(2*time.Second)) // the clock sync's answer, late
+	if s.Command(dundry.Key, "set repeat off", "set repeat", t0.Add(time.Second)) != nil {
+		t.Fatal("nothing goes out while a late reply may still come")
+	}
+	_, done, set := s.OnReply(prefix(dundry), "OK", t0.Add(2*time.Second)) // the clock sync's answer, late
 	if done != nil || sess.Settings["repeat"].Value != "on" || sess.Pending["repeat"] != "off" {
 		t.Fatalf("a late OK was taken as the set's: done %v, %+v pending %v", done, sess.Settings["repeat"], sess.Pending)
 	}
 	if last := sess.Console[len(sess.Console)-1]; !strings.Contains(last.Text, "late reply") {
 		t.Errorf("console: %+v", last)
 	}
+	if set == nil || set.Text != "set repeat off" {
+		t.Fatalf("the set goes once the late reply is in: %+v", set)
+	}
+	if s.LateOver(dundry.Key, slow.ID, t0.Add(20*time.Second)) != nil {
+		t.Error("a window already closed by its reply sends nothing more")
+	}
 	if _, done, _ = s.OnReply(prefix(dundry), "OK", t0.Add(3*time.Second)); done != set || sess.Settings["repeat"].Value != "off" {
 		t.Fatalf("the set's own reply: done %v, %+v", done, sess.Settings["repeat"])
 	}
+}
 
-	// Once the window has passed, a reply is the answer again.
-	slow = s.Command(dundry.Key, "ver", "", t0)
+func TestQueueCarriesOnAfterALateReply(t *testing.T) {
+	s := newService()
+	s.Session(dundry)
+	sess, _ := s.Find(dundry.Key)
+	first := s.ReadSettings(dundry.Key, "", t0)
+	gets := len(sess.queue) + 1
+	s.CommandTimedOut(dundry.Key, first.ID, t0.Add(CommandTimeout))
+	_, _, next := s.OnReply(prefix(dundry), "> 22", t0.Add(25*time.Second)) // the first get's answer
+	settled := 0
+	for at := t0.Add(26 * time.Second); next != nil; at = at.Add(time.Second) {
+		want := strings.TrimPrefix(next.Purpose, "get ")
+		var done *Command
+		_, done, next = s.OnReply(prefix(dundry), "> v-"+want, at)
+		if done == nil || sess.Settings[want].Value != "v-"+want {
+			t.Fatalf("%s: done %+v, %+v", want, done, sess.Settings[want])
+		}
+		settled++
+	}
+	if settled != gets-1 || sess.Busy() {
+		t.Errorf("settled %d of %d after the first; busy %v", settled, gets-1, sess.Busy())
+	}
+}
+
+func TestVeryLateReplyIsNotTakenForALaterCommand(t *testing.T) {
+	s := newService()
+	s.Session(dundry)
+	sess, _ := s.Find(dundry.Key)
+	sess.Settings["repeat"] = Value{Value: "on"}
+	sess.Pending["repeat"] = "off"
+
+	slow := s.Command(dundry.Key, "clock sync", "", t0)
 	s.CommandTimedOut(dundry.Key, slow.ID, t0)
-	g := s.Command(dundry.Key, "get tx", "get tx", t0.Add(time.Minute))
-	if _, done, _ = s.OnReply(prefix(dundry), "> 20", t0.Add(time.Minute)); done != g || sess.Settings["tx"].Value != "20" {
-		t.Fatalf("after the window: done %v, %+v", done, sess.Settings["tx"])
+	s.Command(dundry.Key, "set repeat off", "set repeat", t0)
+	if s.LateOver(dundry.Key, 9999, t0) != nil {
+		t.Error("another command's window")
+	}
+	probe := s.LateOver(dundry.Key, slow.ID, t0.Add(LateWindow))
+	if probe == nil || probe.Text != "ver" {
+		t.Fatalf("after the window, the queue goes on behind a ver: %+v", probe)
+	}
+	if _, done, _ := s.OnReply(prefix(dundry), "OK", t0.Add(time.Minute)); done != nil || sess.Settings["repeat"].Value != "on" {
+		t.Fatalf("the clock sync's very late OK was taken: done %+v, %+v", done, sess.Settings["repeat"])
+	}
+	_, done, set := s.OnReply(prefix(dundry), "v1.17.1 (Build: 01-Oct-2026)", t0.Add(time.Minute))
+	if done != probe || set == nil || set.Text != "set repeat off" {
+		t.Fatalf("the ver's answer puts the replies back in step: done %+v, next %+v", done, set)
+	}
+	if _, done, _ = s.OnReply(prefix(dundry), "OK", t0.Add(time.Minute)); done != set || sess.Settings["repeat"].Value != "off" {
+		t.Fatalf("the set's own reply: done %+v, %+v", done, sess.Settings["repeat"])
+	}
+
+	// If the ver goes unanswered too, the rest of the queue is dropped rather than left to guess.
+	slow = s.Command(dundry.Key, "get tx", "get tx", t0)
+	s.Command(dundry.Key, "get af", "get af", t0)
+	s.CommandTimedOut(dundry.Key, slow.ID, t0)
+	probe = s.LateOver(dundry.Key, slow.ID, t0)
+	s.CommandTimedOut(dundry.Key, probe.ID, t0)
+	if sess.Busy() || !strings.Contains(sess.Settings["af"].Err, "isn't answering") {
+		t.Errorf("busy %v, af %+v", sess.Busy(), sess.Settings["af"])
+	}
+	if s.Command(dundry.Key, "get name", "get name", t0) != nil {
+		t.Error("still holding for the ver's window")
+	}
+	if c := s.LateOver(dundry.Key, probe.ID, t0); c == nil || c.Text != "ver" {
+		t.Errorf("a new command still goes out behind a ver: %+v", c)
 	}
 }
 
