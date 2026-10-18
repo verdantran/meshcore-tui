@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/verdantran/meshcore-tui/internal/chat"
 	"github.com/verdantran/meshcore-tui/internal/config"
@@ -161,6 +162,35 @@ func (m *Model) highlight(line, query string, base theme.RGB, marks []emph) stri
 	return b.String()
 }
 
+// fileName keeps a conversation's name to what's safe in a file name: letters, digits, - and _. Names come
+// from other people, and a / or .. in one would put the file somewhere else.
+func fileName(name string) string {
+	name = strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' {
+			return r
+		}
+		return '_'
+	}, strings.ToLower(name))
+	if strings.Trim(name, "_") == "" {
+		return "conversation"
+	}
+	return name
+}
+
+// createExport makes a file in the exports folder that only you can read.
+func (m *Model) createExport(name string) (*os.File, string, error) {
+	dir := m.opt.ExportDir
+	if dir == "" {
+		dir = filepath.Join(config.DataDir(), "exports")
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, "", err
+	}
+	path := filepath.Join(dir, name)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	return f, path, err
+}
+
 func exportCommand() command {
 	return command{name: "export", args: "[json] [all] | packets", help: "save this conversation, all of them, or the visible packets, to a file",
 		run: func(m *Model, a []string) error {
@@ -189,21 +219,13 @@ func exportCommand() command {
 				if !ok {
 					return fmt.Errorf("no conversation selected")
 				}
-				c, name = cur.Convo, slug(cur.Title)
+				c, name = cur.Convo, fileName(slug(cur.Title))
 			}
 			ext := ".txt"
 			if asJSON {
 				ext = ".json"
 			}
-			dir := m.opt.ExportDir
-			if dir == "" {
-				dir = filepath.Join(config.DataDir(), "exports")
-			}
-			if err := os.MkdirAll(dir, 0o755); err != nil {
-				return err
-			}
-			path := filepath.Join(dir, name+"-"+m.now.Format("20060102-150405")+ext)
-			f, err := os.Create(path)
+			f, path, err := m.createExport(name + "-" + m.now.Format("20060102-150405") + ext)
 			if err != nil {
 				return err
 			}

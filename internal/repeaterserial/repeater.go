@@ -16,6 +16,7 @@ import (
 
 	"github.com/verdantran/meshcore-tui/internal/admin"
 	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 var ErrConsoleOnly = errors.New("this is a repeater's own console; messaging and contacts need a companion radio")
@@ -116,7 +117,7 @@ func (r *Repeater) get(ctx context.Context, key string) string {
 	if err != nil {
 		return ""
 	}
-	return v
+	return untrusted.Text(v)
 }
 
 func (r *Repeater) Start(ctx context.Context) {
@@ -389,7 +390,7 @@ func (r *Repeater) SendCLI(ctx context.Context, key [32]byte, command string) er
 }
 
 func (r *Repeater) reply(text string) {
-	r.emit(radio.Incoming{At: time.Now(), From: r.prefix(), Hops: -1, SentAt: time.Now(), Text: text, CLI: true})
+	r.emit(radio.Incoming{At: time.Now(), From: r.prefix(), Hops: -1, SentAt: time.Now(), Text: untrusted.Text(text), CLI: true})
 }
 
 func (r *Repeater) SyncContacts(ctx context.Context) ([]radio.Contact, error) {

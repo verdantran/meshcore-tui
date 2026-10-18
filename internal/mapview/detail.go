@@ -13,6 +13,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 // Street detail comes from OpenFreeMap's vector tiles (OpenMapTiles schema, OpenStreetMap data), fetched
@@ -23,6 +26,10 @@ const (
 	DetailCredit = "OpenFreeMap © OpenMapTiles Data from OpenStreetMap"
 	MaxTiles     = 400 // far more than any mesh needs, and well inside OpenFreeMap's limit
 	tileExtent   = 4096.0
+
+	maxTile      = 32 << 20  // a tile unzipped; the largest seen is under 1 MB
+	maxDetail    = 512 << 20 // the saved detail unzipped, for MaxTiles of the busiest tiles
+	fetchTimeout = 30 * time.Second
 )
 
 // Tile is an x, y at DetailZoom.
@@ -124,8 +131,11 @@ func LoadDetail(path string) (*Detail, error) {
 		return nil, err
 	}
 	var d Detail
-	if err := json.NewDecoder(zr).Decode(&d); err != nil {
+	if err := json.NewDecoder(io.LimitReader(zr, maxDetail)).Decode(&d); err != nil {
 		return nil, err
+	}
+	for i := range d.Places {
+		d.Places[i].Name = untrusted.Text(d.Places[i].Name) // saved before names were cleaned on download
 	}
 	d.index()
 	return &d, nil
@@ -133,11 +143,12 @@ func LoadDetail(path string) (*Detail, error) {
 
 // Save writes the file atomically, so a crash never leaves a broken one.
 func (d *Detail) Save(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	tmp := path + ".tmp"
-	f, err := os.Create(tmp)
+	os.Remove(tmp)
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
 	}
@@ -174,7 +185,7 @@ func (f Fetcher) get(ctx context.Context, url string) ([]byte, error) {
 	req.Header.Set("User-Agent", f.Agent)
 	client := f.Client
 	if client == nil {
-		client = http.DefaultClient
+		client = &http.Client{Timeout: fetchTimeout}
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -229,8 +240,8 @@ func (f Fetcher) Fetch(ctx context.Context, d *Detail, tiles []Tile, progress fu
 			if err != nil && ctx.Err() == nil {
 				url := strings.NewReplacer("{z}", fmt.Sprint(DetailZoom), "{x}", fmt.Sprint(t[0]), "{y}", fmt.Sprint(t[1])).Replace(tj.Tiles[0])
 				if data, err = f.get(ctx, url); err == nil && f.Dir != "" {
-					os.MkdirAll(f.Dir, 0o755)
-					os.WriteFile(cache, data, 0o644)
+					os.MkdirAll(f.Dir, 0o700)
+					os.WriteFile(cache, data, 0o600)
 				}
 				fresh = len(data)
 			}
@@ -318,7 +329,7 @@ func (d *Detail) addTile(t Tile, layers []mvtLayer) {
 				}
 				if f.Type == mvtPoint && rank > 0 && name != "" && len(f.Parts) > 0 && len(f.Parts[0]) > 0 {
 					q := ll(f.Parts[0][0])
-					d.Places = append(d.Places, Place{Name: name, Lat: q[1], Lon: q[0], Rank: rank})
+					d.Places = append(d.Places, Place{Name: untrusted.Text(name), Lat: q[1], Lon: q[0], Rank: rank})
 				}
 			}
 		}

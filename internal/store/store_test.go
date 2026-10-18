@@ -368,3 +368,21 @@ func TestSignaturesAndPins(t *testing.T) {
 		t.Error("closed")
 	}
 }
+
+func TestHistoryIsPrivate(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "meshcore-tui")
+	os.MkdirAll(dir, 0o755)
+	path := filepath.Join(dir, "meshcore-tui.db")
+	os.WriteFile(path, nil, 0o644) // as an install from before
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if st, _ := os.Stat(path); st.Mode().Perm() != 0o600 {
+		t.Errorf("the database is %v", st.Mode().Perm())
+	}
+	if st, _ := os.Stat(dir); st.Mode().Perm() != 0o700 {
+		t.Errorf("its folder is %v", st.Mode().Perm())
+	}
+}

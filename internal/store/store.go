@@ -4,7 +4,9 @@ package store
 import (
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +15,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 // Convo identifies a conversation: "ch:<idx>" for a channel, "dm:<key hex>" for a contact,
@@ -104,10 +107,34 @@ CREATE TABLE IF NOT EXISTS node_status (
 CREATE INDEX IF NOT EXISTS node_status_at ON node_status (node, at);
 `
 
+// private makes the database's folder and files readable by their owner only: it holds message history.
+// SQLite gives its journal files the database's permissions, and installs from before this get theirs
+// tightened too.
+func private(path string) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return err
+	}
+	f.Close()
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		if err := os.Chmod(p, 0o600); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
+
 // Open opens (or creates) the database file; ":memory:" gives a throwaway store for tests.
 func Open(path string) (*Store, error) {
 	if path != ":memory:" {
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		if err := private(path); err != nil {
 			return nil, err
 		}
 	}
@@ -206,6 +233,7 @@ func (s *Store) Contacts(device string) ([]radio.Contact, error) {
 			return nil, err
 		}
 		hex.Decode(c.Key[:], []byte(keyHex))
+		c.Name = untrusted.Text(c.Name) // kept before names were cleaned as they arrived
 		c.Type, c.Flags, c.LastAdvert = radio.ContactType(typ), byte(flags), time.Unix(advert, 0)
 		out = append(out, c)
 	}
@@ -243,6 +271,7 @@ func (s *Store) Channels(device string) ([]radio.Channel, error) {
 			return nil, err
 		}
 		copy(c.Secret[:], secret)
+		c.Name = untrusted.Text(c.Name)
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -308,7 +337,7 @@ func (s *Store) Pins() (map[string]Pin, error) {
 		var p Pin
 		copy(p.Key[:], key)
 		p.At = time.UnixMilli(at)
-		out[name] = p
+		out[untrusted.Text(name)] = p
 	}
 	return out, rows.Err()
 }
@@ -364,6 +393,7 @@ func scanMessage(sc interface{ Scan(...any) error }, extra ...any) (Message, err
 	var sent, recv, rtt int64
 	dest := []any{&m.ID, &convo, &out, &m.Sender, &m.Text, &sent, &recv, &m.Hops, &m.SNR, &hasSNR, &signed, &state, &m.Ack, &m.Attempts, &rtt, &flood, &m.Repeats, &m.Path, &m.PathHash, &m.Sig, &m.SigKey}
 	err := sc.Scan(append(dest, extra...)...)
+	m.Sender, m.Text = untrusted.Text(m.Sender), untrusted.Text(m.Text)
 	m.Convo, m.Out, m.HasSNR, m.Signed, m.State, m.Flood = Convo(convo), out == 1, hasSNR == 1, signed == 1, State(state), flood == 1
 	m.SentAt, m.RecvAt, m.RTT = time.UnixMilli(sent), time.UnixMilli(recv), time.Duration(rtt)*time.Millisecond
 	return m, err

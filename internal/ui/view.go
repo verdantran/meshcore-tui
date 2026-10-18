@@ -34,7 +34,7 @@ func (m *Model) View() tea.View {
 	if m.phase == phaseMain {
 		m.overlayToasts(lines)
 	}
-	frame := strings.Join(lines, "\n")
+	frame := drawable(strings.Join(lines, "\n"))
 	if m.opt.ASCII {
 		frame = toASCII(frame)
 	}
@@ -52,6 +52,34 @@ func (m *Model) View() tea.View {
 		v.WindowTitle = "meshcore-tui · " + m.ready.Self.Name
 	}
 	return v
+}
+
+// stringSeqs are the escape sequences a terminal acts on beyond drawing: OSC, DCS, SOS, PM and APC, in 7-bit
+// and 8-bit form. The app writes none of them into a frame, so any here came in with someone else's text.
+var stringSeqs = []string{"\x1b]", "\x1bP", "\x1bX", "\x1b^", "\x1b_", "\u009d", "\u0090", "\u0098", "\u009e", "\u009f"}
+
+// drawable keeps a frame's text and colours and drops every other escape sequence, so nothing that slipped
+// past the cleaning of text from the mesh can reach the terminal.
+func drawable(frame string) string {
+	if !slices.ContainsFunc(stringSeqs, func(s string) bool { return strings.Contains(frame, s) }) {
+		return frame
+	}
+	frame = strings.ToValidUTF8(frame, "\uFFFD") // a stray byte could otherwise swallow the escape after it
+	var b strings.Builder
+	p := ansi.NewParser()
+	var state byte
+	for len(frame) > 0 {
+		seq, _, n, next := ansi.DecodeSequence(frame, state, p)
+		switch {
+		case ansi.HasCsiPrefix(seq) && p.Command() == 'm', seq == "\n":
+			b.WriteString(seq)
+		case seq[0] < 0x20 || seq[0] == 0x7f || strings.ContainsRune(seq, 0x1b) || strings.ContainsFunc(seq, func(r rune) bool { return r >= 0x80 && r <= 0x9f }):
+		default:
+			b.WriteString(seq)
+		}
+		state, frame = next, frame[n:]
+	}
+	return b.String()
 }
 
 // Layout helpers. Every rendered row is fitted to the terminal width exactly.

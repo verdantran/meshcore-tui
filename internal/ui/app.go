@@ -266,6 +266,18 @@ func (m *Model) shutdown() {
 // SlowTerminalMsg says writing frames to the terminal is taking longer than drawing them should.
 type SlowTerminalMsg struct{}
 
+// safely handles what came from the radio or the mesh, so that data nobody foresaw is set aside with a note
+// in the log rather than closing the app.
+func (m *Model) safely(what string, handle func() tea.Cmd) (cmd tea.Cmd) {
+	defer func() {
+		if r := recover(); r != nil {
+			m.addLog(m.now, fmt.Sprintf("SKIPPED  %s that couldn't be read: %v", what, r), radio.ToneWarn)
+			cmd = nil
+		}
+	}()
+	return handle()
+}
+
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.now = m.opt.Clock()
 	var cmds []tea.Cmd
@@ -282,7 +294,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.addLog(m.now, "MOTION  reduced: the terminal is slow to draw to · v changes it", radio.ToneInfo)
 		}
 	case eventMsg:
-		cmds = append(cmds, m.apply(msg.e))
+		cmds = append(cmds, m.safely("something the radio sent", func() tea.Cmd { return m.apply(msg.e) }))
 		if m.radio != nil {
 			cmds = append(cmds, waitEvent(m.radio.Events()))
 		}
@@ -296,7 +308,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd, _ := m.contactsMsg(msg)
 		cmds = append(cmds, cmd)
 	case jobSentMsg, jobTimeoutMsg, cmdSentMsg, cmdTimeoutMsg, autoStatusMsg, fleetPollMsg, keysCheckedMsg, watchTickMsg:
-		cmds = append(cmds, m.adminMsg(msg))
+		cmds = append(cmds, m.safely("a reply from a node", func() tea.Cmd { return m.adminMsg(msg) }))
 	case devLoadedMsg, devOpMsg, keyExportedMsg:
 		cmds = append(cmds, m.deviceMsg(msg))
 	case statsMsg, statsTickMsg:

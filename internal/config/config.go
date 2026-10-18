@@ -134,11 +134,12 @@ func (c *Config) Save() error {
 	if err := toml.NewEncoder(&buf).Encode(c); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(c.path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(c.path), 0o700); err != nil {
 		return err
 	}
 	tmp := c.path + ".tmp"
-	if err := os.WriteFile(tmp, buf.Bytes(), 0o644); err != nil {
+	os.Remove(tmp) // WriteFile keeps an existing file's permissions
+	if err := os.WriteFile(tmp, buf.Bytes(), 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, c.path)

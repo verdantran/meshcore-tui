@@ -4,15 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/verdantran/meshcore-tui/internal/chat"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/verdantran/meshcore-tui/internal/config"
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/packets"
 	"github.com/verdantran/meshcore-tui/internal/radio"
@@ -516,15 +513,7 @@ type packetJSON struct {
 // exportPackets writes the visible packets, oldest first, one JSON object per line.
 func (m *Model) exportPackets() error {
 	list := m.visiblePackets()
-	dir := m.opt.ExportDir
-	if dir == "" {
-		dir = filepath.Join(config.DataDir(), "exports")
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	path := filepath.Join(dir, "packets-"+m.now.Format("20060102-150405")+".jsonl")
-	f, err := os.Create(path)
+	f, path, err := m.createExport("packets-" + m.now.Format("20060102-150405") + ".jsonl")
 	if err != nil {
 		return err
 	}

@@ -8,6 +8,8 @@ import (
 
 	meshcore "github.com/OwlShack/meshcore-go"
 	"github.com/OwlShack/meshcore-go/companion"
+
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 func (l *Link) Device() Device { return l }
@@ -20,7 +22,7 @@ func (l *Link) Settings(ctx context.Context) (Settings, error) {
 		return Settings{}, err
 	}
 	s := Settings{
-		Self: SelfInfo{Name: self.Name, PubKey: self.PublicKey, FreqKHz: self.RadioFrequency, BwHz: self.RadioBandwidth,
+		Self: SelfInfo{Name: untrusted.Text(self.Name), PubKey: self.PublicKey, FreqKHz: self.RadioFrequency, BwHz: self.RadioBandwidth,
 			SF: self.RadioSpreadFactor, CR: self.RadioCodingRate, TxPower: self.TxPower,
 			Lat: float64(self.AdvertLatitude) / 1e6, Lon: float64(self.AdvertLongitude) / 1e6},
 		MaxTxPower: int(self.MaxTxPower),

@@ -123,3 +123,17 @@ func TestLoadKeys(t *testing.T) {
 		t.Errorf("a misspelt section is caught: %v", err)
 	}
 }
+
+func TestConfigIsPrivate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cfg", "config.toml")
+	c, _ := Load(path)
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := os.Stat(path); st.Mode().Perm() != 0o600 {
+		t.Errorf("the config is %v", st.Mode().Perm())
+	}
+	if st, _ := os.Stat(filepath.Dir(path)); st.Mode().Perm() != 0o700 {
+		t.Errorf("its folder is %v", st.Mode().Perm())
+	}
+}

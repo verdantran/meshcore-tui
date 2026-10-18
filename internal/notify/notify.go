@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 type Method string
@@ -56,15 +58,9 @@ func Resolve(setting string, env func(string) string) Method {
 	return Detect(env)
 }
 
-func clean(s string) string {
-	// Control characters would end the escape sequence early.
-	return strings.Map(func(r rune) rune {
-		if r < 0x20 || r == 0x7f {
-			return ' '
-		}
-		return r
-	}, s)
-}
+// clean keeps notification text to one line with no control characters, which would end an escape sequence
+// early.
+func clean(s string) string { return strings.ReplaceAll(untrusted.Text(s), "\n", " ") }
 
 // Escape is the terminal sequence for a notification, with the bell first if wanted.
 func Escape(m Method, title, body string, bell bool, env func(string) string) string {
@@ -88,8 +84,15 @@ func Escape(m Method, title, body string, bell bool, env func(string) string) st
 	return b.String()
 }
 
-// run starts an external command; tests replace it so they don't raise real notifications.
-var run = func(name string, args ...string) error { return exec.Command(name, args...).Run() }
+// run starts an external command, with extra environment variables; tests replace it so they don't raise
+// real notifications.
+var run = func(env []string, name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	if env != nil {
+		cmd.Env = append(os.Environ(), env...)
+	}
+	return cmd.Run()
+}
 
 var (
 	goos     = runtime.GOOS
@@ -100,28 +103,26 @@ var (
 func Desktop(title, body string) error {
 	switch goos {
 	case "darwin":
-		return run("osascript", "-e", `display notification `+appleQuote(body)+` with title `+appleQuote(title))
+		return run(nil, "osascript", "-e", `display notification `+appleQuote(body)+` with title `+appleQuote(title))
 	case "linux":
-		return run("notify-send", "--app-name=meshcore-tui", clean(title), clean(body))
+		return run(nil, "notify-send", "--app-name=meshcore-tui", clean(title), clean(body))
 	case "windows":
-		return run("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", toastScript(title, body))
+		// The text goes in the environment, never the script: PowerShell ends a quoted string at curly
+		// quotes as well as straight ones, so no quoting of it inside the script can be trusted.
+		return run([]string{"MESHCORE_TUI_TITLE=" + clean(title), "MESHCORE_TUI_BODY=" + clean(body)},
+			"powershell.exe", "-NoProfile", "-NonInteractive", "-Command", toastScript)
 	}
 	return nil
 }
 
-// toastScript raises a Windows toast. It's sent as PowerShell's own, since Windows only shows toasts
-// from an app it knows.
-func toastScript(title, body string) string {
-	return `$n = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
+// toastScript raises a Windows toast with the title and body from the environment. It's sent as
+// PowerShell's own, since Windows only shows toasts from an app it knows.
+const toastScript = `$n = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
 $x = $n::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
 $t = $x.GetElementsByTagName('text')
-$t.Item(0).AppendChild($x.CreateTextNode(` + psQuote(title) + `)) > $null
-$t.Item(1).AppendChild($x.CreateTextNode(` + psQuote(body) + `)) > $null
+$t.Item(0).AppendChild($x.CreateTextNode($env:MESHCORE_TUI_TITLE)) > $null
+$t.Item(1).AppendChild($x.CreateTextNode($env:MESHCORE_TUI_BODY)) > $null
 $n::CreateToastNotifier('{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe').Show([Windows.UI.Notifications.ToastNotification]::new($x))`
-}
-
-// psQuote is a single-quoted PowerShell string, in which only a quote needs escaping, by doubling it.
-func psQuote(s string) string { return "'" + strings.ReplaceAll(clean(s), "'", "''") + "'" }
 
 func appleQuote(s string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(clean(s)) + `"`

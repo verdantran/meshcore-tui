@@ -108,8 +108,11 @@ func decodeTile(data []byte) ([]mvtLayer, error) {
 		if err != nil {
 			return nil, err
 		}
-		if data, err = io.ReadAll(zr); err != nil {
+		if data, err = io.ReadAll(io.LimitReader(zr, maxTile+1)); err != nil {
 			return nil, err
+		}
+		if len(data) > maxTile {
+			return nil, errors.New("a map tile unzipped to more than 32 MB")
 		}
 	}
 	p := pbuf{b: data}

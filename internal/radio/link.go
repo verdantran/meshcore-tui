@@ -15,6 +15,8 @@ import (
 	meshcore "github.com/OwlShack/meshcore-go"
 	"github.com/OwlShack/meshcore-go/companion"
 	"github.com/OwlShack/meshcore-go/companion/client"
+
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 const (
@@ -225,11 +227,11 @@ func (l *Link) sync(ctx context.Context) {
 	}
 	l.emit(Ready{
 		Self: SelfInfo{
-			Name: self.Name, PubKey: self.PublicKey, FreqKHz: self.RadioFrequency, BwHz: self.RadioBandwidth,
+			Name: untrusted.Text(self.Name), PubKey: self.PublicKey, FreqKHz: self.RadioFrequency, BwHz: self.RadioBandwidth,
 			SF: self.RadioSpreadFactor, CR: self.RadioCodingRate, TxPower: self.TxPower,
 			Lat: float64(self.AdvertLatitude) / 1e6, Lon: float64(self.AdvertLongitude) / 1e6,
 		},
-		Device:      DeviceInfo{Model: dev.Model, Firmware: dev.FirmwareVersionStr, BuildDate: dev.FirmwareBuildDate, MaxContacts: int(dev.MaxContacts), MaxChannels: int(dev.MaxChannels)},
+		Device:      DeviceInfo{Model: untrusted.Text(dev.Model), Firmware: untrusted.Text(dev.FirmwareVersionStr), BuildDate: untrusted.Text(dev.FirmwareBuildDate), MaxContacts: int(dev.MaxContacts), MaxChannels: int(dev.MaxChannels)},
 		Contacts:    len(contacts),
 		Channels:    len(channels),
 		Battery:     Battery{batt.BatteryMilliVolts},
@@ -240,7 +242,7 @@ func (l *Link) sync(ctx context.Context) {
 }
 
 func contactFrom(key [32]byte, name string, typ, flags, pathLen byte, path []byte, lastAdvert uint32, lat, lon int32) Contact {
-	c := Contact{Key: key, Name: name, Type: ContactType(typ), Flags: flags, PathLen: -1,
+	c := Contact{Key: key, Name: untrusted.Text(name), Type: ContactType(typ), Flags: flags, PathLen: -1,
 		LastAdvert: time.Unix(int64(lastAdvert), 0), Lat: float64(lat) / 1e6, Lon: float64(lon) / 1e6}
 	if pathLen != 0xFF {
 		size, hops := meshcore.PathLenFields(pathLen)
@@ -266,7 +268,7 @@ func (l *Link) deliver(ms []client.WaitingMessage) {
 		switch {
 		case w.Contact != nil:
 			m := w.Contact
-			in.From, in.Hops, in.Text = m.PubKeyPrefix, hopsFrom(m.PathLen), m.Text
+			in.From, in.Hops, in.Text = m.PubKeyPrefix, hopsFrom(m.PathLen), untrusted.Text(m.Text)
 			in.SentAt, in.Signed = time.Unix(int64(m.SenderTimestamp), 0), m.TxtType == companion.TxtTypeSignedPlain
 			in.CLI = m.TxtType == companion.TxtTypeCLIData
 			if in.Signed && len(m.SenderPrefix) >= 4 {
@@ -274,7 +276,7 @@ func (l *Link) deliver(ms []client.WaitingMessage) {
 			}
 		case w.Channel != nil:
 			m := w.Channel
-			in.Channel, in.ChannelIdx, in.Hops, in.Text = true, int(m.ChannelIdx), hopsFrom(m.PathLen), m.Text
+			in.Channel, in.ChannelIdx, in.Hops, in.Text = true, int(m.ChannelIdx), hopsFrom(m.PathLen), untrusted.Text(m.Text)
 			in.SentAt = time.Unix(int64(m.SenderTimestamp), 0)
 		case w.ChannelData != nil:
 			d := w.ChannelData
@@ -473,7 +475,7 @@ func (l *Link) registerPushes() {
 	c.OnPush(companion.PushNewAdvert, func(r companion.Response) {
 		if p, ok := r.Data.(companion.PushNewAdvertResponse); ok {
 			l.emit(Heard{Contact: contactFrom(p.PublicKey, p.AdvertName, p.Type, p.Flags, p.OutPathLen, p.OutPath[:], p.LastAdvert, p.AdvertLatitude, p.AdvertLongitude)})
-			l.emit(Log{At: time.Now(), Text: fmt.Sprintf("HEARD  %s [%s], not a contact", p.AdvertName, hexPrefix(p.PublicKey[:1]))})
+			l.emit(Log{At: time.Now(), Text: fmt.Sprintf("HEARD  %s [%s], not a contact", untrusted.Text(p.AdvertName), hexPrefix(p.PublicKey[:1]))})
 		}
 	})
 	c.OnPush(companion.PushAdvert, func(r companion.Response) {
@@ -755,7 +757,7 @@ func (l *Link) Channels(ctx context.Context) ([]Channel, error) {
 			break
 		}
 		if ch.Name != "" {
-			out = append(out, Channel{Idx: int(ch.ChannelIdx), Name: ch.Name, Secret: ch.Secret})
+			out = append(out, Channel{Idx: int(ch.ChannelIdx), Name: untrusted.Text(ch.Name), Secret: ch.Secret})
 		}
 	}
 	return out, nil

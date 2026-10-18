@@ -2,6 +2,7 @@ package notify
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -30,7 +31,7 @@ func TestDetect(t *testing.T) {
 
 func TestEscape(t *testing.T) {
 	ghostty := env(map[string]string{"TERM_PROGRAM": "ghostty"})
-	if got := Escape(Terminal, "Alice", "hi\x1b]evil", true, ghostty); got != "\a\x1b]9;Alice: hi ]evil\a" {
+	if got := Escape(Terminal, "Alice", "hi\x1b]evil\u009c", true, ghostty); got != "\a\x1b]9;Alice: hi]evil\a" {
 		t.Errorf("OSC 9 = %q", got)
 	}
 	kitty := env(map[string]string{"TERM": "xterm-kitty"})
@@ -49,8 +50,10 @@ func TestDesktopAndPlatforms(t *testing.T) {
 	saved, savedOS, savedLook := run, goos, lookPath
 	t.Cleanup(func() { run, goos, lookPath = saved, savedOS, savedLook })
 	var calls [][]string
-	run = func(name string, args ...string) error {
+	var envs [][]string
+	run = func(env []string, name string, args ...string) error {
 		calls = append(calls, append([]string{name}, args...))
+		envs = append(envs, env)
 		return nil
 	}
 
@@ -69,7 +72,7 @@ func TestDesktopAndPlatforms(t *testing.T) {
 		t.Error("Linux with notify-send uses it")
 	}
 	Desktop("Alice", "hi\x07")
-	if calls[1][0] != "notify-send" || calls[1][3] != "hi " {
+	if calls[1][0] != "notify-send" || calls[1][3] != "hi" {
 		t.Errorf("notify-send call = %q", calls[1])
 	}
 	lookPath = func(string) (string, error) { return "", errNotFound }
@@ -82,9 +85,13 @@ func TestDesktopAndPlatforms(t *testing.T) {
 	if Detect(env(nil)) != OS {
 		t.Error("Windows raises toasts through PowerShell")
 	}
-	Desktop("Bob's node", "it's\nup")
-	if last := calls[len(calls)-1]; last[0] != "powershell.exe" || !strings.Contains(last[4], "CreateTextNode('Bob''s node')") || !strings.Contains(last[4], "CreateTextNode('it''s up')") {
-		t.Errorf("toast call = %q", last)
+	Desktop("Bob's node", "it’s'); Start-Process calc; ('\nup")
+	last, vars := calls[len(calls)-1], envs[len(envs)-1]
+	if last[0] != "powershell.exe" || last[4] != toastScript || strings.Contains(last[4], "calc") {
+		t.Errorf("the text stays out of the script: %q", last)
+	}
+	if !slices.Equal(vars, []string{"MESHCORE_TUI_TITLE=Bob's node", "MESHCORE_TUI_BODY=it’s'); Start-Process calc; (' up"}) {
+		t.Errorf("toast text = %q", vars)
 	}
 
 	goos = "plan9"

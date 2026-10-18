@@ -12,6 +12,7 @@ import (
 
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/signing"
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 // Field is one decoded value and the bytes [Start, End) it occupies in the raw packet.
@@ -100,7 +101,17 @@ func hexs(b []byte) string {
 	return strings.Join(parts, " ")
 }
 
+// Decode reads a packet heard off air; every string in what it returns is safe to draw.
 func Decode(raw []byte, book Book) Decoded {
+	d := decode(raw, book)
+	d.Summary, d.Channel, d.Sender, d.Text, d.Name = untrusted.Text(d.Summary), untrusted.Text(d.Channel), untrusted.Text(d.Sender), untrusted.Text(d.Text), untrusted.Text(d.Name)
+	for i := range d.Fields {
+		d.Fields[i].Value = untrusted.Text(d.Fields[i].Value)
+	}
+	return d
+}
+
+func decode(raw []byte, book Book) Decoded {
 	d := Decoded{Raw: raw}
 	p, err := meshcore.PacketFromBytes(raw)
 	if err != nil {
