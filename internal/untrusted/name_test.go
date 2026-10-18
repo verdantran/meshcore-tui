@@ -1,6 +1,9 @@
 package untrusted
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestName(t *testing.T) {
 	for in, want := range map[string]string{
@@ -37,6 +40,29 @@ func TestSkeleton(t *testing.T) {
 	for _, s := range []string{"Zack", "Ze", "Zed2"} {
 		if Skeleton(s) == zed {
 			t.Errorf("%q isn't Zed", s)
+		}
+	}
+}
+
+func TestSkeletonLookalikes(t *testing.T) {
+	for fake, real := range map[string]string{
+		"ᏴᎾᏴ":          "BOB",
+		"ᎪᏴᏟᎬᎻᎫᏦᏞᎷᏢᏚᏔ": "ABCEHJKLMPSW",
+		"ꮯꮪꮩꮃ":         "CSVW",
+		"օսհոցզ":       "ouhngq",
+		"ıȷɑɡɩǀ":       "ijagil",
+		"ᴀʙᴄᴅᴇʜɪᴊᴋʟᴍɴᴏᴘʀꜱᴛᴜᴠᴡʏᴢ": "ABCDEHIJKLMNOPRSTUVWYZ",
+		"ϲϳѵ":          "cjv",
+		"a‐b‑c−d–e":    "a-b-c-d-e",
+		"5ALT 8OB 2ED": "SALT BOB ZED",
+	} {
+		if Skeleton(fake) != Skeleton(real) {
+			t.Errorf("Skeleton(%q) = %q, Skeleton(%q) = %q", fake, Skeleton(fake), real, Skeleton(real))
+		}
+	}
+	for _, s := range []string{"Bob", "Alice", "Zed", "x-y"} {
+		if sk := Skeleton(s); sk != strings.ToLower(sk) || len(sk) != len(s) {
+			t.Errorf("Skeleton(%q) = %q", s, sk)
 		}
 	}
 }

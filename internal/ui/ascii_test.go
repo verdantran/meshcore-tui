@@ -28,6 +28,24 @@ func TestToASCII(t *testing.T) {
 	}
 }
 
+// TestASCIIKeepsWidth: characters that take no cell, or join others, mustn't widen a row once it's been fit.
+func TestASCIIKeepsWidth(t *testing.T) {
+	defer func(m ansi.Method) { renderWidth = m }(renderWidth)
+	for _, method := range []ansi.Method{ansi.WcWidth, ansi.GraphemeWidth} {
+		renderWidth = method
+		for _, in := range []string{"a⁡b⁤c", "x᠎￹￻y", "tag\U000e0041\U000e007f", "café café",
+			"1️⃣ key", "🏴\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f flag", "👍🏽 ok", "🇬🇧 uk", "​"} {
+			out := toASCII(in)
+			if strings.ContainsFunc(out, func(r rune) bool { return r > 0x7e }) {
+				t.Errorf("%v: toASCII(%q) = %q", method, in, out)
+			}
+			if w, ow := renderWidth.StringWidth(in), renderWidth.StringWidth(out); w != ow {
+				t.Errorf("%v: %q is %d wide, %q is %d", method, in, w, out, ow)
+			}
+		}
+	}
+}
+
 func TestEveryScreenInASCII(t *testing.T) {
 	h := busyHarness(t)
 	h.m.opt.ASCII = true

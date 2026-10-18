@@ -23,7 +23,7 @@ var asciiFor = map[string]string{
 
 // toASCII rewrites a frame in plain ASCII for terminals without Unicode symbols, keeping its colours.
 // Braille becomes a character shaped like its dots, and anything else without a stand-in becomes ?,
-// one for each cell it took, so columns still line up.
+// one for each cell it took, so columns still line up and rows keep their width.
 func toASCII(frame string) string {
 	var b strings.Builder
 	b.Grow(len(frame))
@@ -32,6 +32,9 @@ func toASCII(frame string) string {
 	for g.Next() {
 		s := g.Value()
 		switch r := []rune(s); {
+		case s[0] >= 0x20 && s[0] < 0x7f && len(s) > 1:
+			b.WriteByte(s[0]) // a letter carrying marks or a keycap
+			b.WriteString(strings.Repeat("?", max(renderWidth.StringWidth(s)-1, 0)))
 		case s[0] < 0x80:
 			b.WriteString(s)
 		case len(r) == 1 && r[0] >= 0x2800 && r[0] <= 0x28FF:
@@ -40,7 +43,7 @@ func toASCII(frame string) string {
 			if a, ok := asciiFor[s]; ok {
 				b.WriteString(a)
 			} else {
-				b.WriteString(strings.Repeat("?", max(renderWidth.StringWidth(s), 1)))
+				b.WriteString(strings.Repeat("?", renderWidth.StringWidth(s)))
 			}
 		}
 	}

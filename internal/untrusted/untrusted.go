@@ -13,10 +13,12 @@ const maxMarks = 4
 
 const zwj = '\u200d'
 
+const blackFlag = '\U0001f3f4' // tag characters after it spell out a flag, such as Scotland's
+
 // Text drops control characters (C0 but line breaks, DEL and C1, so escape sequences can't form), the
 // bidirectional controls that can make text read in a different order to how it's stored, and invisible
-// characters, except the joiner inside an emoji sequence. Tabs become spaces, invalid UTF-8 becomes U+FFFD,
-// and a stack of combining marks is cut to maxMarks.
+// characters, except the joiner inside an emoji sequence and the tags that spell out a flag. Tabs become
+// spaces, invalid UTF-8 becomes U+FFFD, and a stack of combining marks is cut to maxMarks.
 func Text(s string) string { return clean(s, false) }
 
 // Line is Text for a field drawn on one row, such as a name: line breaks become spaces too, so it can't
@@ -40,6 +42,10 @@ func clean(s string, line bool) string {
 			if next, _ := utf8.DecodeRuneInString(s[i+utf8.RuneLen(zwj):]); !pictographic(prev) || !pictographic(next) {
 				continue
 			}
+		case tag(r):
+			if prev != blackFlag && (!tag(prev) || prev == cancelTag) {
+				continue
+			}
 		case drop(r):
 			continue
 		}
@@ -57,7 +63,7 @@ func clean(s string, line bool) string {
 }
 
 func special(r rune, line bool) bool {
-	return drop(r) || r == '\t' || r == utf8.RuneError || r == zwj || line && lineBreak(r) || unicode.Is(unicode.M, r)
+	return drop(r) || tag(r) || r == '\t' || r == utf8.RuneError || r == zwj || line && lineBreak(r) || unicode.Is(unicode.M, r)
 }
 
 func lineBreak(r rune) bool { return r == '\n' || r == '\u2028' || r == '\u2029' }
@@ -68,13 +74,13 @@ func drop(r rune) bool {
 		return false
 	case r < 0x20, r == 0x7f, r >= 0x80 && r <= 0x9f:
 		return true
-	case r >= 0x202a && r <= 0x202e, r >= 0x2066 && r <= 0x2069, r == 0x200e, r == 0x200f, r == 0x061c:
-		return true
-	case r == 0x200b, r == 0x200c, r == 0x2060, r == 0xfeff:
-		return true
 	}
-	return false
+	return r >= 0xad && r != zwj && !tag(r) && unicode.Is(unicode.Cf, r)
 }
+
+const cancelTag = '\U000e007f'
+
+func tag(r rune) bool { return r >= 0xe0020 && r <= cancelTag }
 
 // pictographic is roughly Extended_Pictographic, plus the emoji presentation selector that may sit
 // between an emoji and its joiner.

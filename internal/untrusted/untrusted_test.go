@@ -6,6 +6,8 @@ import (
 	"unicode"
 )
 
+const scotland = "\U0001f3f4\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f"
+
 func TestText(t *testing.T) {
 	for in, want := range map[string]string{
 		"hello 👋":                                 "hello 👋",
@@ -27,6 +29,12 @@ func TestText(t *testing.T) {
 		"a\u200d👋":                                "a👋",
 		"Z" + strings.Repeat("\u0301", 30) + "ed": "Z" + strings.Repeat("\u0301", maxMarks) + "ed",
 		"para\u2028sep\u2029":                     "para\u2028sep\u2029",
+		"so\u00adft\u2061\u2062\u2063\u2064":      "soft",
+		"mon\u180egol\ufff9an\ufffano\ufffb":      "mongolanno",
+		"tag\U000e0041\U000e0001\U000e007f":       "tag",
+		scotland:                                  scotland,
+		scotland + "\U000e0067":                   scotland,
+		"\U0001f3f4x\U000e0067":                   "\U0001f3f4x",
 	} {
 		if got := Text(in); got != want {
 			t.Errorf("Text(%q) = %q, want %q", in, got, want)
@@ -52,11 +60,15 @@ func FuzzText(f *testing.F) {
 	f.Add("Z\u200b\u0301\u0301\u0301\u0301\u0301e\n👨\u200d👩")
 	f.Fuzz(func(t *testing.T, s string) {
 		for _, line := range []bool{false, true} {
-			out, marks := clean(s, line), 0
+			out, marks, prev := clean(s, line), 0, rune(0)
 			for _, r := range out {
-				if drop(r) || r == '\t' || line && lineBreak(r) {
+				if drop(r) || r == '\t' || line && lineBreak(r) || unicode.Is(unicode.Cf, r) && r != zwj && !tag(r) {
 					t.Fatalf("%q kept %U", s, r)
 				}
+				if tag(r) && prev != blackFlag && (!tag(prev) || prev == cancelTag) {
+					t.Fatalf("%q kept a stray tag %U", s, r)
+				}
+				prev = r
 				if marks = marks + 1; !unicode.Is(unicode.M, r) {
 					marks = 0
 				} else if marks > maxMarks {
