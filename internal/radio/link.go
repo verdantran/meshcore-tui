@@ -276,7 +276,7 @@ func (l *Link) sync(ctx context.Context) {
 		ContactList: list,
 		ChannelList: channels,
 	})
-	l.deliver(waiting)
+	l.deliver(waiting, true)
 }
 
 func contactFrom(key [32]byte, name string, typ, flags, pathLen byte, path []byte, lastAdvert uint32, lat, lon int32) Contact {
@@ -299,10 +299,10 @@ func hopsFrom(pathLen byte) int {
 	return int(hops)
 }
 
-func (l *Link) deliver(ms []client.WaitingMessage) {
+func (l *Link) deliver(ms []client.WaitingMessage, queued bool) {
 	now := time.Now()
 	for _, w := range ms {
-		in := Incoming{At: now, SNR: w.SNR, HasSNR: w.HasSNR}
+		in := Incoming{At: now, SNR: w.SNR, HasSNR: w.HasSNR, Queued: queued}
 		switch {
 		case w.Contact != nil:
 			m := w.Contact
@@ -364,7 +364,7 @@ func (l *Link) fetch(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, fetchTimeout)
 	defer cancel()
 	ms, err := l.client.GetWaitingMessages(ctx)
-	l.deliver(ms)
+	l.deliver(ms, false)
 	return err
 }
 
@@ -595,7 +595,7 @@ func (l *Link) registerPushes() {
 	for _, code := range []byte{companion.RespContactMsgRecv, companion.RespContactMsgRecvV3, companion.RespChannelMsgRecv, companion.RespChannelMsgRecvV3, companion.RespChannelDataRecv} {
 		c.OnPush(code, func(r companion.Response) {
 			if w, ok := late(r); ok {
-				l.deliver([]client.WaitingMessage{w})
+				l.deliver([]client.WaitingMessage{w}, false)
 				l.nudge() // the fetch that lost it stopped early, so more may be waiting
 			}
 		})

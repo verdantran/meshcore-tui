@@ -29,6 +29,7 @@ const (
 	sigHold    = 15 * time.Minute // every signature is kept this long, for messages it may yet be for
 	sigHeld    = 256              // and at most this many at once
 	sigFresh   = 15 * time.Minute // a message that took longer than this to arrive is too old to vouch for
+	sigQueued  = 24 * time.Hour   // the same for one the radio held while the app was away
 	sigWait    = 30 * time.Second // after this, a message from someone who signs, without a signature, is flagged
 	signingMin = "v1.15.0"        // the firmware that sends and receives channel datagrams
 	senderMax  = 24               // cells a sender's name may take in a message's header
@@ -189,7 +190,11 @@ func (m *Model) check(d signing.Datagram, channel string, msg store.Message) (st
 		}
 		tried = true
 		if d.Verify(k, channel, msg.Text) {
-			if u, ok := m.chats.usedSigs[d.Sig]; ok && u.id != msg.ID || msg.RecvAt.Sub(msg.SentAt).Abs() > sigFresh {
+			fresh := sigFresh
+			if _, ok := m.chats.queued[msg.ID]; ok {
+				fresh = sigQueued
+			}
+			if u, ok := m.chats.usedSigs[d.Sig]; ok && u.id != msg.ID || msg.RecvAt.Sub(msg.SentAt).Abs() > fresh {
 				return store.SigStale, k[:]
 			}
 			return store.SigValid, k[:]
@@ -274,7 +279,7 @@ func (m *Model) applySig(p *pendingSig) {
 	if p.on != 0 && p.on != best.ID {
 		for _, msg := range msgs {
 			if msg.ID == p.on && msg.Sig == p.onSig {
-				m.setSig(msg, name, p.d.TS, store.Unsigned, nil)
+				m.setSig(msg, p.idx, p.d.TS, store.Unsigned, nil)
 			}
 		}
 	}
@@ -282,7 +287,7 @@ func (m *Model) applySig(p *pendingSig) {
 	if sig == store.SigValid {
 		m.chats.usedSigs[p.d.Sig] = usedSig{best.ID, m.now}
 	}
-	m.setSig(best, name, p.d.TS, sig, key)
+	m.setSig(best, p.idx, p.d.TS, sig, key)
 	switch {
 	case sig == store.SigBad:
 		m.addLog(m.now, fmt.Sprintf("SIGNATURE  %s's message in %s has a signature that doesn't match it", best.Sender, name), radio.ToneFail)
@@ -294,12 +299,12 @@ func (m *Model) applySig(p *pendingSig) {
 	m.refreshChats()
 }
 
-func (m *Model) setSig(msg store.Message, channel string, ts uint32, sig store.Sig, key []byte) {
+func (m *Model) setSig(msg store.Message, idx int, ts uint32, sig store.Sig, key []byte) {
 	if err := m.chat.SetSig(msg.ID, sig, key); err != nil {
 		m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 	}
 	msg.Sig, msg.SigKey = sig, key
-	m.chats.signedMsgs[sigKey(channel, ts)] = msg
+	m.chats.signedMsgs[sigKey(idx, ts)] = msg
 	m.trimSigned()
 }
 
@@ -412,14 +417,15 @@ func (m *Model) sigVerdict(msg store.Message) (string, theme.RGB, bool) {
 	return "", th.Text, false
 }
 
-func sigKey(channel string, ts uint32) string { return fmt.Sprintf("%s|%d", channel, ts) }
+func sigKey(idx int, ts uint32) string { return fmt.Sprintf("%d|%d", idx, ts) }
 
 // signatureSummary is the Packets screen's line for a signature: the message it signs and the verdict, as
 // they stand now.
 func (m *Model) signatureSummary(dec packets.Decoded) string {
 	d := dec.Signature
-	msg, ok := m.chats.signedMsgs[sigKey(dec.Channel, d.TS)]
-	if !ok {
+	ch, found := m.packetChannel(dec)
+	msg, ok := m.chats.signedMsgs[sigKey(ch.Idx, d.TS)]
+	if !found || !ok {
 		return fmt.Sprintf("%s · signature by key %s, for a message not heard", dec.Channel, radio.KeyHex(d.KeyID[:4]))
 	}
 	verdict, _, _ := m.sigVerdict(msg)

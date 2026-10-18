@@ -201,6 +201,7 @@ type Incoming struct {
 	Signed     bool
 	Author     [4]byte // for signed messages, such as room posts: the writer's key prefix
 	CLI        bool    // a reply from a repeater's command console, not a chat message
+	Queued     bool    // held by the radio while the app was away, so it can arrive long after it was sent
 }
 
 // Sent is the radio's receipt for a direct message; Ack matches the later Acked event.

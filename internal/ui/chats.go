@@ -50,6 +50,7 @@ type chatsModel struct {
 	pins     map[string]store.Pin // keys names are trusted to sign with; nil until read
 
 	signedMsgs map[string]store.Message // the message each signature heard was for, by channel and timestamp
+	queued     map[int64]time.Time      // channel messages the radio held while the app was away, while their signature may come
 	usedSigs   map[[64]byte]usedSig     // valid signatures lately, against replays
 
 	arrived map[int64]time.Time       // incoming messages, for the decode and the bar flash
@@ -73,7 +74,7 @@ type chatsModel struct {
 
 func newChats() chatsModel {
 	return chatsModel{arrived: map[int64]time.Time{}, acked: map[int64]time.Time{}, failed: map[int64]time.Time{}, echoed: map[int64]time.Time{},
-		signedMsgs: map[string]store.Message{}, usedSigs: map[[64]byte]usedSig{}, popped: map[store.Convo]time.Time{}}
+		signedMsgs: map[string]store.Message{}, queued: map[int64]time.Time{}, usedSigs: map[[64]byte]usedSig{}, popped: map[store.Convo]time.Time{}}
 }
 
 type sendResultMsg struct {
@@ -190,6 +191,9 @@ func (m *Model) chatEvent(e radio.Event) tea.Cmd {
 			return nil
 		}
 		flash(m.chats.arrived, msg.ID, m.now, arriveDur)
+		if e.Queued && e.Channel {
+			flash(m.chats.queued, msg.ID, m.now, sigHold)
+		}
 		m.routeArrived(msg)
 		m.sigArrived(msg)
 		title := m.chat.Title(msg.Convo)

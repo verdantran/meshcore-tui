@@ -213,3 +213,22 @@ func TestTwoNodesOneName(t *testing.T) {
 		t.Errorf("pinned: %q", v)
 	}
 }
+
+// A message the radio held while the app was away arrives long after it was sent; its signature still counts.
+func TestQueuedSignedMessage(t *testing.T) {
+	h, zed := pinnedZed(t)
+	sent := h.clk.t.Add(-9 * time.Hour)
+	ts := uint32(sent.Unix())
+	h.m.Update(eventMsg{radio.Incoming{Channel: true, ChannelIdx: 1, Hops: 1, Text: "Zed: overnight", SentAt: sent, At: h.clk.t, Queued: true}})
+	h.settle()
+	h.datagram(1, zed.datagram("#bristol", ts, "overnight"))
+	if v := h.verdict(); v != "✓ signed" {
+		t.Errorf("held by the radio: %q", v)
+	}
+	h.m.Update(eventMsg{radio.Incoming{Channel: true, ChannelIdx: 1, Hops: 1, Text: "Zed: live", SentAt: sent, At: h.clk.t}})
+	h.settle()
+	h.datagram(1, zed.datagram("#bristol", ts, "live"))
+	if v := h.verdict(); v != "⚠ old signature" {
+		t.Errorf("heard live, 9 h after it was sent: %q", v)
+	}
+}
