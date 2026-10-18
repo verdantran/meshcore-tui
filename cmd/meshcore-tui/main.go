@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"time"
@@ -95,7 +96,36 @@ func simRepeater() radio.Radio {
 	return repeaterserial.NewRepeater("demo", nil, func() (io.ReadWriteCloser, error) { return s.Console("Dundry"), nil })
 }
 
-var errUsage = errors.New("usage")
+var (
+	errUsage   = errors.New("usage")
+	errVersion = errors.New("version")
+)
+
+// stdout is where --version prints; tests replace it.
+var stdout io.Writer = os.Stdout
+
+// version is the module version a release was installed at, or for a build from a checkout the commit it
+// was built from, which Go records in every binary.
+func version() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "meshcore-tui (unknown version)"
+	}
+	v := info.Main.Version
+	var rev, dirty string
+	for _, s := range info.Settings {
+		switch {
+		case s.Key == "vcs.revision" && len(s.Value) >= 12:
+			rev = s.Value[:12]
+		case s.Key == "vcs.modified" && s.Value == "true":
+			dirty = ", with local changes"
+		}
+	}
+	if (v == "" || v == "(devel)") && rev != "" {
+		return "meshcore-tui " + rev + dirty
+	}
+	return "meshcore-tui " + v
+}
 
 // setup turns the command line, config file and environment into the app's options.
 // Flags win over the config file only when they're given.
@@ -111,8 +141,12 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 	motionFlag := fs.String("motion", "", "full | reduced | off (default full, or reduced over SSH)")
 	themeFlag := fs.String("theme", "", strings.Join(theme.Names(), " | "))
 	configPath := fs.String("config", filepath.Join(config.Dir(), "config.toml"), "config file")
+	showVersion := fs.Bool("version", false, "print the version and exit")
 	if err := fs.Parse(args); err != nil {
 		return ui.Options{}, errUsage
+	}
+	if *showVersion {
+		return ui.Options{}, errVersion
 	}
 
 	cfg, err := config.Load(*configPath)
@@ -192,6 +226,10 @@ func run(args []string, env func(string) string, stderr io.Writer) int {
 	opt, err := setup(args, env, stderr)
 	if errors.Is(err, errUsage) {
 		return 2
+	}
+	if errors.Is(err, errVersion) {
+		fmt.Fprintln(stdout, version())
+		return 0
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, untrusted.Line(err.Error())) // a parse error can quote a handed file's text

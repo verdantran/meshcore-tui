@@ -246,3 +246,13 @@ func TestFileErrorsReachTheTerminalClean(t *testing.T) {
 		}
 	}
 }
+
+func TestVersion(t *testing.T) {
+	var out bytes.Buffer
+	saved := stdout
+	stdout = &out
+	t.Cleanup(func() { stdout = saved })
+	if code := run([]string{"--version"}, func(string) string { return "" }, &bytes.Buffer{}); code != 0 || !strings.HasPrefix(out.String(), "meshcore-tui ") {
+		t.Errorf("--version = %d %q", code, out.String())
+	}
+}
