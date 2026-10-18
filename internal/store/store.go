@@ -14,6 +14,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"github.com/verdantran/meshcore-tui/internal/privfile"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
@@ -113,7 +114,7 @@ CREATE INDEX IF NOT EXISTS node_status_at ON node_status (node, at);
 // tightened too.
 func private(path string) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := privfile.Dir(dir); err != nil {
 		return err
 	}
 	if err := os.Chmod(dir, 0o700); err != nil {

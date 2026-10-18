@@ -10,6 +10,7 @@ import (
 
 	"github.com/verdantran/meshcore-tui/internal/chat"
 	"github.com/verdantran/meshcore-tui/internal/config"
+	"github.com/verdantran/meshcore-tui/internal/privfile"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/store"
 	"github.com/verdantran/meshcore-tui/internal/theme"
@@ -192,7 +193,7 @@ func (m *Model) createExport(name string) (*os.File, string, error) {
 	if dir == "" {
 		dir = filepath.Join(config.DataDir(), "exports")
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := privfile.Dir(dir); err != nil {
 		return nil, "", err
 	}
 	path := filepath.Join(dir, name)

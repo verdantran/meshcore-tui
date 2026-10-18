@@ -61,7 +61,7 @@ type FileKeychain struct {
 
 func (k *FileKeychain) load() (map[string]string, error) {
 	m := map[string]string{}
-	b, err := os.ReadFile(k.Path)
+	b, err := privfile.Read(k.Path)
 	if errors.Is(err, os.ErrNotExist) {
 		return m, nil
 	}

@@ -42,14 +42,39 @@ func WriteWith(path string, write func(io.Writer) error) error {
 	return err
 }
 
-// Dir makes dir if need be, and refuses one that another user owns or others can write to.
+// Read reads a private file from a folder no one else can change, and makes it 0600 if an older
+// version, or someone's umask, left it readable by others.
+func Read(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	if err := folder(filepath.Dir(path)); err != nil {
+		return nil, err
+	}
+	if err := own(path, f); err != nil {
+		return nil, err
+	}
+	return io.ReadAll(f)
+}
+
+// Dir makes dir if need be, and refuses one that another user owns or others can write to, or that sits
+// in a folder someone else could swap it out of.
 func Dir(dir string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
+	return folder(dir)
+}
+
+func folder(dir string) error {
 	fi, err := os.Stat(dir)
 	if err != nil {
 		return err
 	}
-	return check(dir, fi)
+	if err := check(dir, fi); err != nil {
+		return err
+	}
+	return parents(dir)
 }

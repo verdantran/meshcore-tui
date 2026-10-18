@@ -79,6 +79,25 @@ func TestFileKeychainIgnoresPlantedFiles(t *testing.T) {
 	}
 }
 
+func TestFileKeychainTightensAnOldFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no permission bits")
+	}
+	path := filepath.Join(t.TempDir(), "passwords.json")
+	os.WriteFile(path, []byte(`{"A300000000000000000000000000000000000000000000000000000000000000": "hunter2"}`), 0o644)
+	k := &FileKeychain{Path: path}
+	k.Get([32]byte{0xA3})
+	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o600 {
+		t.Errorf("a 0644 passwords.json is still %v after it's read", fi.Mode().Perm())
+	}
+	open := t.TempDir()
+	os.WriteFile(filepath.Join(open, "passwords.json"), []byte(`{}`), 0o600)
+	os.Chmod(open, 0o777)
+	if _, err := (&FileKeychain{Path: filepath.Join(open, "passwords.json")}).load(); err == nil {
+		t.Error("read from a folder anyone can write to")
+	}
+}
+
 type countingKeychain struct {
 	MemoryKeychain
 	gets int
