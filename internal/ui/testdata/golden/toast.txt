@@ -29,7 +29,7 @@
  [10:03:03] ▸ █
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles dc79204d3025ff09
+styles 91b9e092e69de532
 == 130ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -61,7 +61,7 @@ styles dc79204d3025ff09
  [10:03:03] ▸ NOTIFIED  Alice · █
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 247a43ce289ec43f
+styles 278d9d22d131a31e
 == 260ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -93,7 +93,7 @@ styles 247a43ce289ec43f
  [10:03:03] ▸ NOTIFIED  Alice · via terminal escap█
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles a63fe5793e81d6d6
+styles 9fb513c3db082823
 == 2s ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -125,7 +125,7 @@ styles a63fe5793e81d6d6
  [10:03:03] ▸ NOTIFIED  Alice · via terminal escape + bell
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 5e5341dc1c669f91
+styles 80a67e0e6e6f57ba
 == 3.87s ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -157,7 +157,7 @@ styles 5e5341dc1c669f91
  [10:03:03] ▸ NOTIFIED  Alice · via terminal escape + bell
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 99b4c27dc812f494
+styles a700dbee4b8cb82b
 == 4s ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -189,4 +189,4 @@ styles 99b4c27dc812f494
  [10:03:03] ▸ NOTIFIED  Alice · via terminal escape + bell
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 59bc430fa580f730
+styles b3b3bac8109a6f1b

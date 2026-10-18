@@ -29,7 +29,7 @@
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 35968cb8b33be894
+styles a60a6618edbd32fe
 == 300ms ==
  MeshCore-%*  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 3.91V ████░▌ 72%   ● LI░▒▓█
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -61,9 +61,9 @@ styles 35968cb8b33be894
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
                                                                                                 11 0
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles e3491e7e42731f16
+styles 242ce12df1fd6f34
 == 600ms ==
- MeshCore-j#  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 3.90V ████░▌ 71%   ● LINKED
+ MeshCore-k#  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 3.90V ████░▌ 71%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ [PENDING] Message history isn't available: the store couldn't be opened.                         ┃
@@ -93,7 +93,7 @@ styles e3491e7e42731f16
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
                                                                                             11 01 A3
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles d6994bf70b192d40
+styles acf43c632dffd213
 == 1.8s ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 3.90V ████░▌ 71%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -125,4 +125,4 @@ styles d6994bf70b192d40
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
                                                                            11 01 A3 00 00 00 00 00 0
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 441b2f3095e5d4c7
+styles aadc2cfaef3a943c

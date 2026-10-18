@@ -29,7 +29,7 @@
  [10:03:02] ▸ █
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 691aed0a329c4f66
+styles 72503c35ff02ad97
 == 210ms ==
  MeshCor#*▟/  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ░▒▓█
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -61,9 +61,9 @@ styles 691aed0a329c4f66
  [10:03:02] ▸ THEME  dusk
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 60f2a3bffe33198f
+styles a0dd27dc0146101a
 == 420ms ==
- MeshCore-j5  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ MeshCore-k5  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ [PENDING] Message history isn't available: the store couldn't be opened.                         ┃
@@ -93,4 +93,4 @@ styles 60f2a3bffe33198f
  [10:03:02] ▸ THEME  dusk
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 484237161da2c511
+styles 61a365fe8461e2cf

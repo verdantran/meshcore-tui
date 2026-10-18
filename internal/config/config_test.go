@@ -64,14 +64,14 @@ func TestPathsAndFailures(t *testing.T) {
 		t.Errorf("XDG paths: %s %s", Dir(), DataDir())
 	}
 	goos = "windows"
-	t.Setenv("APPDATA", `C:\Users\me\AppData\Roaming`)
-	t.Setenv("LOCALAPPDATA", `C:\Users\me\AppData\Local`)
+	t.Setenv("APPDATA", `C:\Users\sam\AppData\Roaming`)
+	t.Setenv("LOCALAPPDATA", `C:\Users\sam\AppData\Local`)
 	if Dir() != filepath.Join("/x/config", "meshcore-tui") {
 		t.Errorf("XDG wins on Windows too: %s", Dir())
 	}
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("XDG_DATA_HOME", "")
-	if Dir() != filepath.Join(`C:\Users\me\AppData\Roaming`, "meshcore-tui") || DataDir() != filepath.Join(`C:\Users\me\AppData\Local`, "meshcore-tui") {
+	if Dir() != filepath.Join(`C:\Users\sam\AppData\Roaming`, "meshcore-tui") || DataDir() != filepath.Join(`C:\Users\sam\AppData\Local`, "meshcore-tui") {
 		t.Errorf("Windows paths: %s %s", Dir(), DataDir())
 	}
 	goos = "linux"

@@ -29,7 +29,7 @@
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles c8e9a4d717846154
+styles 040bd89352a09e3f
 == 0s ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -61,7 +61,7 @@ styles c8e9a4d717846154
  [10:03:03] ▸ █
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles d71edadd4ca13156
+styles 68b6da33b620e186
 == 225ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -93,7 +93,7 @@ styles d71edadd4ca13156
  [10:03:03] ▸ DELIVERED  ✓ Alice  1.4s
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 817cd902cda3ce44
+styles f95cdbf6ca0db7b4
 == 450ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -125,4 +125,4 @@ styles 817cd902cda3ce44
  [10:03:03] ▸ DELIVERED  ✓ Alice  1.4s
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles c979c552e1e63d27
+styles c07f217718f9b497
