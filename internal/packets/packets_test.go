@@ -89,6 +89,29 @@ func TestChannelDecrypt(t *testing.T) {
 	}
 }
 
+// Names can repeat, so the channel that decrypted a packet is named by slot and secret; this private
+// "Public" even shares the real one's 1-byte hash.
+func TestChannelDecryptNamesTheChannel(t *testing.T) {
+	public := [16]byte(meshcore.PublicChannel().PSK)
+	var private [16]byte
+	for i := 0; meshcore.DeriveChannelHash(private) != meshcore.DeriveChannelHash(public); i++ {
+		sum := sha256.Sum256([]byte{byte(i), byte(i >> 8)})
+		private = [16]byte(sum[:16])
+	}
+	book := Book{Channels: []radio.Channel{{Idx: 0, Name: "Public", Secret: public}, {Idx: 3, Name: "Public", Secret: private}}}
+	for _, want := range book.Channels {
+		gt, err := (&meshcore.GroupTextPayload{Timestamp: 1760000000, Sender: "Carol", Text: "hi"}).Encrypt(meshcore.DeriveChannelHash(want.Secret), want.Secret[:])
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload, _ := gt.ToBytes()
+		d := Decode(build(t, meshcore.RouteTypeFlood, meshcore.PayloadTypeGrpTxt, nil, payload), book)
+		if !d.Decrypted || d.ChannelIdx != want.Idx || d.ChannelSecret != want.Secret {
+			t.Errorf("decrypted by slot %d, want %d", d.ChannelIdx, want.Idx)
+		}
+	}
+}
+
 func TestOtherTypesAndMalformed(t *testing.T) {
 	book := Book{Self: [32]byte{0xC0}, Contacts: []radio.Contact{dundry}}
 	msg := build(t, meshcore.RouteTypeDirect, meshcore.PayloadTypeTxtMsg, []byte{0xA3}, append([]byte{0xC0, 0xA3, 1, 2}, make([]byte, 16)...))

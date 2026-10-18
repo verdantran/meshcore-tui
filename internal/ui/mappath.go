@@ -266,7 +266,7 @@ func (m *Model) showMessagePath(msg store.Message) {
 	if cur, ok := m.selectedConvo(); ok && cur.Kind == chat.KindChannel {
 		for _, row := range m.inspector.rows {
 			d := row.dec
-			if !d.Decrypted || d.Type != "GRP_TXT" || d.Channel != cur.Title || d.Sender != msg.Sender || d.Text != msg.Text {
+			if !d.Decrypted || d.Type != "GRP_TXT" || store.ChannelConvo(d.ChannelIdx) != cur.Convo || d.Sender != msg.Sender || d.Text != msg.Text {
 				continue
 			}
 			for i := len(row.copies) - 1; i >= 0; i-- {

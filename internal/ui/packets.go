@@ -22,6 +22,7 @@ const (
 	rowArrival   = 700 * time.Millisecond
 	rowCPS       = 300.0 // a new row types out inside rowArrival, even at 200 columns
 	inspectorPad = 12    // rows kept for the detail pane
+	packetCopies = 32    // copies of one packet kept; replays beyond are only counted
 )
 
 // heardCopy is one reception of a packet; floods often arrive more than once by different routes.
@@ -36,7 +37,10 @@ type packetRow struct {
 	first  time.Time
 	dec    packets.Decoded
 	copies []heardCopy
+	extra  int // copies heard beyond packetCopies
 }
+
+func (r *packetRow) heard() int { return len(r.copies) + r.extra }
 
 var routeChoices = []string{"all", "flood", "direct"}
 var snrChoices = []float32{-99, 0, 5}
@@ -76,12 +80,21 @@ func (m *Model) shown(d packets.Decoded) bool {
 	if d.Err != nil || d.Type != "GRP_TXT" && !signature || !d.Decrypted || m.chat == nil {
 		return false
 	}
+	ch, ok := m.packetChannel(d)
+	return ok && chat.IsOpen(ch)
+}
+
+// packetChannel is the channel that decrypted a packet, found by slot and secret since names can repeat.
+func (m *Model) packetChannel(d packets.Decoded) (radio.Channel, bool) {
+	if !d.Decrypted || m.chat == nil {
+		return radio.Channel{}, false
+	}
 	for _, ch := range m.chat.Channels() {
-		if ch.Name == d.Channel {
-			return chat.IsOpen(ch)
+		if ch.Idx == d.ChannelIdx && ch.Secret == d.ChannelSecret {
+			return ch, true
 		}
 	}
-	return false
+	return radio.Channel{}, false
 }
 
 func (m *Model) book() packets.Book {
@@ -106,27 +119,31 @@ func (m *Model) heardPacket(p radio.Packet) {
 			in.seenOrder = in.seenOrder[1:]
 		}
 	}
-	in.mesh.add(dec, p.SNR, first, m.now)
+	shown := m.shown(dec)
+	in.mesh.add(dec, p.SNR, first, shown, m.now)
 	m.messagePacket(dec, p.Raw, p.SNR)
 	if dec.Decrypted && dec.Type == "GRP_TXT" {
-		m.heardEcho(dec.Channel, dec.Sender, dec.Text) // every copy is another repeater passing it on
+		m.heardEcho(dec) // every copy is another repeater passing it on
 	}
-	if !m.shown(dec) {
+	if !shown {
 		if first {
 			in.others++
 		}
 		return
 	}
+	row, again := in.byHash[dec.Hash]
+	if again && dec.Err == nil && len(row.copies) >= packetCopies {
+		row.extra++
+		return
+	}
 	m.ticker.add(hexBytes(p.Raw, dec.Hidden), m.now, m.w)
 	m.mapHeard(dec, p.SNR)
 	copy := heardCopy{at: m.now, snr: p.SNR, rssi: p.RSSI, path: dec.Path}
-	if dec.Err == nil {
-		if row, ok := in.byHash[dec.Hash]; ok {
-			row.copies = append(row.copies, copy)
-			return
-		}
+	if again && dec.Err == nil {
+		row.copies = append(row.copies, copy)
+		return
 	}
-	row := &packetRow{first: m.now, dec: dec, copies: []heardCopy{copy}}
+	row = &packetRow{first: m.now, dec: dec, copies: []heardCopy{copy}}
 	if in.paused {
 		in.held++
 	} else if in.sel > 0 && m.shows(row) {
@@ -362,7 +379,9 @@ func (m *Model) packetTable(list []*packetRow, w, rows int) []string {
 			route = "FLOOD"
 		}
 		times := ""
-		if n := len(r.copies); n > 1 {
+		if n := r.heard(); n > 99 {
+			times = "99+" // the full count is in the detail pane
+		} else if n > 1 {
 			times = fmt.Sprintf("%d", n)
 		}
 		path := hashes(r.dec.Path)
@@ -374,7 +393,7 @@ func (m *Model) packetTable(list []*packetRow, w, rows int) []string {
 			summary = m.signatureSummary(r.dec)
 		}
 		if compact {
-			at, typ, snr, n := r.first.Local().Format("15:04")+" ", fmt.Sprintf("%-8s ", truncate(r.dec.Type, 8)), fmt.Sprintf("%+6.2f ", c.snr), fmt.Sprintf("%2s  ", times)
+			at, typ, snr, n := r.first.Local().Format("15:04")+" ", fmt.Sprintf("%-8s ", truncate(r.dec.Type, 8)), fmt.Sprintf("%+6.2f ", c.snr), fmt.Sprintf("%-4s", fmt.Sprintf("%2s", times))
 			if i == in.sel {
 				out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(" "+at+typ+snr+n+summary, w-1)))
 			} else {
@@ -439,12 +458,16 @@ func (m *Model) packetDetail(w, rows int) []string {
 		}
 		left = append(left, "  "+name+value)
 	}
-	if n := len(r.copies); n > 1 {
+	if n := r.heard(); n > 1 {
 		var via []string
 		for _, c := range r.copies {
 			via = append(via, fmt.Sprintf("%s (%+.1f)", orFlood(c.path), c.snr))
 		}
-		left = append(left, "", th.Fg(th.Magenta, true).Render(fmt.Sprintf("heard %d times: ", n))+th.Fg(th.Muted, false).Render(strings.Join(via, " · ")))
+		head := fmt.Sprintf("heard %d times: ", n)
+		if r.extra > 0 {
+			head = fmt.Sprintf("heard %d times, the first %d kept: ", n, len(r.copies))
+		}
+		left = append(left, "", th.Fg(th.Magenta, true).Render(head)+th.Fg(th.Muted, false).Render(strings.Join(via, " · ")))
 	}
 	left = append(left, "", th.Fg(th.Dim, false).Render("enter map · [ ] fields · space pause · F route · + - signal · / filter · y copy · C clear"))
 
@@ -521,7 +544,7 @@ func (m *Model) exportPackets() error {
 	for i := len(list) - 1; i >= 0; i-- {
 		r := list[i]
 		j := packetJSON{Time: r.first, SNR: r.copies[0].snr, RSSI: r.copies[0].rssi, Route: r.dec.Route, Type: r.dec.Type,
-			Path: hashes(r.dec.Path), Hex: r.dec.MaskedHex(), Summary: r.dec.Summary, Channel: r.dec.Channel, Copies: len(r.copies)}
+			Path: hashes(r.dec.Path), Hex: r.dec.MaskedHex(), Summary: r.dec.Summary, Channel: r.dec.Channel, Copies: r.heard()}
 		if r.dec.Decrypted {
 			j.Decrypted = r.dec.Sender + ": " + r.dec.Text
 		}

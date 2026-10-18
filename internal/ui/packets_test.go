@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	meshcore "github.com/OwlShack/meshcore-go"
@@ -32,16 +33,78 @@ func channelPacket(t *testing.T, h *harness, channel, sender, text string, path 
 	t.Helper()
 	for _, ch := range h.m.chat.Channels() {
 		if ch.Name == channel {
-			gt, err := (&meshcore.GroupTextPayload{Timestamp: 1760000000, Sender: sender, Text: text}).Encrypt(meshcore.DeriveChannelHash(ch.Secret), ch.Secret[:])
-			if err != nil {
-				t.Fatal(err)
-			}
-			payload, _ := gt.ToBytes()
-			return rawPacket(t, meshcore.RouteTypeFlood, meshcore.PayloadTypeGrpTxt, path, payload)
+			return secretPacket(t, ch.Secret, sender, text, path)
 		}
 	}
 	t.Fatalf("no channel %s", channel)
 	return nil
+}
+
+func secretPacket(t *testing.T, secret [16]byte, sender, text string, path []byte) []byte {
+	t.Helper()
+	gt, err := (&meshcore.GroupTextPayload{Timestamp: 1760000000, Sender: sender, Text: text}).Encrypt(meshcore.DeriveChannelHash(secret), secret[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := gt.ToBytes()
+	return rawPacket(t, meshcore.RouteTypeFlood, meshcore.PayloadTypeGrpTxt, path, payload)
+}
+
+// A private channel named like an open one is still private: what it carries never reaches Packets, the
+// ticker, the map, Stats or an export.
+func TestPrivateChannelsNamedLikeOpenOnesStayHidden(t *testing.T) {
+	h := newHarness(t)
+	fakePublic := radio.Channel{Idx: 5, Name: "Public", Secret: [16]byte{5, 5}}
+	fakeBristol := radio.Channel{Idx: 6, Name: "#bristol", Secret: [16]byte{6, 6}}
+	h.m.chat.ReplaceChannels(append(h.m.chat.Channels(), fakePublic, fakeBristol))
+	h.keys("4")
+	h.hear(secretPacket(t, fakePublic.Secret, "Mum", "the key's under the mat", []byte{0xA3}), 5)
+	h.hear(secretPacket(t, fakeBristol.Secret, "Carol", "meet at the back door", []byte{0xA3}), 5)
+
+	if scr := h.screen(); !strings.Contains(scr, "PACKETS 0 · 2 OTHERS NOT SHOWN") || strings.Contains(scr, "mat") || strings.Contains(scr, "back door") {
+		t.Fatalf("private messages shown:\n%s", scr)
+	}
+	if len(h.m.ticker.items) != 0 || len(h.m.mapv.routes) != 0 {
+		t.Fatalf("private messages reached the ticker (%d) or the map (%d)", len(h.m.ticker.items), len(h.m.mapv.routes))
+	}
+	h.hear(channelPacket(t, h, "Public", "Bob", "hello all", nil), 5)
+	h.keys(":export packets")
+	h.key(tea.KeyEnter)
+	files, _ := filepath.Glob(filepath.Join(h.m.opt.ExportDir, "packets-*.jsonl"))
+	if len(files) != 1 {
+		t.Fatalf("export files = %v", files)
+	}
+	if data, _ := os.ReadFile(files[0]); strings.Count(string(data), "\n") != 1 || !strings.Contains(string(data), "hello all") {
+		t.Fatalf("export:\n%s", data)
+	}
+	h.keys("7")
+	if scr := h.screen(); !strings.Contains(scr, "(private channels)") || strings.Contains(scr, "#bristol") {
+		t.Errorf("Stats names only open channels:\n%s", scr)
+	}
+}
+
+// A packet replayed by many routes keeps only its first copies, and counts the rest.
+func TestReplaysAreCapped(t *testing.T) {
+	h := newHarness(t)
+	h.keys("4")
+	p, _ := meshcore.PacketFromBytes(channelPacket(t, h, "Public", "Bob", "again", nil))
+	for i := range 100_000 {
+		p.Path, p.PathLength = []byte{byte(i), byte(i >> 8)}, meshcore.MakePathLen(1, 2)
+		raw, _ := p.ToBytes()
+		h.m.heardPacket(radio.Packet{At: h.clk.t, SNR: 1, Raw: raw})
+	}
+	row := h.m.inspector.rows[0]
+	if len(h.m.inspector.rows) != 1 || len(row.copies) != packetCopies || row.heard() != 100_000 {
+		t.Fatalf("rows %d, copies kept %d, heard %d", len(h.m.inspector.rows), len(row.copies), row.heard())
+	}
+	start := time.Now()
+	scr := h.screen()
+	if d := time.Since(start); d > 50*time.Millisecond {
+		t.Errorf("a frame took %v", d)
+	}
+	if !strings.Contains(scr, "heard 100000 times") || !strings.Contains(scr, "heard 100000 times, the first 32 kept") || !strings.Contains(scr, "99+") {
+		t.Errorf("the count of replays is shown:\n%s", scr)
+	}
 }
 
 func TestInspector(t *testing.T) {

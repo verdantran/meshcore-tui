@@ -220,8 +220,9 @@ func newMeshTally() meshTally {
 	return meshTally{adverts: map[time.Time]map[string]bool{}, hops: map[int]int{}, hashes: map[byte]int{}, channels: map[string]int{}}
 }
 
-// add counts one copy of a packet; first is false for repeats, which only add their signal.
-func (t *meshTally) add(d packets.Decoded, snr float32, first bool, now time.Time) {
+// add counts one copy of a packet; first is false for repeats, which only add their signal. Only open
+// channels are counted by name.
+func (t *meshTally) add(d packets.Decoded, snr float32, first, open bool, now time.Time) {
 	t.snr[min(max(int(snr+15)/5, 0), 5)]++
 	if !first {
 		return
@@ -244,8 +245,11 @@ func (t *meshTally) add(d packets.Decoded, snr float32, first bool, now time.Tim
 	}
 	if d.Type == "GRP_TXT" {
 		name := d.Channel
-		if name == "" {
+		switch {
+		case !d.Decrypted:
 			name = "(unknown channel)"
+		case !open:
+			name = "(private channels)"
 		}
 		t.channels[name]++
 	}

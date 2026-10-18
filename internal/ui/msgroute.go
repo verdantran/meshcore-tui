@@ -41,14 +41,11 @@ func (m *Model) messagePacket(dec packets.Decoded, raw []byte, snr float32) {
 	h := heardMessage{from: -1, path: dec.Path, hashSize: dec.HashSize, snr: snr, at: m.now}
 	switch {
 	case dec.Type == "GRP_TXT" && dec.Decrypted:
-		for _, ch := range m.chat.Channels() {
-			if ch.Name == dec.Channel {
-				h.convo = store.ChannelConvo(ch.Idx)
-			}
-		}
-		if h.convo == "" || dec.Sender == m.ready.Self.Name {
+		ch, ok := m.packetChannel(dec)
+		if !ok || dec.Sender == m.ready.Self.Name {
 			return
 		}
+		h.convo = store.ChannelConvo(ch.Idx)
 		h.sender, h.text = dec.Sender, dec.Text
 	case dec.Type == "TXT_MSG":
 		to, from := -1, -1

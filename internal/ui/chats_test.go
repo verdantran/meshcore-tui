@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/packets"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/store"
 	"github.com/verdantran/meshcore-tui/internal/theme"
@@ -352,7 +353,7 @@ func TestChannelRepeatsAreHeard(t *testing.T) {
 		}
 	}
 	h.m.chat = nil
-	h.m.heardEcho("Public", "MeshCore-k4", "x") // no chat service: nothing to count
+	h.m.heardEcho(packets.Decoded{Decrypted: true, Sender: "MeshCore-k4", Text: "x"}) // no chat service: nothing to count
 }
 
 func TestBracketMentionsAreHighlighted(t *testing.T) {
@@ -417,4 +418,38 @@ func TestMentionCompletion(t *testing.T) {
 		}
 	}
 	h.key(tea.KeyEscape)
+}
+
+// :msg refuses a name that could mean more than one conversation, rather than guessing which.
+func TestMsgRefusesAnAmbiguousName(t *testing.T) {
+	h := newHarness(t)
+	h.keys("1")
+	bob := h.contact("Bob")
+	twin := radio.Contact{Key: [32]byte{0xB0, 0xB0}, Name: "Bob", Type: radio.TypeChat}
+	city := radio.Contact{Key: [32]byte{0xB1}, Name: "Bristol", Type: radio.TypeChat}
+	h.m.chat.ReplaceContacts(append(h.m.chat.Contacts(), twin, city))
+	bristol, _ := h.channel("#bristol")
+	sent := func() int { msgs, _ := h.m.chat.Messages(store.ChannelConvo(bristol.Idx), 100); return len(msgs) }
+	before := sent()
+
+	h.keys(":")
+	h.typeLine("msg bristol meet at six")
+	if l := h.lastLog(); !strings.Contains(l, "could be the channel #bristol or Bristol (B1000000)") {
+		t.Errorf("channel and contact: %s", l)
+	}
+	h.keys(":")
+	h.typeLine("msg bob hi")
+	if l := h.lastLog(); !strings.Contains(l, radio.KeyHex(bob.Key[:4])) || !strings.Contains(l, "B0B00000") {
+		t.Errorf("two contacts: %s", l)
+	}
+	if sent() != before || h.m.queued != nil {
+		t.Fatal("nothing is sent while the name is ambiguous")
+	}
+
+	h.keys(":")
+	h.typeLine("msg #bristol meet at six")
+	h.until("sent", func() bool { return sent() == before+1 })
+	h.keys(":")
+	h.typeLine("msg dan hello")
+	h.until("dan", func() bool { cur, _ := h.m.selectedConvo(); return cur.Title == "Dan" })
 }

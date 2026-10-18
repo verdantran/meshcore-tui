@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/verdantran/meshcore-tui/internal/chat"
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/store"
@@ -338,6 +339,26 @@ func (m *Model) unfinished() string {
 	return ""
 }
 
+// convoLabel names a conversation so that two with the same title can be told apart.
+func (m *Model) convoLabel(c store.Convo, title string) string {
+	if c.IsChannel() {
+		return "the channel " + title
+	}
+	if ct, ok := m.chat.Contact(c); ok {
+		return fmt.Sprintf("%s (%s)", title, radio.KeyHex(ct.Key[:4]))
+	}
+	return title
+}
+
+func (m *Model) convoIndex(c store.Convo) int {
+	for i, info := range m.chats.infos {
+		if info.Convo == c {
+			return i
+		}
+	}
+	return -1
+}
+
 // slug is how a conversation is typed in the palette: lower case, spaces as underscores, no leading #.
 func slug(title string) string {
 	return strings.ToLower(strings.ReplaceAll(strings.TrimPrefix(title, "#"), " ", "_"))
@@ -353,24 +374,34 @@ func msgCommand() command {
 				return fmt.Errorf("msg needs a conversation and some text")
 			}
 			want := strings.ToLower(strings.TrimPrefix(a[0], "#"))
-			for i, info := range m.chats.infos {
-				if slug(info.Title) == want {
-					m.chats.sel = i
-					m.chats.input.set(strings.Join(a[1:], " "))
-					m.refreshChats()
-					m.queued = m.composeSend()
-					return nil
+			onlyChannels := strings.HasPrefix(a[0], "#")
+			// Someone you haven't messaged yet is a candidate too: their conversation starts, as on Contacts.
+			var found []store.Convo
+			var names []string
+			for _, info := range m.chats.infos {
+				if slug(info.Title) == want && (!onlyChannels || info.Kind == chat.KindChannel) {
+					found, names = append(found, info.Convo), append(names, m.convoLabel(info.Convo, info.Title))
 				}
 			}
-			// Someone you haven't messaged yet: start their conversation, as Contacts does.
 			for _, ct := range m.chat.Contacts() {
-				if slug(ct.Name) == want && ct.Type == radio.TypeChat {
-					m.openDraft(store.ContactConvo(ct.Key))
-					m.chats.input.set(strings.Join(a[1:], " "))
-					m.refreshChats()
-					m.queued = m.composeSend()
-					return nil
+				c := store.ContactConvo(ct.Key)
+				if slug(ct.Name) == want && ct.Type == radio.TypeChat && !onlyChannels && !slices.Contains(found, c) {
+					found, names = append(found, c), append(names, m.convoLabel(c, ct.Name))
 				}
+			}
+			switch {
+			case len(found) > 1:
+				return fmt.Errorf("%q could be %s; open the one you mean in Chats", a[0], strings.Join(names, " or "))
+			case len(found) == 1:
+				if i := m.convoIndex(found[0]); i >= 0 {
+					m.chats.sel = i
+				} else {
+					m.openDraft(found[0])
+				}
+				m.chats.input.set(strings.Join(a[1:], " "))
+				m.refreshChats()
+				m.queued = m.composeSend()
+				return nil
 			}
 			return fmt.Errorf("no conversation or contact called %q", a[0])
 		},

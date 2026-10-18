@@ -48,6 +48,9 @@ func TestPlanChannel(t *testing.T) {
 		{ChannelLinkPrefix + "name=x", "", "needs a name and a secret"},
 		{ChannelLinkPrefix + "name=x&secret=00", "", "32 hex"},
 		{"Copy", "", ""},
+		{"public", "000102030405060708090a0b0c0d0e0f", "already have a channel called Public"},
+		{"#BRISTOL", "", "already have a channel called #bristol"},
+		{ChannelLink(radio.Channel{Name: "#bath", Secret: [16]byte{9}}), "", "secret isn't #bath's"},
 	} {
 		_, err := s.PlanChannel(c.name, c.secret, 4)
 		if c.msg == "" {

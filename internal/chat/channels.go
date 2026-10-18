@@ -42,7 +42,10 @@ func (s *Service) PlanChannel(name, secret string, slots int) (ChannelPlan, erro
 			return p, err
 		}
 		p = ChannelPlan{radio.Channel{Name: n, Secret: sec}, "private"}
-		if strings.HasPrefix(n, "#") && sec == meshcore.DeriveHashtagPSK(n) {
+		if strings.HasPrefix(n, "#") {
+			if sec != meshcore.DeriveHashtagPSK(n) {
+				return p, fmt.Errorf("that link's secret isn't %s's, so it would look open when it isn't", n)
+			}
 			p.Kind = "hashtag"
 		}
 	case strings.HasPrefix(name, "#"):
@@ -71,12 +74,25 @@ func (s *Service) PlanChannel(name, secret string, slots int) (ChannelPlan, erro
 			return p, fmt.Errorf("you're already in that channel, as %s", c.Name)
 		}
 	}
+	if c, ok := s.ChannelNamed(p.Channel.Name, -1); ok {
+		return p, fmt.Errorf("you already have a channel called %s; give this one another name", c.Name)
+	}
 	idx, ok := s.freeSlot(slots)
 	if !ok {
 		return p, ErrNoSlot
 	}
 	p.Channel.Idx = idx
 	return p, nil
+}
+
+// ChannelNamed finds a channel other than the one in slot except with this name, ignoring case.
+func (s *Service) ChannelNamed(name string, except int) (radio.Channel, bool) {
+	for _, c := range s.channels {
+		if c.Idx != except && strings.EqualFold(c.Name, name) {
+			return c, true
+		}
+	}
+	return radio.Channel{}, false
 }
 
 func (s *Service) freeSlot(slots int) (int, bool) {

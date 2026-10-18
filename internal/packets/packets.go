@@ -49,11 +49,14 @@ type Decoded struct {
 	Fields       []Field
 	Summary      string
 
-	// Channel messages, when we hold the channel's secret.
-	Channel   string
-	Decrypted bool
-	Sender    string
-	Text      string
+	// Channel messages, when we hold the channel's secret. ChannelIdx and ChannelSecret name the channel
+	// that decrypted it, since names can repeat; they're set only when Decrypted.
+	Channel       string
+	ChannelIdx    int
+	ChannelSecret [16]byte
+	Decrypted     bool
+	Sender        string
+	Text          string
 
 	// Channel datagrams, when we hold the channel's secret; a signed message's signature is one.
 	DataType  uint16
@@ -249,6 +252,7 @@ func (d *Decoded) decodePayload(p *meshcore.Packet, at int, book Book) {
 					continue // another channel can share a 1-byte hash
 				}
 				d.decodeData(ch.Name, data.DataType, data.Data)
+				d.ChannelIdx, d.ChannelSecret = ch.Idx, ch.Secret
 				break
 			}
 			msg, err := g.DecryptStruct(ch.Secret[:])
@@ -256,6 +260,7 @@ func (d *Decoded) decodePayload(p *meshcore.Packet, at int, book Book) {
 				continue // another channel can share a 1-byte hash
 			}
 			d.Decrypted, d.Sender, d.Text = true, msg.Sender, msg.Text
+			d.ChannelIdx, d.ChannelSecret = ch.Idx, ch.Secret
 			last := &d.Fields[len(d.Fields)-1] // the ciphertext: show what it says
 			last.Name, last.Value = "ciphertext, decrypted", fmt.Sprintf("%s: %s", msg.Sender, msg.Text)
 			d.Summary = fmt.Sprintf("%s · %s: %s", ch.Name, msg.Sender, msg.Text)

@@ -14,6 +14,7 @@ import (
 	"github.com/verdantran/meshcore-tui/internal/admin"
 	"github.com/verdantran/meshcore-tui/internal/chat"
 	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/packets"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/store"
 	"github.com/verdantran/meshcore-tui/internal/theme"
@@ -925,23 +926,18 @@ func (m *Model) repeatsMeta(msg store.Message) string {
 }
 
 // heardEcho counts a heard copy of a channel message we sent.
-func (m *Model) heardEcho(channel, sender, text string) {
-	if m.chat == nil {
+func (m *Model) heardEcho(dec packets.Decoded) {
+	ch, ok := m.packetChannel(dec)
+	if !ok {
 		return
 	}
-	for _, ch := range m.chat.Channels() {
-		if ch.Name != channel {
-			continue
-		}
-		id, _, ok, err := m.chat.Echo(ch.Idx, sender, text, m.now)
-		if err != nil {
-			m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
-		}
-		if ok {
-			m.chats.echoed[id] = m.now
-			m.refreshChats()
-		}
-		return
+	id, _, ok, err := m.chat.Echo(ch.Idx, dec.Sender, dec.Text, m.now)
+	if err != nil {
+		m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
+	}
+	if ok {
+		m.chats.echoed[id] = m.now
+		m.refreshChats()
 	}
 }
 

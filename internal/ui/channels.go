@@ -162,6 +162,10 @@ func (m *Model) channelKey(s string) (tea.Cmd, bool) {
 				m.fail("RENAME  a channel name is at most 31 bytes")
 				return nil, true
 			}
+			if other, ok := m.chat.ChannelNamed(name, c.shareCh.Idx); ok {
+				m.fail("RENAME  you already have a channel called " + other.Name)
+				return nil, true
+			}
 			c.chanStage = chanNone
 			ch := c.shareCh
 			ch.Name = name
