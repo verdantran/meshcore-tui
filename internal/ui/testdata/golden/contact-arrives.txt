@@ -15,9 +15,9 @@
 ┃ trace       press t to trace direct A3·1E                                                        ┃
 ┃ signing key not pinned · K pins this key to Alice, so messages signed as them can be checked     ┃
 ┃                                                                                                  ┃
-┃ m message · t trace · d discover route · p set route · r reset route · M route on the map · K    ┃
-┃ pin signing key · f favourite · e share · x remove · I import · a heard · A auto-add · F type or ┃
-┃ favourites · s sort · / filter                                                                   ┃
+┃ enter or m message · t trace · d discover route · p set route · r reset route · M route on the   ┃
+┃ map · L place on the map · K pin signing key · f favourite · e share · x remove · I import · a   ┃
+┃ heard · A auto-add · P prune · F type or favourites · o sort · / filter                          ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
@@ -29,7 +29,7 @@
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles a9e237e7b71e6dec
+styles b67b56f6341812ac
 == 120ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -47,9 +47,9 @@ styles a9e237e7b71e6dec
 ┃ trace       press t to trace direct A3·1E                                                        ┃
 ┃ signing key not pinned · K pins this key to Alice, so messages signed as them can be checked     ┃
 ┃                                                                                                  ┃
-┃ m message · t trace · d discover route · p set route · r reset route · M route on the map · K    ┃
-┃ pin signing key · f favourite · e share · x remove · I import · a heard · A auto-add · F type or ┃
-┃ favourites · s sort · / filter                                                                   ┃
+┃ enter or m message · t trace · d discover route · p set route · r reset route · M route on the   ┃
+┃ map · L place on the map · K pin signing key · f favourite · e share · x remove · I import · a   ┃
+┃ heard · A auto-add · P prune · F type or favourites · o sort · / filter                          ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
@@ -61,7 +61,7 @@ styles a9e237e7b71e6dec
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles ea5fd204d98f7ae7
+styles d1f4991c80c28cdf
 == 300ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -79,9 +79,9 @@ styles ea5fd204d98f7ae7
 ┃ trace       press t to trace direct A3·1E                                                        ┃
 ┃ signing key not pinned · K pins this key to Alice, so messages signed as them can be checked     ┃
 ┃                                                                                                  ┃
-┃ m message · t trace · d discover route · p set route · r reset route · M route on the map · K    ┃
-┃ pin signing key · f favourite · e share · x remove · I import · a heard · A auto-add · F type or ┃
-┃ favourites · s sort · / filter                                                                   ┃
+┃ enter or m message · t trace · d discover route · p set route · r reset route · M route on the   ┃
+┃ map · L place on the map · K pin signing key · f favourite · e share · x remove · I import · a   ┃
+┃ heard · A auto-add · P prune · F type or favourites · o sort · / filter                          ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
@@ -93,7 +93,7 @@ styles ea5fd204d98f7ae7
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles f5583c5434beeda1
+styles 94574d106add37b5
 == 600ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -111,9 +111,9 @@ styles f5583c5434beeda1
 ┃ trace       press t to trace direct A3·1E                                                        ┃
 ┃ signing key not pinned · K pins this key to Alice, so messages signed as them can be checked     ┃
 ┃                                                                                                  ┃
-┃ m message · t trace · d discover route · p set route · r reset route · M route on the map · K    ┃
-┃ pin signing key · f favourite · e share · x remove · I import · a heard · A auto-add · F type or ┃
-┃ favourites · s sort · / filter                                                                   ┃
+┃ enter or m message · t trace · d discover route · p set route · r reset route · M route on the   ┃
+┃ map · L place on the map · K pin signing key · f favourite · e share · x remove · I import · a   ┃
+┃ heard · A auto-add · P prune · F type or favourites · o sort · / filter                          ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
@@ -125,4 +125,4 @@ styles f5583c5434beeda1
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 6e8fa5fa83278a72
+styles ce7f95e2501ece26

@@ -270,7 +270,7 @@ func TestMessagePaths(t *testing.T) {
 
 	h.openConvo("Public")
 	scr := h.screen()
-	for _, want := range []string{"2 hops via 5F·77", "1 hop via 1E", "3 hops", "→ pick a message to reply to or see its route"} {
+	for _, want := range []string{"2 hops via 5F·77", "1 hop via 1E", "3 hops", "→ pick a message · r reply"} {
 		if !strings.Contains(scr, want) {
 			t.Errorf("chats lack %q:\n%s", want, scr)
 		}
@@ -320,6 +320,10 @@ func TestMessagePaths(t *testing.T) {
 	h.key(tea.KeyRight)
 	h.key(tea.KeyDown) // can't go past the newest
 	h.keys("g")
+	if h.m.picked() != 0 {
+		t.Error("g goes to the oldest")
+	}
+	h.keys("G")
 	h.key(tea.KeyDown)
 	if c.msgs[h.m.picked()].Text != "unheard" {
 		t.Error("stays on the newest")

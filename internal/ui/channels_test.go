@@ -82,9 +82,9 @@ func TestAddChannels(t *testing.T) {
 		!strings.Contains(scr, chat.ChannelLinkPrefix) {
 		t.Fatalf("share:\n%s", scr)
 	}
-	_, cmd := h.m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
+	_, cmd := h.m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
 	if cmd == nil || !strings.Contains(h.lastLog(), "COPIED  link for Club") {
-		t.Error("c copies")
+		t.Error("y copies")
 	}
 	h.keys("z")
 
@@ -115,7 +115,7 @@ func TestShareAndLeaveChannels(t *testing.T) {
 	h := newHarness(t)
 	pub, _ := h.channel("Public")
 	h.m.jumpToConvo(store.ChannelConvo(pub.Idx))
-	h.keys("s")
+	h.keys("e")
 	if !strings.Contains(h.screen(), "its secret is no secret") {
 		t.Fatalf("public share:\n%s", h.screen())
 	}
@@ -125,7 +125,7 @@ func TestShareAndLeaveChannels(t *testing.T) {
 	}
 	bristol, _ := h.channel("#bristol")
 	h.m.jumpToConvo(store.ChannelConvo(bristol.Idx))
-	h.keys("s")
+	h.keys("e")
 	if !strings.Contains(h.screen(), "sharing the name #bristol is enough") {
 		t.Errorf("hashtag share:\n%s", h.screen())
 	}
@@ -153,7 +153,7 @@ func TestShareAndLeaveChannels(t *testing.T) {
 	}
 	// A contact conversation has no channel to share or leave.
 	h.m.jumpToConvo(store.ContactConvo(h.contact("Alice").Key))
-	h.keys("s")
+	h.keys("e")
 	if h.m.chats.chanStage != chanNone {
 		t.Error("not a channel")
 	}
@@ -190,7 +190,7 @@ func TestChannelCommand(t *testing.T) {
 	for _, bad := range []string{"channel", "channel frob x", "channel remove nowhere", "channel add #a b c"} {
 		run(bad)
 	}
-	if !strings.Contains(plainLog(h), "no channel called") || !strings.Contains(plainLog(h), "try add, new, remove or share") {
+	if !strings.Contains(plainLog(h), "no channel called") || !strings.Contains(plainLog(h), "try add, new, rename, remove or share") {
 		t.Errorf("errors:\n%s", plainLog(h))
 	}
 	if got := channelCommand().complete(h.m); len(got) < 5 {
@@ -231,7 +231,8 @@ func TestRenameChannel(t *testing.T) {
 	h := newHarness(t)
 	bristol, _ := h.channel("#bristol")
 	h.m.jumpToConvo(store.ChannelConvo(bristol.Idx))
-	h.keys("r")
+	rename := func(name string) { h.keys(":"); h.typeLine("channel rename " + name) }
+	rename("#bristol")
 	if !strings.Contains(plainLog(h), "can't be renamed") || h.m.chats.chanStage != chanNone {
 		t.Fatal("hashtag channels keep their name")
 	}
@@ -241,8 +242,8 @@ func TestRenameChannel(t *testing.T) {
 	h.until("family", func() bool { _, ok := h.channel("Family"); return ok })
 	h.keys("z")
 	before, _ := h.channel("Family")
-	h.keys("r")
-	if !strings.Contains(h.screen(), "RENAME FAMILY") || h.m.chats.chanInput != "Family" {
+	rename("Family")
+	if !strings.Contains(h.screen(), "RENAME FAMILY") || h.m.chats.chanInput.text != "Family" {
 		t.Fatalf("rename:\n%s", h.screen())
 	}
 	h.clear()
@@ -262,7 +263,7 @@ func TestRenameChannel(t *testing.T) {
 	if after.Secret != before.Secret || after.Idx != before.Idx || !strings.Contains(h.lastLog(), "RENAMED  Family → The Family") {
 		t.Errorf("renamed = %+v", after)
 	}
-	h.keys("r")
+	rename("The Family")
 	h.key(tea.KeyEscape)
 	if h.m.chats.chanStage != chanNone {
 		t.Error("esc")

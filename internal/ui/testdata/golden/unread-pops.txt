@@ -23,13 +23,13 @@
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │ No messages yet. Press enter to write the first one.                  ┃
-┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply · 0/147 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ █
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 91b9e092e69de532
+styles ba626b1f821c4f60
 == 225ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -55,13 +55,13 @@ styles 91b9e092e69de532
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │ No messages yet. Press enter to write the first one.                  ┃
-┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply · 0/147 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ MSG  Alice · Alice: are you abo█
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 75e7e13cdbecc845
+styles 365fa2a9fd007f0f
 == 375ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -87,13 +87,13 @@ styles 75e7e13cdbecc845
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │ No messages yet. Press enter to write the first one.                  ┃
-┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply · 0/147 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ MSG  Alice · Alice: are you about?
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 9159f090e3a34c5a
+styles 88f438cd83f5bccc
 == 450ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -119,10 +119,10 @@ styles 9159f090e3a34c5a
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │ No messages yet. Press enter to write the first one.                  ┃
-┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply · 0/147 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ MSG  Alice · Alice: are you about?
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles cdbb82caead8d930
+styles 6ffe32c1ca0a5d4e

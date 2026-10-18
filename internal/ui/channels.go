@@ -107,35 +107,19 @@ func (m *Model) selectedChannel() (radio.Channel, bool) {
 // channelKey handles the channel keys and prompts on the Chats screen.
 func (m *Model) channelKey(s string) (tea.Cmd, bool) {
 	c := &m.chats
-	typing := func() {
-		switch s {
-		case "backspace":
-			c.chanInput = dropLast(c.chanInput)
-		case "space":
-			c.chanInput += " "
-		default:
-			if len([]rune(s)) == 1 {
-				c.chanInput += s
-			}
-		}
-	}
+	typing := func() { c.chanInput.key(s) }
 	switch c.chanStage {
 	case chanNone:
 		switch s {
 		case "n":
-			c.chanStage, c.chanInput, c.chanName = chanName, "", ""
+			c.chanStage, c.chanInput, c.chanName = chanName, lineEdit{}, ""
 			return nil, true
-		case "s", "x", "r":
+		case "e", "x":
 			ch, ok := m.selectedChannel()
 			if !ok {
 				return nil, false
 			}
-			if s == "r" && strings.HasPrefix(ch.Name, "#") {
-				m.fail("RENAME  a hashtag channel's name is its secret, so " + ch.Name + " can't be renamed")
-				return nil, true
-			}
-			c.shareCh, c.chanInput = ch, ch.Name
-			c.chanStage = map[string]chanStage{"s": chanShare, "x": chanRemove, "r": chanRename}[s]
+			c.shareCh, c.chanStage = ch, map[string]chanStage{"e": chanShare, "x": chanRemove}[s]
 			return nil, true
 		}
 		return nil, false
@@ -144,9 +128,9 @@ func (m *Model) channelKey(s string) (tea.Cmd, bool) {
 		case "esc":
 			c.chanStage = chanNone
 		case "enter":
-			in := strings.TrimSpace(c.chanInput)
+			in := strings.TrimSpace(c.chanInput.text)
 			if c.chanStage == chanName && !strings.HasPrefix(in, "#") && !strings.HasPrefix(in, chat.ChannelLinkPrefix) && in != "" {
-				c.chanName, c.chanInput, c.chanStage = in, "", chanSecret
+				c.chanName, c.chanInput, c.chanStage = in, lineEdit{}, chanSecret
 				return nil, true
 			}
 			name, secret := in, ""
@@ -169,7 +153,7 @@ func (m *Model) channelKey(s string) (tea.Cmd, bool) {
 		case "esc":
 			c.chanStage = chanNone
 		case "enter":
-			name := strings.TrimSpace(c.chanInput)
+			name := strings.TrimSpace(c.chanInput.text)
 			switch {
 			case name == "" || strings.HasPrefix(name, "#"):
 				m.fail("RENAME  a private channel's name can't be empty or start with #")
@@ -187,7 +171,7 @@ func (m *Model) channelKey(s string) (tea.Cmd, bool) {
 		}
 		return nil, true
 	case chanShare:
-		if s == "c" {
+		if s == "y" {
 			m.addLog(m.now, "COPIED  link for "+c.shareCh.Name, radio.ToneOK)
 			return tea.SetClipboard(chat.ChannelLink(c.shareCh)), true
 		}
@@ -204,11 +188,7 @@ func (m *Model) channelKey(s string) (tea.Cmd, bool) {
 func (m *Model) channelLines(w, rows int) []string {
 	th, c := m.th, &m.chats
 	field := func(label string) string {
-		in := c.chanInput
-		if r := []rune(in); len(r) > w-len(label)-6 {
-			in = "…" + string(r[len(r)-(w-len(label)-7):])
-		}
-		return th.Fg(th.Magenta, true).Render(label+" ▸ ") + th.Fg(th.Text, false).Render(in) + th.Fg(th.Text, true).Render("█")
+		return th.Fg(th.Magenta, true).Render(label+" ▸ ") + c.chanInput.render(th, w-len(label)-3, false)
 	}
 	wrap := func(text string) []string {
 		var out []string
@@ -223,19 +203,19 @@ func (m *Model) channelLines(w, rows int) []string {
 		out = append(out, wrap("#name joins a public hashtag channel: everyone who types the same name meets there, so it's open to anyone who guesses it.")...)
 		out = append(out, "")
 		out = append(out, wrap("A plain name joins or makes a private channel; you'll be asked for its secret next. A pasted "+chat.ChannelLinkPrefix+"… link joins straight away.")...)
-		return append(out, "", th.Fg(th.Dim, false).Render("enter continues · esc cancels"))
+		return append(out, "", th.Fg(th.Dim, false).Render("enter continue · esc cancel"))
 	case chanSecret:
 		out := []string{th.Fg(th.Muted, true).Render("SECRET FOR " + strings.ToUpper(c.chanName)), "", field("secret"), ""}
 		out = append(out, wrap("Paste the secret someone shared with you, as 32 hex characters or base64. Leave it empty to make a new private channel with a random secret, which you can then share.")...)
-		return append(out, "", th.Fg(th.Dim, false).Render("enter adds it · esc cancels"))
+		return append(out, "", th.Fg(th.Dim, false).Render("enter add it · esc cancel"))
 	case chanRename:
 		out := []string{th.Fg(th.Muted, true).Render("RENAME " + strings.ToUpper(c.shareCh.Name)), "", field("name"), ""}
 		out = append(out, wrap("The name is only for you: the secret is what decides who's in the channel, so others can call it something else.")...)
-		return append(out, "", th.Fg(th.Dim, false).Render("enter renames it · esc cancels"))
+		return append(out, "", th.Fg(th.Dim, false).Render("enter rename it · esc cancel"))
 	case chanRemove:
 		return []string{th.Fg(th.Red, true).Render("LEAVE " + strings.ToUpper(c.shareCh.Name)), "",
 			th.Fg(th.Text, false).Render("Remove it from the radio? Its message history here is deleted too."), "",
-			th.Fg(th.Dim, false).Render("You can join again later with its name or secret. y removes it · any other key cancels")}
+			th.Fg(th.Dim, false).Render("You can join again later with its name or secret. y leave · any other key cancel")}
 	}
 	return m.channelShareLines(w, rows)
 }
@@ -243,7 +223,7 @@ func (m *Model) channelLines(w, rows int) []string {
 func (m *Model) channelShareLines(w, rows int) []string {
 	th, ch := m.th, m.chats.shareCh
 	link := chat.ChannelLink(ch)
-	out := []string{th.Fg(th.Muted, true).Render("SHARE "+strings.ToUpper(ch.Name)) + th.Fg(th.Dim, false).Render("  ·  c copies the link · any key closes"), ""}
+	out := []string{th.Fg(th.Muted, true).Render("SHARE "+strings.ToUpper(ch.Name)) + th.Fg(th.Dim, false).Render("  ·  y copy the link · any other key close"), ""}
 	note := "Anyone with this secret can read and post in the channel."
 	switch {
 	case chat.IsPublic(ch):
@@ -268,10 +248,10 @@ func (m *Model) channelShareLines(w, rows int) []string {
 }
 
 func channelCommand() command {
-	return command{name: "channel", args: "add|new|remove|share <name> [secret]", help: "join, make, leave or share a channel",
+	return command{name: "channel", args: "add|new|rename|remove|share <name> [secret]", help: "join, make, rename, leave or share a channel",
 		run: func(m *Model, a []string) error {
 			if m.chat == nil || len(a) < 2 {
-				return fmt.Errorf("channel needs add, new, remove or share, and a name")
+				return fmt.Errorf("channel needs add, new, rename, remove or share, and a name")
 			}
 			name := strings.Join(a[1:], " ")
 			switch a[0] {
@@ -290,21 +270,24 @@ func channelCommand() command {
 				m.setTab(0)
 				m.queued = cmd
 				return nil
-			case "remove", "share":
+			case "rename", "remove", "share":
 				for _, ch := range m.chat.Channels() {
 					if strings.EqualFold(ch.Name, name) {
+						if a[0] == "rename" && strings.HasPrefix(ch.Name, "#") {
+							return fmt.Errorf("a hashtag channel's name is its secret, so %s can't be renamed", ch.Name)
+						}
 						m.jumpToConvo(store.ChannelConvo(ch.Idx))
-						m.chats.shareCh = ch
-						m.chats.chanStage = map[string]chanStage{"remove": chanRemove, "share": chanShare}[a[0]]
+						m.chats.shareCh, m.chats.chanInput = ch, newLine(ch.Name)
+						m.chats.chanStage = map[string]chanStage{"rename": chanRename, "remove": chanRemove, "share": chanShare}[a[0]]
 						return nil
 					}
 				}
 				return fmt.Errorf("no channel called %q", name)
 			}
-			return fmt.Errorf("channel %s? try add, new, remove or share", a[0])
+			return fmt.Errorf("channel %s? try add, new, rename, remove or share", a[0])
 		},
 		complete: func(m *Model) []string {
-			out := []string{"add", "new", "remove", "share"}
+			out := []string{"add", "new", "rename", "remove", "share"}
 			if m.chat != nil {
 				for _, ch := range m.chat.Channels() {
 					out = append(out, ch.Name)

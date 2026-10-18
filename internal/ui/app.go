@@ -4,6 +4,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -117,11 +118,38 @@ type Model struct {
 
 	pal           palette
 	help          bool
+	helpScroll    int
+	asking        *question
 	quitting      bool
 	tickerOn      bool
 	beaconOn      bool
 	mouseOn       bool
 	extraCommands []command
+}
+
+// question is something that waits for y before it's done: anything that deletes data or changes another node.
+type question struct {
+	what, verb string
+	run        func() tea.Cmd
+}
+
+// hint is a key and what it does, imperative: "u refresh".
+type hint struct{ k, v string }
+
+// hintLine joins hints as a screen's bottom line: key verb · key verb.
+func hintLine(hs []hint) string {
+	parts := make([]string, len(hs))
+	for i, h := range hs {
+		parts[i] = strings.TrimSpace(h.k + " " + h.v)
+	}
+	return strings.Join(parts, " · ")
+}
+
+func (m *Model) ask(what, verb string, run func() tea.Cmd) { m.asking = &question{what, verb, run} }
+
+func (m *Model) askLine() string {
+	th := m.th
+	return th.Fg(th.Red, true).Render(strings.ToUpper(m.asking.what)) + th.Fg(th.Muted, false).Render(" · y "+m.asking.verb+" · any other key cancel")
 }
 
 type linkState int
@@ -287,6 +315,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.paste(msg.Content))
 	case tea.MouseClickMsg:
 		cmds = append(cmds, m.click(tea.Mouse(msg)))
+	case tea.MouseWheelMsg:
+		cmds = append(cmds, m.wheel(tea.Mouse(msg)))
 	case tea.KeyPressMsg:
 		if utf8.RuneCountInString(msg.Text) > 1 && m.typing() {
 			cmds = append(cmds, m.typeText(msg.Text)) // an emoji made of several characters
@@ -483,7 +513,7 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 	if s == "ctrl+c" {
 		return nil, true
 	}
-	if !m.typing() && !m.paneKey { // the key after ctrl+w is the chord's own
+	if !m.typing() {
 		if to, ok := m.rebound(s); ok {
 			if to == "" {
 				return nil, false
@@ -497,10 +527,15 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 		m.queued = nil
 		return cmd, m.quitting
 	}
-	if m.help {
-		if s == "esc" || s == "?" || s == "q" || s == "enter" {
-			m.help = false
+	if q := m.asking; q != nil {
+		m.asking = nil
+		if s != "y" {
+			return nil, false
 		}
+		return q.run(), m.quitting
+	}
+	if m.help {
+		m.helpKey(s)
 		return nil, false
 	}
 	if m.search.open {
@@ -511,7 +546,7 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 		m.paneKey = false
 		return m.paneKeyPressed(s), false
 	}
-	if s == "ctrl+w" && m.phase == phaseMain {
+	if s == "ctrl+w" && m.phase == phaseMain && !m.typing() {
 		if m.repeaterMode() {
 			m.addLog(m.now, "PANES  split panes are for companion mode; a repeater's screens show one at a time", radio.ToneInfo)
 			return nil, false
@@ -519,7 +554,7 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 		m.paneKey = true
 		return nil, false
 	}
-	if s == "ctrl+f" && m.phase == phaseMain {
+	if s == "ctrl+f" && m.phase == phaseMain && !m.typing() {
 		m.openSearch()
 		return nil, false
 	}
@@ -567,7 +602,15 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 		if s == "b" && !m.connect.editing && m.connect.mode == "" && m.opt.Scan != nil {
 			return m.startScan(), false
 		}
-		t, chosen, quit := m.connect.key(s, m.now, m.forget)
+		if t := m.connect.items[m.connect.sel]; s == "x" && !m.connect.editing && t.Saved != "" {
+			m.ask("forget "+t.Saved+"?", "forget", func() tea.Cmd {
+				m.forget(t)
+				m.connect.rescan()
+				return nil
+			})
+			return nil, false
+		}
+		t, chosen, quit := m.connect.key(s, m.now)
 		if quit {
 			return nil, true
 		}
@@ -603,12 +646,16 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 	}
 	switch s {
 	case "q":
+		if why := m.unfinished(); why != "" {
+			m.ask("quit? "+why, "quit", func() tea.Cmd { m.quitting = true; return nil })
+			return nil, false
+		}
 		return nil, true
 	case ":":
 		m.openPalette()
 	case "?":
-		m.help = true
-	case "f12", "ctrl+d":
+		m.help, m.helpScroll = true, 0
+	case "f12":
 		m.debug = !m.debug
 	case "v":
 		m.setMotion((m.level + 1) % 3)
@@ -771,41 +818,46 @@ func (m *Model) forget(t Target) {
 	}
 }
 
-// screenKeys are the help lines for the current screen; screens add their own as they're built.
+// screenKeys are the help lines for the current screen.
 func (m *Model) screenKeys() []string {
 	th := m.th
-	key := func(k, what string) string {
-		return th.Fg(th.Cyan, true).Render(fmt.Sprintf("%-12s", k)) + th.Fg(th.Muted, false).Render(what)
-	}
+	key := func(k, what string) string { return helpRow(th, k, what) }
 	if m.tab == 5 {
-		return []string{key("↑↓ j k", "choose a setting"), key("enter", "edit it, switch it, or run it"),
+		return []string{key("↑↓ j k", "choose a setting; g G the first or last"), key("enter space", "edit it, switch it, or run it"),
 			key("u", "read the settings again"), key("esc", "cancel an edit"),
-			key("", "radio changes, a new identity, a reboot or a factory reset ask first"), ""}
+			key("", "radio changes and a new identity ask for y; a reboot or factory reset needs a word typed"), ""}
 	}
 	if m.tab == 6 {
 		return []string{key("", fmt.Sprintf("the radio's counters are read every %s while this screen is open", statsEvery)),
 			key("", "the mesh overview counts the packets heard since connecting"), ""}
 	}
-	if m.tab == 4 && m.repeaterMode() {
-		return []string{key("1-9 ← →", "switch screens: status, health, settings, neighbours, access, regions, telemetry, log, console"),
-			key("tab", "the next screen; in the console it completes a command"),
-			key("u", "refresh what's shown"), key("a", "refresh the status every so often while it's open"),
-			key("B", "battery type: Li-ion, LiPo, LiFePO4, or none when wired, for reading its charge"),
-			key("health", fmt.Sprintf("the node is polled every %s while connected and each poll is kept", every(m.watchEvery()))),
-			key("r", "on Health, 24 hours or 7 days · on Log, read the log and sum it up"),
-			key("enter", "on Health, a cursor on the charts: ← → step through time to read each value then"),
-			key("console", "type commands as on the serial console; esc on an empty line leaves it"), ""}
-	}
 	if m.tab == 4 {
+		if _, sess, ok := m.openNode(); ok {
+			lines := []string{th.Fg(th.Muted, true).Render(strings.ToUpper(paneNames[m.adm.pane]))}
+			for _, h := range m.paneHints(sess) {
+				lines = append(lines, key(h.k, h.v))
+			}
+			if m.adm.pane == paneHealth {
+				lines = append(lines, key("", "with the cursor: ←→ step through time, g G the oldest or newest, esc stops"))
+			}
+			if m.adm.pane == paneConsole {
+				lines = append(lines, key("", "type commands as on the node's serial console; erasing asks for y, and a reboot, new password or radio change needs the node's name"))
+			}
+			lines = append(lines, "", th.Fg(th.Muted, true).Render("ANY PANE"))
+			if m.adm.local {
+				lines = append(lines, key("1-9 ←→", "switch screens: status, health, settings, neighbours, access, regions, telemetry, log, console"))
+			} else {
+				lines = append(lines, key("←→", "switch between status, health, settings, neighbours, access, regions, telemetry, log and console"),
+					key("L", "log in or out"), key("w", fmt.Sprintf("watch the node: polled every %s and kept, for Health", every(m.watchEvery()))), key("esc", "back to the node list"))
+			}
+			return append(lines, key("B", "battery type: Li-ion, LiPo, LiFePO4, or none when wired, for reading its charge"), "")
+		}
 		return []string{key("↑↓ j k", "choose a repeater or room server"), key("enter", "open it, logging in first; an empty password is a guest login"),
-			key("← →", "switch between status, settings, neighbours, access, regions, telemetry, log and console"),
-			key("u", "refresh what's shown"), key("L", "log out"), key("esc", "back to the node list"),
-			key("f F", "mark a favourite · show favourites only, which P then polls"), key("X", "forget a saved password"),
+			key("L", "log in or out"), key("u U", "poll the node now · poll every node shown, one at a time"),
+			key("f F", "mark a favourite · show favourites only"), key("x", "forget a saved password"),
 			key("w", fmt.Sprintf("watch a node: its status is polled every %s and kept, for the Health screen", every(m.watchEvery()))),
 			key("H", "open a node's kept history without logging in"),
-			key("enter", "on Health, a cursor on the charts: ← → step through time to read each value then"),
-			key("B", "battery type: Li-ion, LiPo, LiFePO4, or none when wired, for reading its charge"),
-			key("console", "type commands as on the node's serial console; tab completes, ↑↓ recall"), ""}
+			key("B", "battery type: Li-ion, LiPo, LiFePO4, or none when wired, for reading its charge"), ""}
 	}
 	if m.tab == 2 {
 		return []string{key("←↑↓→ h j k l", "move the map"), key("+ -", "zoom in and out"), key("m", "back to your whole mesh"),
@@ -814,42 +866,47 @@ func (m *Model) screenKeys() []string {
 			key("d", "download street detail (roads, rivers, towns) for your mesh's area from OpenFreeMap, or more of it; esc stops"),
 			key("L r", "town and node names · main roads"),
 			key("t", "the traffic layer: links get more saturated the more packets crossed them lately; t again counts the last hour, then hides it"),
-			key("f F", "pick out the busiest nodes' traffic one at a time, fading the rest; esc shows it all again"),
+			key("f F", "pick out the busiest nodes' traffic one at a time, forwards or back, fading the rest; esc shows it all again"),
+			key("esc", "stop a download, then drop the picked route, then the picked node"),
 			key("", fmt.Sprintf("only the busiest %d links are drawn; dashed ones are guesses between repeaters that share a hash", trafficLinks)),
-			key("", fmt.Sprintf("the newest %d routes are drawn, fading out over %s; [ ] picks any of the last %d", mapview.RoutesShown, "ten minutes", mapRoutes)), key("M", "from any screen, open the map; on Packets, on that packet's route"),
+			key("", fmt.Sprintf("the newest %d routes are drawn, fading out over %s; [ ] picks any of the last %d", mapview.RoutesShown, "ten minutes", mapRoutes)),
 			key(":map update", "download the street detail again · :map remove deletes it"),
 			key("", "only adverts and messages on open channels travel the map, as on the Packets screen"),
 			key("", "a hop's colour is its signal where known: measured for the last hop, from traces and neighbour lists for the rest"), ""}
 	}
 	if m.tab == 3 {
-		return []string{key("↑↓ j k", "choose a packet; g jumps back to the newest"), key("[ ]", "step through decoded fields, highlighting their bytes"),
-			key("space", "pause, so the list holds still"), key("R n", "filter by route · minimum signal"), key("/", "filter by text"),
-			key("C", "clear"), key(":export packets", "save the visible packets as JSON lines"),
-			key("M", "show the packet's path on the map, with each copy heard"), key("y", "copy the packet's bytes"), ""}
+		return []string{key("↑↓ j k", "choose a packet; g G the newest or oldest"), key("enter M", "show the packet's path on the map, with each copy heard"),
+			key("[ ]", "step through decoded fields, highlighting their bytes"),
+			key("space", "pause, so the list holds still"), key("F", "filter by route: all, flood, direct"), key("+ -", "raise or lower the minimum signal"),
+			key("/", "filter by text"), key("y", "copy the packet's bytes"), key("C", "clear the list"),
+			key(":export packets", "save the visible packets as JSON lines"), ""}
 	}
 	if m.tab == 1 {
-		return []string{key("↑↓ j k", "choose a contact"), key("m", "message them"), key("t", "trace the route, showing signal at each hop"),
+		return []string{key("↑↓ j k", "choose a contact"), key("enter m", "message them; enter on a repeater opens it in Admin"),
+			key("t", "trace the route, showing signal at each hop"),
 			key("d", "discover a fresh route"), key("p", "set the route by hand"), key("r", "reset the route, so messages flood"),
-			key("f", "favourite"), key("e", "share as a QR code and meshcore:// link"), key("x", "remove from the radio"),
+			key("f", "favourite"), key("K", "pin their signing key to their name, or unpin it"), key("e", "share as a QR code and meshcore:// link; y copies it"),
+			key("x", "remove from the radio"),
 			key("L", "place it on the map by hand, for a node that doesn't share a location; empty clears it"),
 			key("M", "show the way to them on the map: the newest trace, else the stored route, else their advert's path"),
 			key("I", "import a meshcore:// link"), key("a", "nodes heard but not added"), key("A", "auto-add settings"),
-			key("P", "suggest contacts to prune"), key("F s /", "filter by type or favourites · sort · filter by name"), ""}
+			key("P", "suggest contacts to prune"), key("F", "filter by type or favourites"), key("o", "sort"), key("/", "filter by name"), ""}
 	}
 	if m.tab == 0 {
-		return []string{key("↑↓ j k", "choose a conversation"), key("enter i", "write a message; enter sends"), key("tab", "while writing, complete an @name; again for the next match"),
-			key("← → home end", "while typing, move the cursor; alt+← → by word · alt+backspace deletes a word · ctrl+u ctrl+k to the start or end"),
+		return []string{key("↑↓ j k", "choose a conversation; g G the first or last"), key("enter i", "write a message; enter sends"), key("tab", "while writing, complete an @name; again for the next match"),
 			key("esc", "stop writing, or clear the filter"), key("/", "filter this conversation"),
-			key("ctrl+f", "search every conversation"), key("K J", "scroll history"),
-			key("→", "pick a message: ↑↓ move, r replies to it (naming them in a channel), M shows its route, y copies it, ← goes back"),
+			key("pgup pgdn", "scroll history; ctrl+u ctrl+d too"),
+			key("→", "pick a message: ↑↓ move, g G the oldest or newest, ← or esc goes back"),
+			key("r", "reply to the picked message, or the newest one received; in a channel it names them"),
+			key("y", "copy the picked message"),
 			key("paste", "pastes into whatever you're typing in; in Chats it starts a message"),
 			key("S", "sign your messages on the open channel, or stop; ctrl+s while writing flips it for one message"),
-			key("p P", "on a picked signed message, pin its key to the sender's name · replace a pin"),
-			key("M", "show on the map the route of the newest message received in view"),
+			key("K", "on a picked signed message, pin its key to the sender's name, or unpin it; replacing a pin asks first"),
+			key("M", "show on the map the route of the picked message, or the newest received"),
 			key("R", "send your newest failed message again; on a picked one, R or enter sends that one"),
-			key("L", "log in to the room server whose conversation is open"),
+			key("L", "log in to or out of the room server whose conversation is open"),
 			key("n", "add a channel: #name, a private one with its secret, or a shared link"),
-			key("s r x", "share, rename or leave the channel that's open"), ""}
+			key("e x", "share or leave the channel that's open; :channel rename renames it"), ""}
 	}
 	return nil
 }

@@ -280,8 +280,16 @@ func TestPalette(t *testing.T) {
 	key(m, tea.KeyEscape)
 
 	typeKeys(m, "?")
-	if got := plain(screen(t, m)); !strings.Contains(got, "HELP") || !strings.Contains(got, "command palette") {
+	if got := plain(screen(t, m)); !strings.Contains(got, "HELP") || !strings.Contains(got, "j k scroll") {
 		t.Errorf("help overlay:\n%s", got)
+	}
+	typeKeys(m, "G")
+	if got := plain(screen(t, m)); !strings.Contains(got, "HELP · 100%") || !strings.Contains(got, "send a test notification") {
+		t.Errorf("help scrolls to the commands at the end:\n%s", got)
+	}
+	typeKeys(m, "g")
+	if m.helpScroll != 0 {
+		t.Error("g goes back to the top")
 	}
 	key(m, tea.KeyEscape)
 	if m.help {
@@ -321,9 +329,16 @@ func TestSavedDevices(t *testing.T) {
 	if strings.Count(got, "/dev/cu.test") != 1 || !strings.Contains(got, "★USB") || !strings.Contains(got, "MeshCore-k4") {
 		t.Errorf("connect screen:\n%s", got)
 	}
-	typeKeys(m2, "d")
+	typeKeys(m2, "x")
+	if len(back.Devices) != 1 || !strings.Contains(plain(screen(t, m2)), "FORGET MESHCORE-K4?") {
+		t.Fatalf("x asks before forgetting:\n%s", plain(screen(t, m2)))
+	}
+	typeKeys(m2, "y")
 	if len(back.Devices) != 0 {
-		t.Error("d should forget the saved device")
+		t.Error("y forgets the saved device")
+	}
+	if _, quit := m2.key(tea.KeyPressMsg{Code: tea.KeyEscape}); quit {
+		t.Error("esc doesn't quit the connect screen")
 	}
 }
 

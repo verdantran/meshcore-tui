@@ -112,7 +112,11 @@ func TestWatchOverTheAir(t *testing.T) {
 
 	// Clearing the history asks first.
 	h.keys("C")
-	h.typeLine("Dundry")
+	h.keys("n")
+	if len(h.m.historyOf(dundry.Key)) == 0 {
+		t.Fatal("any other key keeps it")
+	}
+	h.keys("Cy")
 	if len(h.m.historyOf(dundry.Key)) != 0 || !strings.Contains(h.lastLog(), "HISTORY CLEARED") {
 		t.Errorf("cleared: %s", h.lastLog())
 	}

@@ -56,7 +56,6 @@ type confirmAction struct {
 	title, warning string
 	commands       []string
 	apply          bool // send the staged settings first
-	clear          bool // delete the node's kept status history instead
 }
 
 type adminModel struct {
@@ -466,6 +465,10 @@ func (m *Model) adminKey(s string) (tea.Cmd, bool) {
 		if a.local {
 			return nil, true
 		}
+		if sess.State != admin.LoggedIn {
+			a.prompt, a.input = promptPassword, lineEdit{}
+			return nil, true
+		}
 		return m.logout(ct), true
 	case "w":
 		if !a.local {
@@ -534,17 +537,37 @@ func (m *Model) nodeListKey(s string) (tea.Cmd, bool) {
 		}
 		return m.setPane(a.pane), true
 	case "L":
-		if ct, ok := m.selectedNode(); ok {
+		ct, ok := m.selectedNode()
+		if !ok {
+			return nil, false
+		}
+		if sess, ok := m.admin.Find(ct.Key); ok && sess.State == admin.LoggedIn {
 			return m.logout(ct), true
 		}
-	case "X":
+		return m.nodeListKey("enter")
+	case "x":
 		if ct, ok := m.selectedNode(); ok {
-			if _, saved := m.opt.Keychain.Get(ct.Key); saved {
+			if _, saved := m.opt.Keychain.Get(ct.Key); !saved {
+				m.fail("PASSWORD  none saved for " + ct.Name)
+				return nil, true
+			}
+			m.ask("forget the saved password for "+ct.Name+"?", "forget", func() tea.Cmd {
 				m.opt.Keychain.Forget(ct.Key)
 				m.addLog(m.now, "PASSWORD FORGOTTEN  for "+ct.Name, radio.ToneInfo)
-			}
+				return nil
+			})
 		}
-	case "P":
+	case "u":
+		ct, ok := m.selectedNode()
+		if !ok {
+			return nil, false
+		}
+		if sess, ok := m.admin.Find(ct.Key); !ok || sess.State != admin.LoggedIn {
+			m.fail("POLL  log in to " + ct.Name + " first, with enter")
+			return nil, true
+		}
+		return m.startJob(m.admin.RequestStatus(ct, m.now)), true
+	case "U":
 		return m.pollFleet(), true
 	case "w":
 		if ct, ok := m.selectedNode(); ok {
@@ -698,12 +721,19 @@ func (m *Model) settingsKey(s string, ct radio.Contact, sess *admin.Session) (te
 		a.setSel = max(a.setSel-1, 0)
 	case "down", "j":
 		a.setSel = min(a.setSel+1, len(rows)-1)
-	case "g":
-		return m.sendCommand(m.admin.ReadSettings(ct.Key, st.Group, m.now)), true
-	case "G":
-		return m.sendCommand(m.admin.ReadSettings(ct.Key, "", m.now)), true
+	case "g", "home":
+		a.setSel = 0
+	case "G", "end":
+		a.setSel = len(rows) - 1
 	case "u":
-		delete(sess.Pending, st.Key)
+		return m.sendCommand(m.admin.ReadSettings(ct.Key, st.Group, m.now)), true
+	case "U":
+		return m.sendCommand(m.admin.ReadSettings(ct.Key, "", m.now)), true
+	case "x":
+		if _, ok := sess.Pending[st.Key]; ok {
+			delete(sess.Pending, st.Key)
+			m.addLog(m.now, "DISCARDED  your edit to "+st.Label, radio.ToneInfo)
+		}
 	case "s":
 		if len(m.admin.Changes(ct.Key)) == 0 {
 			m.fail("NOTHING TO APPLY  edit a setting with enter first")
@@ -778,8 +808,10 @@ func (m *Model) neighboursKey(s string, ct radio.Contact, sess *admin.Session) (
 	case "x":
 		if a.nbSel < len(sess.Neighbours) {
 			n := sess.Neighbours[a.nbSel]
-			return tea.Batch(m.cli(ct.Key, "neighbor.remove "+radio.KeyHex(n.Prefix), ""),
-				m.startJob(m.admin.RequestNeighbours(ct, m.now))), true
+			m.ask("remove neighbour "+radio.KeyHex(n.Prefix)+" from "+ct.Name+"?", "remove", func() tea.Cmd {
+				return tea.Batch(m.cli(ct.Key, "neighbor.remove "+radio.KeyHex(n.Prefix), ""), m.startJob(m.admin.RequestNeighbours(ct, m.now)))
+			})
+			return nil, true
 		}
 	}
 	return nil, false
@@ -799,7 +831,7 @@ func (m *Model) aclKey(s string, ct radio.Contact, sess *admin.Session) (tea.Cmd
 	case "down", "j":
 		a.aclSel = min(a.aclSel+1, max(len(sess.ACL)-1, 0))
 		return nil, true
-	case "a":
+	case "n":
 		a.prompt, a.pickSel = promptPick, 0
 		return nil, true
 	}
@@ -809,7 +841,10 @@ func (m *Model) aclKey(s string, ct radio.Contact, sess *admin.Session) (tea.Cmd
 	row := sess.ACL[a.aclSel]
 	switch s {
 	case "x":
-		return m.cli(ct.Key, "setperm "+radio.KeyHex(row.Prefix[:])+" 0", "acl"), true
+		m.ask("take "+row.Name+"'s access to "+ct.Name+" away?", "remove", func() tea.Cmd {
+			return m.cli(ct.Key, "setperm "+radio.KeyHex(row.Prefix[:])+" 0", "acl")
+		})
+		return nil, true
 	case "+", "=", "-":
 		level := min(row.Level+1, 3)
 		if s == "-" {
@@ -851,7 +886,7 @@ func (m *Model) regionsKey(s string, ct radio.Contact, sess *admin.Session) (tea
 	case "down", "j":
 		a.regSel = min(a.regSel+1, max(len(sess.Regions)-1, 0))
 		return nil, true
-	case "S":
+	case "s":
 		return m.cli(ct.Key, "region save", ""), true
 	}
 	if a.regSel >= len(sess.Regions) {
@@ -875,7 +910,8 @@ func (m *Model) regionsKey(s string, ct radio.Contact, sess *admin.Session) (tea
 			m.fail("REGIONS  the * region can't be removed")
 			return nil, true
 		}
-		return refresh("region remove " + r.Name), true
+		m.ask("remove region "+r.Name+" from "+ct.Name+"?", "remove", func() tea.Cmd { return refresh("region remove " + r.Name) })
+		return nil, true
 	}
 	return nil, false
 }
@@ -895,14 +931,15 @@ func (m *Model) logKey(s string, ct radio.Contact, sess *admin.Session) (tea.Cmd
 			return nil, true
 		}
 		return m.cli(ct.Key, "log", "log"), true
-	case "e":
-		m.askConfirm(confirmAction{title: "ERASE THE LOG ON " + strings.ToUpper(ct.Name), warning: "The packet log on the node is deleted.", commands: []string{"log erase"}})
+	case "C":
+		m.ask("erase the packet log on "+ct.Name+"?", "erase", func() tea.Cmd { return m.cli(ct.Key, "log erase", "") })
 		return nil, true
 	}
 	return nil, false
 }
 
-// dangerous reports why a console command needs the node's name typed before it's sent.
+// dangerous reports why a console command needs the node's name typed before it's sent: it takes the node
+// off the air, strands it, or replaces its identity or password. Erasing data asks for y instead.
 func dangerous(cmd string) string {
 	f := strings.Fields(cmd)
 	switch {
@@ -914,8 +951,6 @@ func dangerous(cmd string) string {
 		return "The node stops routing and waits for a firmware upload."
 	case f[0] == "password":
 		return "This changes the admin password. Note it down: there's no recovery over the air."
-	case f[0] == "erase", cmd == "log erase":
-		return "This deletes data on the node."
 	case len(f) > 1 && f[0] == "set" && f[1] == "prv.key":
 		return "This replaces the node's identity. Every contact will see it as a new node."
 	case len(f) > 1 && f[0] == "set" && f[1] == "radio":
@@ -948,6 +983,10 @@ func (m *Model) consoleKey(s string, ct radio.Contact, sess *admin.Session) (tea
 		a.histAt, a.console = len(a.history), lineEdit{}
 		if why := dangerous(cmd); why != "" {
 			m.askConfirm(confirmAction{title: strings.ToUpper(cmd) + " ON " + strings.ToUpper(ct.Name), warning: why, commands: []string{cmd}})
+			return nil, true
+		}
+		if f := strings.Fields(cmd); f[0] == "erase" || cmd == "log erase" {
+			m.ask(cmd+" on "+ct.Name+"? it deletes data on the node", "send", func() tea.Cmd { return m.cli(ct.Key, cmd, purposeOf(cmd)) })
 			return nil, true
 		}
 		return m.cli(ct.Key, cmd, purposeOf(cmd)), true
@@ -1109,10 +1148,6 @@ func (m *Model) adminPromptKey(s string) tea.Cmd {
 		}
 		a.prompt = noPrompt
 		c := a.confirm
-		if c.clear {
-			m.clearHistory(ct)
-			return nil
-		}
 		if c.apply {
 			return m.applySettings(ct, slices.Contains(c.commands, "reboot"))
 		}
@@ -1197,6 +1232,22 @@ func (m *Model) selectedRoom() (radio.Contact, bool) {
 	}
 	ct, ok := m.chat.Contact(cur.Convo)
 	return ct, ok && ct.Type == radio.TypeRoom
+}
+
+// openInAdmin opens a repeater on the Admin screen, logging in as enter there would.
+func (m *Model) openInAdmin(ct radio.Contact) tea.Cmd {
+	m.setTab(4)
+	if !slices.ContainsFunc(m.adminNodes(), func(n radio.Contact) bool { return n.Key == ct.Key }) {
+		m.adm.favOnly = false
+	}
+	for i, n := range m.adminNodes() {
+		if n.Key == ct.Key {
+			m.adm.sel = i
+		}
+	}
+	m.adm.opened, m.adm.prompt = false, noPrompt
+	cmd, _ := m.nodeListKey("enter")
+	return cmd
 }
 
 func (m *Model) loginFromChats(ct radio.Contact) {

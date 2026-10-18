@@ -347,20 +347,28 @@ func (m *Model) keyOwner(key []byte) string {
 
 // pinPicked pins the key a picked message was signed with to its sender's name. Replacing a pin is a
 // separate key, since that's what an impersonator would want you to do.
-func (m *Model) pinPicked(msg store.Message, replace bool) {
+func (m *Model) pinPicked(msg store.Message) {
 	if msg.Sig != store.SigValid || len(msg.SigKey) != 32 || msg.Out {
 		m.fail("PIN  only a message with a valid signature can pin its key")
 		return
 	}
+	key := [32]byte(msg.SigKey)
 	p, pinned := m.pins()[msg.Sender]
 	switch {
 	case pinned && bytes.Equal(p.Key[:], msg.SigKey):
-		m.addLog(m.now, "PIN  "+msg.Sender+" is already pinned to this key", radio.ToneInfo)
-	case pinned && !replace:
-		m.fail("PIN  " + msg.Sender + " is pinned to a different key; P replaces it, if you're sure this one is really theirs")
-	case !replace && m.keyOwner(msg.SigKey) != "" && m.keyOwner(msg.SigKey) != msg.Sender:
-		m.fail("PIN  that key is " + m.keyOwner(msg.SigKey) + "'s; pinning it to " + msg.Sender + " would let them post as " + msg.Sender + ". P pins it anyway")
+		m.unpin(msg.Sender)
+	case pinned:
+		m.ask(msg.Sender+" is pinned to a different key: replace it, if you're sure this one is really theirs?", "replace", func() tea.Cmd {
+			m.pin(msg.Sender, key)
+			return nil
+		})
+	case m.keyOwner(msg.SigKey) != "" && m.keyOwner(msg.SigKey) != msg.Sender:
+		owner := m.keyOwner(msg.SigKey)
+		m.ask("that key is "+owner+"'s: pin it to "+msg.Sender+" anyway, letting them post as "+msg.Sender+"?", "pin", func() tea.Cmd {
+			m.pin(msg.Sender, key)
+			return nil
+		})
 	default:
-		m.pin(msg.Sender, [32]byte(msg.SigKey))
+		m.pin(msg.Sender, key)
 	}
 }

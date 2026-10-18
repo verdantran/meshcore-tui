@@ -58,7 +58,7 @@ type inspectorModel struct {
 	held      int // packets that arrived while paused
 	routeIdx  int
 	snrIdx    int
-	filter    string
+	filter    lineEdit
 	filtering bool
 }
 
@@ -157,7 +157,7 @@ func (m *Model) shows(r *packetRow) bool {
 	case r.bestSNR() < snrChoices[in.snrIdx]:
 		return false
 	}
-	q := strings.ToLower(in.filter)
+	q := strings.ToLower(in.filter.text)
 	return q == "" || strings.Contains(strings.ToLower(r.dec.Summary+" "+r.dec.Type+" "+hashes(r.dec.Path)), q)
 }
 
@@ -197,18 +197,7 @@ func (m *Model) selectedPacket() (*packetRow, bool) {
 func (m *Model) inspectorKey(s string) (tea.Cmd, bool) {
 	in := &m.inspector
 	if in.filtering {
-		switch s {
-		case "esc":
-			in.filter, in.filtering = "", false
-		case "enter":
-			in.filtering = false
-		case "backspace":
-			in.filter = dropLast(in.filter)
-		default:
-			if len([]rune(s)) == 1 {
-				in.filter += s
-			}
-		}
+		filterKey(&in.filter, &in.filtering, s)
 		in.sel = 0
 		return nil, true
 	}
@@ -225,6 +214,9 @@ func (m *Model) inspectorKey(s string) (tea.Cmd, bool) {
 	case "g", "home":
 		in.sel = 0
 		moved()
+	case "G", "end":
+		in.sel = max(len(m.visiblePackets())-1, 0)
+		moved()
 	case "[":
 		in.field = max(in.field-1, 0)
 	case "]":
@@ -237,17 +229,26 @@ func (m *Model) inspectorKey(s string) (tea.Cmd, bool) {
 			in.held = 0
 		}
 	case "C":
-		mesh := in.mesh // clearing the list doesn't reset the Stats tally
-		*in = newInspector()
-		in.mesh = mesh
-		m.addLog(m.now, "PACKETS CLEARED", radio.ToneInfo)
-	case "R":
+		if len(in.rows) == 0 {
+			m.fail("PACKETS  nothing to clear")
+			return nil, true
+		}
+		m.ask(fmt.Sprintf("clear the %d packets heard?", len(in.rows)), "clear", func() tea.Cmd {
+			mesh := m.inspector.mesh // clearing the list doesn't reset the Stats tally
+			m.inspector = newInspector()
+			m.inspector.mesh = mesh
+			m.addLog(m.now, "PACKETS CLEARED", radio.ToneInfo)
+			return nil
+		})
+	case "F":
 		in.routeIdx, in.sel = (in.routeIdx+1)%len(routeChoices), 0
-	case "n":
-		in.snrIdx, in.sel = (in.snrIdx+1)%len(snrChoices), 0
+	case "+", "=":
+		in.snrIdx, in.sel = min(in.snrIdx+1, len(snrChoices)-1), 0
+	case "-":
+		in.snrIdx, in.sel = max(in.snrIdx-1, 0), 0
 	case "/":
-		in.filtering, in.filter = true, ""
-	case "M":
+		in.filtering, in.filter = true, lineEdit{}
+	case "M", "enter":
 		if r, ok := m.selectedPacket(); ok {
 			m.showPacketPath(r)
 		}
@@ -257,10 +258,10 @@ func (m *Model) inspectorKey(s string) (tea.Cmd, bool) {
 			return tea.SetClipboard(r.dec.MaskedHex()), true
 		}
 	case "esc":
-		if in.filter == "" {
+		if in.filter.text == "" {
 			return nil, false
 		}
-		in.filter = ""
+		in.filter = lineEdit{}
 	default:
 		return nil, false
 	}
@@ -313,12 +314,8 @@ var partColours = func(th theme.Theme) map[packets.Part]theme.RGB {
 func (m *Model) renderInspector(w, rows int) []string {
 	th, in := m.th, &m.inspector
 	var out []string
-	if in.filtering || in.filter != "" {
-		cursor := ""
-		if in.filtering {
-			cursor = th.Fg(th.Text, true).Render("█")
-		}
-		out = append(out, th.Fg(th.Yellow, true).Render("/ ")+th.Fg(th.Text, false).Render(in.filter)+cursor+th.Fg(th.Dim, false).Render("  · esc clears"))
+	if in.filtering || in.filter.text != "" {
+		out = append(out, th.Fg(th.Yellow, true).Render("/ ")+filterText(th, in.filter, in.filtering, w-16)+th.Fg(th.Dim, false).Render("  · esc clear"))
 	}
 	list := m.visiblePackets()
 	if len(list) == 0 {
@@ -452,7 +449,7 @@ func (m *Model) packetDetail(w, rows int) []string {
 		}
 		left = append(left, "", th.Fg(th.Magenta, true).Render(fmt.Sprintf("heard %d times: ", n))+th.Fg(th.Muted, false).Render(strings.Join(via, " · ")))
 	}
-	left = append(left, "", th.Fg(th.Dim, false).Render("[ ] step through fields · space pause · R route · n signal · / filter · C clear"))
+	left = append(left, "", th.Fg(th.Dim, false).Render("enter map · [ ] fields · space pause · F route · + - signal · / filter · y copy · C clear"))
 
 	shown := len(r.dec.Raw)
 	if m.level.Allows(motion.Typing) && motion.Running(in.selAt, hexReveal, now) {

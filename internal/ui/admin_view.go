@@ -108,37 +108,45 @@ func (m *Model) paneHint(sess *admin.Session) string {
 	if m.adm.prompt != noPrompt {
 		return ""
 	}
-	if m.adm.local {
-		hints := map[adminPane]string{
-			paneStatus:     "u refresh · a auto-refresh · A send advert · c sync clock · R reboot · 1-9 or ← → screens",
-			paneHealth:     "r 24 hours or 7 days · C clear history · u poll now · polled every " + every(m.watchEvery()) + " while connected",
-			paneSettings:   "↑↓ choose · enter edit · u undo · g read group · G read all · s review and apply",
-			paneNeighbours: "u refresh · d discover again · x remove the selected neighbour",
-			paneACL:        "u refresh · a add a contact · + - change level · x remove",
-			paneRegions:    "u refresh · n new region under this one · h home · f flood on or off · x remove · S save",
-			paneTelemetry:  "u refresh",
-			paneLog:        "r read and sum up the log · s start logging · t stop · e erase",
-			paneConsole:    "enter sends · ↑↓ history · tab completes · esc clears, then leaves the console",
+	return hintLine(m.paneHints(sess))
+}
+
+// paneHints are the keys of the open node's pane, for its hint line and for ?.
+func (m *Model) paneHints(sess *admin.Session) []hint {
+	a := &m.adm
+	var hs []hint
+	switch {
+	case a.pane == paneHealth:
+		if !a.local {
+			hs = append(hs, hint{"w", "watch or stop"})
 		}
-		return hints[m.adm.pane]
+		hs = append(hs, hint{"enter", "cursor"}, hint{"r", "24 hours or 7 days"}, hint{"u", "poll now"}, hint{"C", "clear history"})
+	case sess.State != admin.LoggedIn:
+		return []hint{{"enter", "log in"}, {"esc", "back to the node list"}}
+	default:
+		hs = map[adminPane][]hint{
+			paneStatus:     {{"u", "refresh"}, {"a", "auto-refresh"}, {"A", "send advert"}, {"c", "sync clock"}, {"R", "reboot"}},
+			paneSettings:   {{"↑↓", "choose"}, {"enter", "edit"}, {"x", "discard edit"}, {"u", "read group"}, {"U", "read all"}, {"s", "review and apply"}},
+			paneNeighbours: {{"u", "refresh"}, {"d", "discover again"}, {"x", "remove"}},
+			paneACL:        {{"u", "refresh"}, {"n", "add a contact"}, {"+ -", "change level"}, {"x", "remove"}},
+			paneRegions:    {{"u", "refresh"}, {"n", "new region under this one"}, {"h", "home"}, {"f", "flood on or off"}, {"x", "remove"}, {"s", "save"}},
+			paneTelemetry:  {{"u", "refresh"}},
+			paneLog:        {{"r", "read and sum up (USB)"}, {"s", "start logging"}, {"t", "stop"}, {"C", "erase"}},
+			paneConsole:    {{"enter", "send"}, {"↑↓", "history"}, {"tab", "complete"}, {"esc", "clear, then leave"}},
+		}[a.pane]
+		if a.pane == paneStatus && !a.local {
+			hs = append(hs, hint{"w", "watch"}, hint{"L", "log out"})
+		}
 	}
-	if m.adm.pane == paneHealth {
-		return "w watch or stop · r 24 hours or 7 days · C clear history · u poll now · esc back"
+	switch {
+	case a.local && a.pane == paneStatus:
+		hs = append(hs, hint{"1-9 ←→", "screens"})
+	case a.local && a.pane == paneHealth:
+		hs = append(hs, hint{"", "polled every " + every(m.watchEvery()) + " while connected"})
+	case !a.local && a.pane != paneConsole:
+		hs = append(hs, hint{"esc", "back"})
 	}
-	if sess.State != admin.LoggedIn {
-		return "enter logs in · esc back to the node list"
-	}
-	hints := map[adminPane]string{
-		paneStatus:     "u refresh · a auto-refresh · w watch · A send advert · c sync clock · R reboot · L log out · esc back",
-		paneSettings:   "↑↓ choose · enter edit · u undo · g read group · G read all · s review and apply · esc back",
-		paneNeighbours: "u refresh · d discover again · x remove the selected neighbour · esc back",
-		paneACL:        "u refresh · a add a contact · + - change level · x remove · esc back",
-		paneRegions:    "u refresh · n new region under this one · h home · f flood on or off · x remove · S save · esc back",
-		paneTelemetry:  "u refresh · esc back",
-		paneLog:        "s start logging · t stop · r read (USB only) · e erase · esc back",
-		paneConsole:    "enter sends · ↑↓ history · tab completes · esc clears, then goes back",
-	}
-	return hints[m.adm.pane]
+	return hs
 }
 
 // authBadge is a node's login state: AUTH while waiting, then OK or FAIL.
@@ -226,7 +234,7 @@ func (m *Model) nodeList(w, rows int) []string {
 			m.trend(c.Key, trendW) + " " + th.Fg(th.Red, true).Render(m.alerts(c).String())
 		out = append(out, clip(line, w))
 	}
-	return append(out, "", th.Fg(th.Dim, false).Render(clip("↑↓ choose · enter open · w watch · H history · f favourite · F favourites only · P poll the list · L log out · X forget password · ● saved · ◉ watched", w)))
+	return append(out, "", th.Fg(th.Dim, false).Render(clip("enter open · L log in or out · u U poll one or all · w watch · H history · f F favourite, only those · x forget password · ● saved ◉ watched", w)))
 }
 
 func uptime(secs uint32) string {
@@ -268,17 +276,17 @@ func (m *Model) promptLines(ct radio.Contact, sess *admin.Session, w, rows int) 
 		return []string{th.Fg(th.Muted, true).Render("LOG IN TO " + strings.ToUpper(ct.Name)), "",
 			field("password", true), "",
 			box + th.Fg(th.Text, false).Render(" remember it in the system keychain ") + th.Fg(th.Dim, false).Render("(ctrl+s)"), "",
-			th.Fg(th.Dim, false).Render("enter logs in · leave it empty to log in as a guest · esc cancels")}
+			th.Fg(th.Dim, false).Render("enter log in · leave it empty to log in as a guest · esc cancel")}
 	case promptEdit:
 		st := m.settingRows(sess)[a.setSel]
 		out := []string{th.Fg(th.Muted, true).Render("EDIT " + strings.ToUpper(st.Label)), "", field(st.Key, false), ""}
 		if st.Help != "" {
 			out = append(out, th.Fg(th.Dim, false).Render(clip(st.Help, w)))
 		}
-		return append(out, th.Fg(th.Dim, false).Render("enter stages the change · it's sent when you apply with s · esc cancels"))
+		return append(out, th.Fg(th.Dim, false).Render("enter stage the change · it's sent when you apply with s · esc cancel"))
 	case promptRegion:
 		return []string{th.Fg(th.Muted, true).Render("NEW REGION UNDER " + strings.ToUpper(sess.Regions[a.regSel].Name)), "", field("name", false), "",
-			th.Fg(th.Dim, false).Render("enter adds it with flood allowed · esc cancels")}
+			th.Fg(th.Dim, false).Render("enter add it with flood allowed · esc cancel")}
 	case promptDiff:
 		return m.diffLines(ct, w)
 	case promptConfirm:
@@ -288,10 +296,10 @@ func (m *Model) promptLines(ct radio.Contact, sess *admin.Session, w, rows int) 
 			out = append(out, th.Fg(th.Yellow, false).Render(l))
 		}
 		return append(out, "", th.Fg(th.Text, false).Render("Type "+ct.Name+" to go ahead:"), field("name", false), "",
-			th.Fg(th.Dim, false).Render("esc cancels"))
+			th.Fg(th.Dim, false).Render("enter go ahead · esc cancel"))
 	case promptPick:
 		people := m.aclCandidates(sess)
-		out := []string{th.Fg(th.Muted, true).Render("GIVE A CONTACT ACCESS") + th.Fg(th.Dim, false).Render("  ·  they start read-only; + raises it · esc cancels"), ""}
+		out := []string{th.Fg(th.Muted, true).Render("GIVE A CONTACT ACCESS") + th.Fg(th.Dim, false).Render("  ·  they start read-only; + raises it · enter add · esc cancel"), ""}
 		if len(people) == 0 {
 			return append(out, th.Fg(th.Dim, false).Render("Every chat contact is already on the list."))
 		}
@@ -327,9 +335,9 @@ func (m *Model) diffLines(ct radio.Contact, w int) []string {
 			th.Fg(th.Dim, false).Strikethrough(true).Render(from)+th.Fg(th.Dim, false).Render(" → ")+th.Fg(th.Cyan, true).Render(ch.To)+note, w))
 	}
 	out = append(out, "")
-	hint := "y applies · any other key goes back"
+	hint := "y apply · any other key go back"
 	if reboot {
-		hint = "y applies · Y applies and reboots so they take effect · any other key goes back"
+		hint = "y apply · Y apply and reboot so they take effect · any other key go back"
 	}
 	return append(out, th.Fg(th.Dim, false).Render(hint))
 }
@@ -678,7 +686,7 @@ func (m *Model) regionLines(sess *admin.Session, w, rows int) []string {
 		}
 		out = append(out, clip(" "+th.Fg(th.Text, false).Render(name)+" "+flood+home, w))
 	}
-	note := "fetched " + ago(m.now.Sub(sess.RegionsAt)) + " · changes are lost on reboot until saved with S"
+	note := "fetched " + ago(m.now.Sub(sess.RegionsAt)) + " · changes are lost on reboot until saved with s"
 	if sess.Busy() {
 		note = motion.RampBar(m.now, 3) + " " + note
 	}

@@ -23,13 +23,13 @@
 ┃                          │                                                                       ┃
 ┃                          │ ▌11:03 Zed                                          1 hop · SNR +6.00 ┃
 ┃                          │ ▌      5*9▟78 $0 00+ ▒#1% 2*FB4▟2E                                    ┃
-┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply · 0/147 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ █
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles f824c298182fd23f
+styles ca4038399dcd4c99
 == 160ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -55,13 +55,13 @@ styles f824c298182fd23f
 ┃                          │                                                                       ┃
 ┃                          │ ▌11:03 Zed                                          1 hop · SNR +6.00 ┃
 ┃                          │ ▌      anyone on the hill toniE▚█\                                    ┃
-┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply · 0/147 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ MSG  Public · Zed: any█
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 679fb4962974718b
+styles ac5b79c0c3444375
 == 320ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -87,13 +87,13 @@ styles 679fb4962974718b
 ┃                          │                                                                       ┃
 ┃                          │ ▌11:03 Zed                                          1 hop · SNR +6.00 ┃
 ┃                          │ ▌      anyone on the hill tonight?                                    ┃
-┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply · 0/147 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ MSG  Public · Zed: anyone on the hill tonigh█
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles da4d61b1b045c5e2
+styles 049015710a589f90
 == 700ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -119,10 +119,10 @@ styles da4d61b1b045c5e2
 ┃                          │                                                                       ┃
 ┃                          │  11:03 Zed                                          1 hop · SNR +6.00 ┃
 ┃                          │        anyone on the hill tonight?                                    ┃
-┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply · 0/147 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ MSG  Public · Zed: anyone on the hill tonight?
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 3a3883dc00ae06cc
+styles 2e47fa342c850aae

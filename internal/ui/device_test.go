@@ -249,9 +249,9 @@ func TestDeviceSecurity(t *testing.T) {
 			t.Fatal("the key never reaches the log")
 		}
 	}
-	_, cmd := h.m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
+	_, cmd := h.m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
 	if cmd == nil || !strings.Contains(h.lastLog(), "COPIED") {
-		t.Error("c copies")
+		t.Error("y copies")
 	}
 	h.keys("x")
 	if h.m.device.key != "" || h.m.device.prompt != devNone {
@@ -287,6 +287,11 @@ func TestDeviceSecurity(t *testing.T) {
 	h.moveTo("reboot")
 	h.key(tea.KeyEnter)
 	h.keys("y")
+	if h.m.device.prompt != devConfirm || !strings.Contains(h.screen(), "Type reboot to go ahead") {
+		t.Fatalf("a reboot takes the radio off the air, so it asks for the word:\n%s", h.screen())
+	}
+	h.clear()
+	h.typeLine("reboot")
 	h.until("reboot and back", func() bool {
 		return strings.Contains(h.screen(), "LINK RESTORED") || h.m.linked == linkUp && strings.Contains(plainLog(h), "LINK RESTORED")
 	})
@@ -357,7 +362,7 @@ func TestDeviceFailures(t *testing.T) {
 		t.Error("ahead")
 	}
 	h.keys("?")
-	if !strings.Contains(h.screen(), "radio changes, a new identity") {
+	if !strings.Contains(h.screen(), "radio changes and a new identity") {
 		t.Errorf("help:\n%s", h.screen())
 	}
 }

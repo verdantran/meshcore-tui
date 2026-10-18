@@ -217,8 +217,10 @@ func (m *Model) healthKey(s string, ct radio.Contact, sess *admin.Session) (tea.
 			m.fail("HISTORY  there's none kept for " + ct.Name)
 			return nil, true
 		}
-		m.askConfirm(confirmAction{title: "CLEAR THE HISTORY OF " + strings.ToUpper(ct.Name), clear: true,
-			warning: "Every status poll kept for it is deleted from this computer. The node itself isn't touched."})
+		m.ask("clear every status poll kept for "+ct.Name+"? the node isn't touched", "clear", func() tea.Cmd {
+			m.clearHistory(ct)
+			return nil
+		})
 	case "u":
 		if sess.State != admin.LoggedIn {
 			m.fail("POLL  log in to " + ct.Name + " first, with enter")
@@ -375,7 +377,7 @@ func (m *Model) healthLines(ct radio.Contact, sess *admin.Session, w, rows int) 
 	}
 	note := plural(h.Polls, "poll") + " in this window"
 	if pick >= 0 {
-		note = "← → step through time · enter or esc stops"
+		note = "←→ step through time · g G oldest or newest · enter or esc stop"
 	}
 	switch h.Reboots {
 	case 0:

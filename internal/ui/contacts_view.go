@@ -27,7 +27,7 @@ func (m *Model) renderContacts(w, rows int) []string {
 	case placeOverlay:
 		return m.placeLines(w)
 	case removeOverlay:
-		return m.confirmLines("REMOVE CONTACT", "Remove %s from the radio? Its message history stays here.", "y removes · any other key cancels")
+		return m.confirmLines("REMOVE CONTACT", "Remove %s from the radio? Its message history stays here.", "y remove · any other key cancel")
 	case autoOverlay:
 		return m.autoLines()
 	case pruneOverlay:
@@ -62,12 +62,8 @@ func (m *Model) contactTable(w, rows int) []string {
 	if c.full {
 		out = append(out, th.Block(th.Bg, th.Yellow).Render(" TABLE FULL ")+th.Fg(th.Yellow, false).Render("  new nodes can't be added · P suggests contacts to prune"))
 	}
-	if c.filtering || c.filter != "" {
-		cursor := ""
-		if c.filtering {
-			cursor = th.Fg(th.Text, true).Render("█")
-		}
-		out = append(out, th.Fg(th.Yellow, true).Render("/ ")+th.Fg(th.Text, false).Render(c.filter)+cursor+th.Fg(th.Dim, false).Render("  · esc clears"))
+	if c.filtering || c.filter.text != "" {
+		out = append(out, th.Fg(th.Yellow, true).Render("/ ")+filterText(th, c.filter, c.filtering, w-16)+th.Fg(th.Dim, false).Render("  · esc clear"))
 	}
 	nameW := min(max(w/4, 14), 26)
 	routeW := max(w-nameW-48, 10)
@@ -168,7 +164,7 @@ func (m *Model) contactDetail(w int) []string {
 	}
 	out = append(out, label("signing key")+sig)
 	out = append(out, "")
-	keys := "m message · t trace · d discover route · p set route · r reset route · M route on the map · K pin signing key · f favourite · e share · x remove · I import · a heard · A auto-add · F type or favourites · s sort · / filter"
+	keys := "enter or m message · t trace · d discover route · p set route · r reset route · M route on the map · L place on the map · K pin signing key · f favourite · e share · x remove · I import · a heard · A auto-add · P prune · F type or favourites · o sort · / filter"
 	for _, l := range strings.Split(ansi.Wrap(keys, w, "·"), "\n") {
 		out = append(out, th.Fg(th.Dim, false).Render(l))
 	}
@@ -218,7 +214,7 @@ func (m *Model) traceLine(ct radio.Contact) string {
 
 func (m *Model) heardLines(w, rows int) []string {
 	th, c := m.th, &m.contacts
-	out := []string{th.Fg(th.Muted, true).Render("HEARD THIS SESSION, NOT CONTACTS") + th.Fg(th.Dim, false).Render("  ·  enter adds · esc back"), ""}
+	out := []string{th.Fg(th.Muted, true).Render("HEARD THIS SESSION, NOT CONTACTS") + th.Fg(th.Dim, false).Render("  ·  enter add · esc back"), ""}
 	if len(c.heard) == 0 {
 		return append(out, th.Fg(th.Dim, false).Render("Nothing yet. Nodes appear here when their advert arrives but auto-add doesn't cover them (A to change)."))
 	}
@@ -239,7 +235,7 @@ func (m *Model) heardLines(w, rows int) []string {
 func (m *Model) shareLines(w, rows int) []string {
 	th, c := m.th, &m.contacts
 	ct, _ := m.selectedContact()
-	out := []string{th.Fg(th.Muted, true).Render("SHARE "+strings.ToUpper(ct.Name)) + th.Fg(th.Dim, false).Render("  ·  c copies the link · any key closes"), ""}
+	out := []string{th.Fg(th.Muted, true).Render("SHARE "+strings.ToUpper(ct.Name)) + th.Fg(th.Dim, false).Render("  ·  y copy the link · any other key close"), ""}
 	if c.link == "" {
 		return append(out, th.Fg(th.Yellow, false).Render(motion.RampBar(m.now, 3)+" exporting from the radio…"))
 	}
@@ -338,13 +334,9 @@ func without(list []string, drop string) []string {
 
 func (m *Model) importLines(w int) []string {
 	th := m.th
-	in := m.contacts.importIn
-	if r := []rune(in); len(r) > w-6 {
-		in = "…" + string(r[len(r)-(w-7):])
-	}
 	return []string{
-		th.Fg(th.Muted, true).Render("IMPORT A CONTACT") + th.Fg(th.Dim, false).Render("  ·  paste a meshcore:// link, then enter · esc cancels"), "",
-		th.Fg(th.Magenta, true).Render("▸ ") + th.Fg(th.Text, false).Render(in) + th.Fg(th.Text, true).Render("█"),
+		th.Fg(th.Muted, true).Render("IMPORT A CONTACT") + th.Fg(th.Dim, false).Render("  ·  paste a meshcore:// link · enter import · esc cancel"), "",
+		th.Fg(th.Magenta, true).Render("▸ ") + m.contacts.importIn.render(th, w-2, false),
 	}
 }
 
@@ -356,7 +348,7 @@ func (m *Model) placeLines(w int) []string {
 		shared = fmt.Sprintf("it shares %.4f, %.4f; yours is used instead", ct.Lat, ct.Lon)
 	}
 	return []string{
-		th.Fg(th.Muted, true).Render("PLACE "+strings.ToUpper(ct.Name)) + th.Fg(th.Dim, false).Render(truncate("  ·  latitude, longitude, then enter · empty clears · esc cancels", w-len(ct.Name)-6)), "",
+		th.Fg(th.Muted, true).Render("PLACE "+strings.ToUpper(ct.Name)) + th.Fg(th.Dim, false).Render(truncate("  ·  latitude, longitude · enter place · empty clears it · esc cancel", w-len(ct.Name)-6)), "",
 		th.Fg(th.Magenta, true).Render("▸ ") + m.contacts.placeIn.render(th, w-2, false), "",
 		th.Fg(th.Dim, false).Render(truncate("Only this app uses it, for the map and its routes; "+shared+".", w)),
 	}
@@ -370,7 +362,7 @@ func (m *Model) confirmLines(title, question, hint string) []string {
 
 func (m *Model) autoLines() []string {
 	th, c := m.th, &m.contacts
-	out := []string{th.Fg(th.Muted, true).Render("AUTO-ADD") + th.Fg(th.Dim, false).Render("  ·  which newly heard nodes the radio adds by itself · space toggles · ←→ hops · s save · esc cancel"), ""}
+	out := []string{th.Fg(th.Muted, true).Render("AUTO-ADD") + th.Fg(th.Dim, false).Render("  ·  which newly heard nodes the radio adds by itself · space toggle · ←→ hops · s save · esc cancel"), ""}
 	if !c.autoReady {
 		return append(out, th.Fg(th.Yellow, false).Render(motion.RampBar(m.now, 3)+" reading from the radio…"))
 	}
@@ -422,5 +414,5 @@ func (m *Model) pruneLines() []string {
 		}
 		out = append(out, "  "+th.Fg(th.Text, false).Render(col(name, 24))+th.Fg(th.Dim, false).Render("heard "+heard))
 	}
-	return append(out, "", th.Fg(th.Dim, false).Render("y removes them all · any other key cancels · history is kept"))
+	return append(out, "", th.Fg(th.Dim, false).Render("y remove them all · any other key cancel · history is kept"))
 }

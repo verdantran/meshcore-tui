@@ -64,7 +64,7 @@ type contactsModel struct {
 	sel        int
 	typeFilter int
 	sortBy     int
-	filter     string
+	filter     lineEdit
 	filtering  bool
 	heardView  bool
 	heard      []heardNode
@@ -82,7 +82,7 @@ type contactsModel struct {
 	link      string
 	editPath  []byte
 	editSel   int
-	importIn  string
+	importIn  lineEdit
 	placeIn   lineEdit
 	auto      radio.AutoAdd
 	autoSel   int
@@ -190,7 +190,7 @@ func (m *Model) contactRows() []radio.Contact {
 	c := &m.contacts
 	var out []radio.Contact
 	want, favOnly := typeFilters[c.typeFilter].typ, typeFilters[c.typeFilter].fav
-	q := strings.ToLower(c.filter)
+	q := strings.ToLower(c.filter.text)
 	for _, ct := range m.chat.Contacts() {
 		if want != 0 && ct.Type != want || favOnly && ct.Flags&radio.FlagFavourite == 0 {
 			continue
@@ -423,18 +423,7 @@ func (m *Model) contactsKey(s string) (tea.Cmd, bool) {
 		return m.overlayKey(s), true
 	}
 	if c.filtering {
-		switch s {
-		case "esc":
-			c.filter, c.filtering = "", false
-		case "enter":
-			c.filtering = false
-		case "backspace":
-			c.filter = dropLast(c.filter)
-		default:
-			if len([]rune(s)) == 1 {
-				c.filter += s
-			}
-		}
+		filterKey(&c.filter, &c.filtering, s)
 		c.sel = 0
 		return nil, true
 	}
@@ -450,16 +439,16 @@ func (m *Model) contactsKey(s string) (tea.Cmd, bool) {
 		c.sel++
 		return m.onSelectContact(), true
 	case "/":
-		c.filtering, c.filter = true, ""
+		c.filtering, c.filter = true, lineEdit{}
 	case "esc":
-		if c.filter == "" {
+		if c.filter.text == "" {
 			return nil, false
 		}
-		c.filter = ""
+		c.filter = lineEdit{}
 	case "F":
 		c.typeFilter = (c.typeFilter + 1) % len(typeFilters)
 		c.sel = 0
-	case "s":
+	case "o":
 		c.sortBy = (c.sortBy + 1) % len(sortNames)
 	case "a":
 		c.heardView, c.heardSel = true, 0
@@ -471,7 +460,7 @@ func (m *Model) contactsKey(s string) (tea.Cmd, bool) {
 			return autoAddMsg{a, err}
 		}), true
 	case "I":
-		c.overlay, c.importIn = importOverlay, ""
+		c.overlay, c.importIn = importOverlay, lineEdit{}
 	case "P":
 		m.openPrune()
 	default:
@@ -496,6 +485,11 @@ func (m *Model) contactAction(s string, ct radio.Contact) (tea.Cmd, bool) {
 			m.pin(ct.Name, ct.Key)
 		}
 		return nil, true
+	case "enter":
+		if ct.Type == radio.TypeRepeater {
+			return m.openInAdmin(ct), true
+		}
+		return m.contactAction("m", ct)
 	case "m":
 		if ct.Type != radio.TypeChat && ct.Type != radio.TypeRoom {
 			m.fail("MESSAGE  " + ct.Name + " is a " + strings.ToLower(ct.Type.String()) + "; only chat nodes and rooms take messages")
@@ -550,7 +544,7 @@ func (m *Model) contactAction(s string, ct radio.Contact) (tea.Cmd, bool) {
 func (m *Model) jumpToConvo(cv store.Convo) {
 	m.setTab(0)
 	ch := &m.chats
-	ch.filter, ch.filtering = "", false
+	ch.filter, ch.filtering = lineEdit{}, false
 	if strings.HasPrefix(string(cv), "dm:") {
 		m.openDraft(cv)
 		return
@@ -617,7 +611,7 @@ func (m *Model) overlayKey(s string) tea.Cmd {
 	}
 	switch c.overlay {
 	case shareOverlay:
-		if s == "c" && c.link != "" {
+		if s == "y" && c.link != "" {
 			m.addLog(m.now, "COPIED  link for "+ct.Name, radio.ToneOK)
 			return tea.SetClipboard(c.link)
 		}
@@ -637,19 +631,15 @@ func (m *Model) overlayKey(s string) tea.Cmd {
 	case importOverlay:
 		switch s {
 		case "enter":
-			link := strings.TrimSpace(c.importIn)
+			link := strings.TrimSpace(c.importIn.text)
 			c.overlay = noOverlay
 			if _, err := radio.ParseLink(link); err != nil {
 				m.fail("IMPORT  " + err.Error())
 				return nil
 			}
 			return m.contactOp("IMPORTED  contact from link", func(ctx context.Context, r radio.Radio) error { return r.ImportContact(ctx, link) })
-		case "backspace":
-			c.importIn = dropLast(c.importIn)
 		default:
-			if len([]rune(s)) == 1 {
-				c.importIn += s
-			}
+			c.importIn.key(s)
 		}
 	case editorOverlay:
 		reps := m.repeaters()

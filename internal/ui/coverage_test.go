@@ -42,7 +42,7 @@ func TestContactsOverlaysRender(t *testing.T) {
 
 	h.keys("I")
 	h.keys("meshcore://zz")
-	has(t, h.screen(), "IMPORT A CONTACT", "meshcore://zz█")
+	has(t, h.screen(), "IMPORT A CONTACT", "meshcore://zz")
 	h.key(tea.KeyBackspace)
 	h.key(tea.KeyEnter)
 	if l := h.m.log[len(h.m.log)-1]; l.tone != radio.ToneFail || !strings.Contains(l.text, "IMPORT") {
@@ -87,7 +87,7 @@ func TestContactsSortFilterAndErrors(t *testing.T) {
 	h.keys("2")
 	for i := range sortNames {
 		has(t, h.screen(), "sort "+sortNames[i])
-		h.keys("s")
+		h.keys("o")
 	}
 	for i := range typeFilters {
 		has(t, h.screen(), "type "+typeFilters[i].name)
@@ -199,7 +199,7 @@ func TestChatEdges(t *testing.T) {
 	key(m, tea.KeyBackspace)
 	key(m, tea.KeyEnter)
 	key(m, tea.KeyEscape)
-	if m.chats.filter != "" {
+	if m.chats.filter.text != "" {
 		t.Error("esc clears the filter")
 	}
 }
@@ -476,8 +476,8 @@ func TestInspectorAndSearchKeys(t *testing.T) {
 		t.Error("g returns to the newest")
 	}
 	h.keys("j][[")
-	h.keys("RRR")
-	h.keys("C")
+	h.keys("FFF")
+	h.keys("Cy")
 	if len(h.m.inspector.rows) != 0 {
 		t.Error("C clears")
 	}

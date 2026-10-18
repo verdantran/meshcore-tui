@@ -171,7 +171,7 @@ func TestAdminSettings(t *testing.T) {
 		}
 		t.Fatalf("no setting %s", key)
 	}
-	h.keys("G")
+	h.keys("U")
 	h.idle(sess)
 	if sess.Settings["tx"].Value != "22" || sess.Settings["bridge.channel"].Value != "1" {
 		t.Fatalf("read all: %+v", sess.Settings)
@@ -205,10 +205,10 @@ func TestAdminSettings(t *testing.T) {
 		t.Fatalf("staged:\n%s", scr)
 	}
 	moveTo("loop.detect")
-	h.keys("u")
+	h.keys("x")
 	h.keys("s")
 	scr = h.screen()
-	if !strings.Contains(scr, "REVIEW CHANGES TO DUNDRY") || !strings.Contains(scr, "Repeat packets") || strings.Contains(scr, "Flood loop") {
+	if !strings.Contains(scr, "REVIEW CHANGES TO DUNDRY") || !strings.Contains(scr, "Repeat packets") || strings.Contains(scr, "  Flood loop") || !strings.Contains(scr, "DISCARDED") {
 		t.Fatalf("diff:\n%s", scr)
 	}
 	h.keys("y")
@@ -233,7 +233,7 @@ func TestAdminSettings(t *testing.T) {
 	}
 	h.typeLine("869.525,250,11,5")
 	h.keys("s")
-	if !strings.Contains(h.screen(), "Y applies and reboots") {
+	if !strings.Contains(h.screen(), "Y apply and reboot") {
 		t.Fatalf("reboot offered:\n%s", h.screen())
 	}
 	h.keys("Y")
@@ -286,7 +286,7 @@ func TestAdminPanes(t *testing.T) {
 	if scr := h.screen(); !strings.Contains(scr, "Alice") || !strings.Contains(scr, "read-only") || !strings.Contains(scr, "admin") {
 		t.Fatalf("acl:\n%s", scr)
 	}
-	h.keys("a")
+	h.keys("n")
 	if !strings.Contains(h.screen(), "GIVE A CONTACT ACCESS") || strings.Contains(h.screen(), " Alice ") {
 		t.Fatalf("picker lists contacts not already on the list:\n%s", h.screen())
 	}
@@ -319,7 +319,7 @@ func TestAdminPanes(t *testing.T) {
 	if bob().Level != 1 {
 		t.Fatalf("lowered: %+v", sess.ACL)
 	}
-	h.keys("x")
+	h.keys("xy")
 	h.idle(sess)
 	if len(sess.ACL) != 2 {
 		t.Fatalf("removed: %+v", sess.ACL)
@@ -360,9 +360,9 @@ func TestAdminPanes(t *testing.T) {
 		t.Error("region names are one word")
 	}
 	h.keys("j")
-	h.keys("x")
+	h.keys("xy")
 	h.idle(sess)
-	h.keys("S")
+	h.keys("s")
 	h.keys("u")
 	h.idle(sess)
 	if len(sess.Regions) != 4 {
@@ -379,8 +379,7 @@ func TestAdminPanes(t *testing.T) {
 	pane(paneLog)
 	h.keys("st")
 	h.idle(sess)
-	h.keys("e")
-	h.typeLine("Dundry")
+	h.keys("Cy")
 	h.idle(sess)
 	if scr := h.screen(); !strings.Contains(scr, "logging started") || !strings.Contains(scr, "log erased") {
 		t.Fatalf("log:\n%s", scr)
@@ -544,14 +543,14 @@ func TestAdminRendersSmall(t *testing.T) {
 	}
 	sess.State = admin.LoggedIn
 	h.keys("?")
-	if !strings.Contains(h.screen(), "switch between status, settings") {
+	if !strings.Contains(h.screen(), "switch between status, health, settings") {
 		t.Errorf("help:\n%s", h.screen())
 	}
 }
 
 func TestConsoleHelpers(t *testing.T) {
-	for cmd, risky := range map[string]bool{"reboot": true, "start ota": true, "password x": true, "log erase": true, "set prv.key ab": true,
-		"set radio 1,2,3,4": true, "set tx 20": false, "ver": false, "": false, "erase": true, "poweroff": true} {
+	for cmd, risky := range map[string]bool{"reboot": true, "start ota": true, "password x": true, "log erase": false, "set prv.key ab": true,
+		"set radio 1,2,3,4": true, "set tx 20": false, "ver": false, "": false, "erase": false, "poweroff": true} {
 		if (dangerous(cmd) != "") != risky {
 			t.Errorf("dangerous(%q)", cmd)
 		}
@@ -607,6 +606,11 @@ func TestRoomLoginFromChats(t *testing.T) {
 	h.key(tea.KeyEnter)
 	h.until("post sent", func() bool { return strings.Contains(h.screen(), "see you there") })
 	h.key(tea.KeyEscape)
+	h.keys("L")
+	h.settle()
+	if sess.State != admin.LoggedOut || h.m.tab != 0 {
+		t.Errorf("L again logs out, staying in Chats: %v", sess.State)
+	}
 	h.m.chats.sel = 0
 	h.m.refreshChats()
 	h.keys("L") // not a room: L does nothing here
@@ -718,7 +722,7 @@ func TestLocalConsole(t *testing.T) {
 	}
 	h.keys("jd")
 	h.idle(sess)
-	h.keys("x")
+	h.keys("xy")
 	h.idle(sess)
 	h.key(tea.KeyTab)
 	h.idle(sess)
@@ -815,7 +819,7 @@ func TestKeychainAndFleet(t *testing.T) {
 	h := newHarness(t)
 	kc := h.m.opt.Keychain
 	h.keys("5")
-	h.keys("P")
+	h.keys("U")
 	if !strings.Contains(h.m.log[len(h.m.log)-1].text, "no nodes to poll") {
 		t.Error("nothing to poll yet")
 	}
@@ -856,7 +860,7 @@ func TestKeychainAndFleet(t *testing.T) {
 		t.Fatal("after a failure it asks")
 	}
 	h.key(tea.KeyEscape)
-	h.keys("X")
+	h.keys("xy")
 	if _, ok := kc.Get(pur.Key); ok || !strings.Contains(h.m.log[len(h.m.log)-1].text, "FORGOTTEN") {
 		t.Error("forget")
 	}
@@ -864,7 +868,7 @@ func TestKeychainAndFleet(t *testing.T) {
 	// Polling logs in with saved passwords, and the fleet flags what needs attention.
 	kel := h.contact("Kelston")
 	kc.Set(kel.Key, "password")
-	h.keys("P")
+	h.keys("U")
 	if !strings.Contains(h.m.log[len(h.m.log)-1].text, "POLLING  2 nodes, one every 20s") {
 		t.Errorf("poll: %s", h.m.log[len(h.m.log)-1].text)
 	}
@@ -938,9 +942,9 @@ func TestFavouriteFilters(t *testing.T) {
 	}
 	h.m.opt.Keychain.Set(h.contact("Kelston").Key, "password")
 	h.m.opt.Keychain.Set(h.contact("Dundry").Key, "password")
-	h.keys("P")
+	h.keys("U")
 	if !strings.Contains(plainLog(h), "POLLING  1 nodes") {
-		t.Errorf("P polls only the favourites:\n%s", plainLog(h))
+		t.Errorf("U polls only the favourites:\n%s", plainLog(h))
 	}
 	h.choose("Kelston")
 	h.keys("f")

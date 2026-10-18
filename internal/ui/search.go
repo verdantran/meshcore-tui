@@ -17,7 +17,7 @@ import (
 // searchModel is the ctrl+f overlay that searches every conversation.
 type searchModel struct {
 	open    bool
-	query   string
+	query   lineEdit
 	results []store.Message
 	sel     int
 }
@@ -29,8 +29,8 @@ func (m *Model) openSearch() {
 func (m *Model) runSearch() {
 	s := &m.search
 	s.results, s.sel = nil, 0
-	if m.chat != nil && strings.TrimSpace(s.query) != "" {
-		s.results, _ = m.chat.Search(s.query, "", 200)
+	if m.chat != nil && strings.TrimSpace(s.query.text) != "" {
+		s.results, _ = m.chat.Search(s.query.text, "", 200)
 	}
 }
 
@@ -48,17 +48,9 @@ func (m *Model) searchKey(k string) {
 			m.jumpTo(s.results[s.sel])
 		}
 		s.open = false
-	case "backspace":
-		if s.query != "" {
-			s.query = dropLast(s.query)
-			m.runSearch()
-		}
-	case "space":
-		s.query += " "
-		m.runSearch()
 	default:
-		if len([]rune(k)) == 1 {
-			s.query += k
+		before := s.query.text
+		if s.query.key(k) && s.query.text != before {
 			m.runSearch()
 		}
 	}
@@ -68,7 +60,7 @@ func (m *Model) searchKey(k string) {
 func (m *Model) jumpTo(msg store.Message) {
 	m.setTab(0)
 	c := &m.chats
-	c.filter, c.filtering, c.writing = "", false, false
+	c.filter, c.filtering, c.writing = lineEdit{}, false, false
 	for i, info := range c.infos {
 		if info.Convo == msg.Convo {
 			c.sel = i
@@ -85,13 +77,13 @@ func (m *Model) jumpTo(msg store.Message) {
 
 func (m *Model) searchLines(w, rows int) []string {
 	th, s := m.th, &m.search
-	prompt := th.Fg(th.Magenta, true).Render("find▸ ") + th.Fg(th.Text, false).Render(s.query) + th.Fg(th.Text, true).Render("█")
+	prompt := th.Fg(th.Magenta, true).Render("find▸ ") + s.query.render(th, w-20, false)
 	count := ""
-	if s.query != "" {
+	if s.query.text != "" {
 		count = th.Fg(th.Dim, false).Render(fmt.Sprintf("  %d found", len(s.results)))
 	}
 	out := []string{prompt + count, ""}
-	if s.query == "" {
+	if s.query.text == "" {
 		return append(out, th.Fg(th.Dim, false).Render("Type to search every conversation. ↑↓ choose · enter open · esc close"))
 	}
 	start := max(s.sel-(rows-3)/2, 0)
@@ -100,7 +92,7 @@ func (m *Model) searchLines(w, rows int) []string {
 		where := m.chat.Title(r.Convo)
 		line := th.Fg(th.Dim, false).Render(r.RecvAt.Local().Format("02 Jan 15:04")+"  ") +
 			th.Fg(th.Cyan, false).Render(col(where, 14)) + " " +
-			th.Fg(th.Muted, true).Render(r.Sender+": ") + m.highlight(r.Text, s.query, th.Text)
+			th.Fg(th.Muted, true).Render(r.Sender+": ") + m.highlight(r.Text, s.query.text, th.Text)
 		if i == s.sel {
 			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(" "+plainResult(r, where), w-1)))
 			continue

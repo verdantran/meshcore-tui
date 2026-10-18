@@ -928,8 +928,11 @@ func (m *Model) renderMap(w, h int) []string {
 		}
 	}
 
-	out = append(out, clip(m.mapInfo(routes, nodes), w), clip(th.Fg(th.Dim, false).Render(
-		"←↑↓→ hjkl move · + - zoom · m whole mesh · [ ] routes · t traffic · f focus · d street detail · L labels · r roads"), w))
+	hint := "←↑↓→ hjkl move · + - zoom · m whole mesh · [ ] routes · t traffic · f F focus · d street detail · L labels · r roads"
+	if mv.hub != "" || mv.layers.Selected >= 0 {
+		hint = "esc show all · " + hint
+	}
+	out = append(out, clip(m.mapInfo(routes, nodes), w), clip(th.Fg(th.Dim, false).Render(hint), w))
 	return out
 }
 

@@ -432,7 +432,7 @@ func (m *Model) deviceRows() []devRow {
 		devRow{id: "reboot", group: "Security", label: "Reboot the radio", value: "", kind: rowAction,
 			press: func(m *Model) tea.Cmd {
 				m.device.prompt, m.device.input, m.device.confirm = devConfirm, lineEdit{}, devConfirmation{title: "REBOOT THE RADIO",
-					warning: "The link drops for a few seconds and reconnects by itself.", id: "reboot", what: "REBOOTING",
+					warning: "The radio goes off the air and the link drops for a few seconds; it reconnects by itself.", word: "reboot", id: "reboot", what: "REBOOTING",
 					op: func(ctx context.Context, d radio.Device) error { return d.Reboot(ctx) }}
 				return nil
 			}},
@@ -508,6 +508,10 @@ func (m *Model) deviceKey(s string) (tea.Cmd, bool) {
 		dm.sel = max(dm.sel-1, 0)
 	case "down", "j":
 		dm.sel = min(dm.sel+1, len(rows)-1)
+	case "g", "home":
+		dm.sel = 0
+	case "G", "end":
+		dm.sel = len(rows) - 1
 	case "u":
 		return m.loadDevice(), true
 	case "enter", "space":
@@ -604,7 +608,7 @@ func (m *Model) devicePromptKey(s string) tea.Cmd {
 		}
 		return m.runOp(c.id, c.what, c.op, c.id != "reboot" && c.id != "reset")
 	case devShowKey:
-		if s == "c" && dm.key != "" {
+		if s == "y" && dm.key != "" {
 			m.addLog(m.now, "COPIED  private key to the clipboard", radio.ToneWarn)
 			return tea.SetClipboard(dm.key)
 		}

@@ -87,6 +87,26 @@ func dropLast(s string) string {
 	return s[:last]
 }
 
+// filterKey edits a "/" filter: enter keeps it, esc clears it.
+func filterKey(f *lineEdit, typing *bool, s string) {
+	switch s {
+	case "esc":
+		*f, *typing = lineEdit{}, false
+	case "enter":
+		*typing = false
+	default:
+		f.key(s)
+	}
+}
+
+// filterText shows a "/" filter, with the cursor while it's typed.
+func filterText(th theme.Theme, f lineEdit, typing bool, w int) string {
+	if typing {
+		return f.render(th, w, false)
+	}
+	return th.Fg(th.Text, false).Render(f.text)
+}
+
 // lineEdit is a line of typed text with a cursor that moves a whole character at a time.
 type lineEdit struct {
 	text string
@@ -130,7 +150,7 @@ func (e *lineEdit) key(s string) bool {
 	case "delete", "ctrl+d":
 		end := nextBoundary(e.text, e.pos)
 		e.text = e.text[:e.pos] + e.text[end:]
-	case "alt+backspace", "ctrl+backspace":
+	case "alt+backspace", "ctrl+backspace", "ctrl+w":
 		e.replace(wordStart(e.text, e.pos), "")
 	case "ctrl+u":
 		e.replace(0, "")

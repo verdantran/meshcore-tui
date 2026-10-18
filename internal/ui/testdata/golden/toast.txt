@@ -23,13 +23,13 @@
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │ No messages yet. Press enter to write the first one.                  ┃
-┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply · 0/147 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ █
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 91b9e092e69de532
+styles ba626b1f821c4f60
 == 130ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -55,13 +55,13 @@ styles 91b9e092e69de532
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │ No messages yet. Press enter to write the first one.                  ┃
-┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply · 0/147 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ NOTIFIED  Alice · █
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 278d9d22d131a31e
+styles 44d436a912933850
 == 260ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -87,13 +87,13 @@ styles 278d9d22d131a31e
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │ No messages yet. Press enter to write the first one.                  ┃
-┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply · 0/147 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ NOTIFIED  Alice · via terminal escap█
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 9fb513c3db082823
+styles 6bc6972728265ccd
 == 2s ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -119,13 +119,13 @@ styles 9fb513c3db082823
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │ No messages yet. Press enter to write the first one.                  ┃
-┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply · 0/147 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ NOTIFIED  Alice · via terminal escape + bell
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 80a67e0e6e6f57ba
+styles b0a6701655fe1168
 == 3.87s ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -151,13 +151,13 @@ styles 80a67e0e6e6f57ba
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │ No messages yet. Press enter to write the first one.                  ┃
-┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply · 0/147 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ NOTIFIED  Alice · via terminal escape + bell
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles a700dbee4b8cb82b
+styles a80396275bb8282d
 == 4s ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -183,10 +183,10 @@ styles a700dbee4b8cb82b
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │ No messages yet. Press enter to write the first one.                  ┃
-┃                          │ ▸ enter to write · ↑↓ conversations · → pick a message to reply 0/147 ┃
+┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply · 0/147 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  ● 1 unread · 0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ NOTIFIED  Alice · via terminal escape + bell
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles b3b3bac8109a6f1b
+styles fc6821dd6768a17d

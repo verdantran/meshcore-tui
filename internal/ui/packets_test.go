@@ -78,11 +78,11 @@ func TestInspector(t *testing.T) {
 		t.Fatalf("] should step to the path field:\n%s", h.screen())
 	}
 
-	h.keys("nn") // SNR ≥ 5: only the #bristol message's best copy qualifies
+	h.keys("++") // SNR ≥ 5: only the #bristol message's best copy qualifies
 	if got := h.screen(); strings.Contains(got, "hello all") || !strings.Contains(got, "Purdown") {
 		t.Fatalf("signal filter:\n%s", got)
 	}
-	h.keys("n")
+	h.keys("--")
 
 	h.key(tea.KeySpace)
 	h.hear(channelPacket(t, h, "Public", "Dan", "late arrival", nil), 3)
@@ -148,7 +148,7 @@ func TestInspectorShowsOnlyAdvertsAndOpenChannels(t *testing.T) {
 	if h.m.inspector.mesh.packets != 7 {
 		t.Errorf("the mesh tally counts every packet's routing: %+v", h.m.inspector.mesh)
 	}
-	h.keys("C")
+	h.keys("Cy")
 	if h.m.inspector.mesh.packets != 7 || len(h.m.inspector.rows) != 0 {
 		t.Error("clearing the list keeps the Stats tally")
 	}

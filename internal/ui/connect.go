@@ -21,7 +21,7 @@ type connectModel struct {
 	mode     string // "" for a companion radio, or ModeRepeater
 	modeAt   time.Time
 	editing  bool
-	input    string
+	input    lineEdit
 	openedAt time.Time
 
 	scanning bool
@@ -155,27 +155,23 @@ func (c *connectModel) rescan() {
 }
 
 // key handles the connect screen; it returns the chosen target once one is picked.
-func (c *connectModel) key(s string, now time.Time, forget func(Target)) (Target, bool, bool) {
+func (c *connectModel) key(s string, now time.Time) (Target, bool, bool) {
 	if c.editing {
 		switch s {
 		case "esc":
 			c.editing = false
 		case "enter":
-			if strings.TrimSpace(c.input) != "" {
-				return Target{Kind: "TCP", Addr: strings.TrimSpace(c.input)}, true, false
+			if addr := strings.TrimSpace(c.input.text); addr != "" {
+				return Target{Kind: "TCP", Addr: addr}, true, false
 			}
-		case "backspace":
-			c.input = dropLast(c.input)
 		case "space":
 		default:
-			if len([]rune(s)) == 1 {
-				c.input += s
-			}
+			c.input.key(s)
 		}
 		return Target{}, false, false
 	}
 	switch s {
-	case "q", "esc":
+	case "q":
 		return Target{}, false, true
 	case "up", "k":
 		c.sel = (c.sel + len(c.items) - 1) % len(c.items)
@@ -189,11 +185,6 @@ func (c *connectModel) key(s string, now time.Time, forget func(Target)) (Target
 			c.setMode("")
 		} else {
 			c.setMode(ModeRepeater)
-		}
-	case "d":
-		if t := c.items[c.sel]; t.Saved != "" {
-			forget(t)
-			c.rescan()
 		}
 	case "enter":
 		t := c.items[c.sel]
@@ -218,7 +209,10 @@ func (m *Model) renderConnect() []string {
 		if t.Kind == "TCP" {
 			addr = "host:port"
 			if c.editing && i == c.sel {
-				addr = c.input + "█"
+				addr = c.input.before() + "█" + c.input.text[c.input.pos:]
+				if r := []rune(addr); len(r) > 22 {
+					addr = "…" + string(r[len(r)-21:])
+				}
 			}
 		}
 		mark := " "
@@ -240,14 +234,19 @@ func (m *Model) renderConnect() []string {
 	case c.scanErr != "":
 		body = append(body, th.Fg(th.Red, false).Render(truncate("BLUETOOTH  "+c.scanErr, inner)), "")
 	}
-	hint := "↑↓ choose · enter connect · m mode · d forget · r rescan · T theme · q quit"
+	hs := []hint{{"↑↓", "choose"}, {"enter", "connect"}}
 	if c.mode == "" && m.opt.Scan != nil {
-		hint = "↑↓ choose · enter connect · b Bluetooth · m mode · d forget · r rescan · q quit"
+		hs = append(hs, hint{"b", "Bluetooth"})
 	}
+	hs = append(hs, hint{"m", "mode"}, hint{"x", "forget"}, hint{"r", "rescan"}, hint{"T", "theme"}, hint{"q", "quit"})
 	if c.editing {
-		hint = "type a host, then enter · esc cancel"
+		hs = []hint{{"", "type a host"}, {"enter", "connect"}, {"esc", "cancel"}}
 	}
-	body = append(body, th.Fg(th.Dim, false).Render(truncate(hint, inner)))
+	line := th.Fg(th.Dim, false).Render(truncate(hintLine(hs), inner))
+	if m.asking != nil {
+		line = truncate(m.askLine(), inner)
+	}
+	body = append(body, line)
 	box := m.panel("SELECT LINK", body, width, len(body)+2, th.Magenta, true)
 	block := append(m.logo(c.openedAt), "")
 	block = append(block, box...)

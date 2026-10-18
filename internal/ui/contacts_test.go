@@ -213,9 +213,9 @@ func TestContactsShareRemoveImport(t *testing.T) {
 	if !strings.Contains(got, "SHARE CAROL") || !strings.Contains(got, "▀") || !strings.Contains(got, "meshcore://") {
 		t.Fatalf("share overlay:\n%s", got)
 	}
-	_, cmd := h.m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
+	_, cmd := h.m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
 	if cmd == nil || !strings.Contains(h.m.log[len(h.m.log)-1].text, "COPIED") {
-		t.Fatal("c should copy the link")
+		t.Fatal("y should copy the link")
 	}
 	h.key(tea.KeyEscape)
 
@@ -410,7 +410,7 @@ func TestRemappedKeys(t *testing.T) {
 	}
 	delete(h.m.opt.Keys["all"], "w")
 	h.keys("/w")
-	if h.m.contacts.filter != "w" {
-		t.Errorf("a text field takes the key as typed: %q", h.m.contacts.filter)
+	if h.m.contacts.filter.text != "w" {
+		t.Errorf("a text field takes the key as typed: %q", h.m.contacts.filter.text)
 	}
 }

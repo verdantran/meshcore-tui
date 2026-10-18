@@ -246,12 +246,43 @@ func (m *Model) paletteLine() string {
 	return prompt + "  " + th.Fg(th.Dim, false).Render(truncate(hint, max(m.w-visibleWidth(prompt)-3, 0)))
 }
 
+// helpKey scrolls the ? overlay; esc, ?, q and enter close it.
+func (m *Model) helpKey(s string) {
+	room := m.mainHeight(m.bodyHeight()) - 2
+	last := max(len(m.helpLines())-room, 0)
+	switch s {
+	case "esc", "?", "q", "enter":
+		m.help = false
+	case "down", "j":
+		m.helpScroll++
+	case "up", "k":
+		m.helpScroll--
+	case "pgdown", "space", "ctrl+d":
+		m.helpScroll += room / 2
+	case "pgup", "ctrl+u":
+		m.helpScroll -= room / 2
+	case "g", "home":
+		m.helpScroll = 0
+	case "G", "end":
+		m.helpScroll = last
+	}
+	m.helpScroll = min(max(m.helpScroll, 0), last)
+}
+
+// helpRow is a key and what it does, as the ? overlay lists them.
+func helpRow(th theme.Theme, k, what string) string {
+	const col = 16
+	pad := col - visibleWidth(k)
+	if pad < 2 {
+		pad = 2
+	}
+	return th.Fg(th.Cyan, true).Render(k+strings.Repeat(" ", pad)) + th.Fg(th.Muted, false).Render(what)
+}
+
 // helpLines is the ? overlay: keys first, then every command.
 func (m *Model) helpLines() []string {
 	th := m.th
-	key := func(k, what string) string {
-		return th.Fg(th.Cyan, true).Render(fmt.Sprintf("%-12s", k)) + th.Fg(th.Muted, false).Render(what)
-	}
+	key := func(k, what string) string { return helpRow(th, k, what) }
 	lines := []string{th.Fg(th.Muted, true).Render("KEYS")}
 	lines = append(lines, m.screenKeys()...)
 	if mine := m.myKeys(); len(mine) > 0 {
@@ -265,20 +296,46 @@ func (m *Model) helpLines() []string {
 		}
 		lines = append(lines, "")
 	}
+	lines = append(lines, th.Fg(th.Muted, true).Render("EVERYWHERE"))
+	if m.repeaterMode() {
+		lines = append(lines, key("1-9", "switch screen"), key("tab shift+tab", "next screen · previous screen; ←→ too"))
+	} else {
+		lines = append(lines, key("1-7", "switch screen"), key("tab shift+tab", "next screen · previous screen"),
+			key("M", "open the map; on a packet, message or contact, its path"))
+	}
+	lines = append(lines, key(":", "command palette"), key("?", "this help: j k scroll, esc closes"))
+	if !m.repeaterMode() {
+		lines = append(lines, key("ctrl+f", "search every conversation"))
+	}
 	lines = append(lines,
-		key("1-7", "switch screen"), key("tab", "next screen"), key(":", "command palette"),
-		key("click", "a screen's name in the tab bar goes to it; a click in a pane focuses it"), "",
-		th.Fg(th.Muted, true).Render("PANES"),
-		key("ctrl+w v", "split right"), key("ctrl+w s", "split down"), key("ctrl+w ←↑↓→", "move between panes; h j k l and w too"),
-		key("ctrl+w q", "close the pane"), key("ctrl+w < >", "narrower · wider"), key("ctrl+w - +", "shorter · taller"),
-		key("ctrl+w =", "even out the panes"), key("ctrl+w z", "zoom the pane, and back"), "",
-		key("T", "next theme"), key("v", "cycle motion: full, reduced, off"), key("F12", "protocol frames"),
-		key("?", "this help"), key("q", "quit"), "",
-		th.Fg(th.Muted, true).Render("COMMANDS"))
+		key("T", "next theme"), key("v", "cycle motion: full, reduced, off"), key("F12", "protocol frames; :frames too"),
+		key("q", "quit; asks first if a message or a settings change isn't sent yet"), key("ctrl+c", "quit, always"),
+		key("click", "a screen's name in the tab bar goes to it; a click in a pane focuses it; the wheel scrolls"), "",
+		th.Fg(th.Muted, true).Render("TEXT FIELDS"),
+		key("enter esc", "commit · cancel"), key("←→ home end", "move the cursor; ctrl+←→ or alt+b alt+f by word"),
+		key("ctrl+w", "delete a word; alt+backspace too"), key("ctrl+u ctrl+k", "delete to the start · to the end"), "")
+	if !m.repeaterMode() {
+		lines = append(lines, th.Fg(th.Muted, true).Render("PANES"),
+			key("ctrl+w v", "split right"), key("ctrl+w s", "split down"), key("ctrl+w ←↑↓→", "move between panes; h j k l and w too"),
+			key("ctrl+w q", "close the pane"), key("ctrl+w < >", "narrower · wider"), key("ctrl+w - +", "shorter · taller"),
+			key("ctrl+w =", "even out the panes"), key("ctrl+w z", "zoom the pane, and back"), "")
+	}
+	lines = append(lines, th.Fg(th.Muted, true).Render("COMMANDS"))
 	for _, c := range m.commandSet() {
 		lines = append(lines, key(c.name, strings.TrimSpace(c.args+"  "+c.help)))
 	}
 	return lines
+}
+
+// unfinished is why quitting should wait: something typed or staged that hasn't been sent.
+func (m *Model) unfinished() string {
+	if strings.TrimSpace(m.chats.input.text) != "" {
+		return "your message isn't sent"
+	}
+	if m.admin != nil && len(m.admin.Changes(m.adm.open)) > 0 {
+		return "settings changes aren't applied"
+	}
+	return ""
 }
 
 // slug is how a conversation is typed in the palette: lower case, spaces as underscores, no leading #.
@@ -365,31 +422,55 @@ func traceCommand() command {
 		}}
 }
 
-// keyScope is the keys.toml section for what has the keyboard now.
-func (m *Model) keyScope() string {
-	switch m.phase {
-	case phaseConnect:
-		return "connect"
-	case phaseMain:
-		return strings.ToLower(tabNames[m.tab])
+// keyScopes are the keys.toml sections for what has the keyboard now, most particular first.
+func (m *Model) keyScopes() []string {
+	switch {
+	case m.paneKey:
+		return []string{"panes"}
+	case m.phase == phaseConnect:
+		return []string{"connect", "all"}
+	case m.phase != phaseMain:
+		return []string{"all"}
+	}
+	screen := strings.ToLower(tabNames[m.tab])
+	if v := m.keyView(); v != "" {
+		return []string{screen + "." + v, screen, "all"}
+	}
+	return []string{screen, "all"}
+}
+
+// keyView is the view within the screen that keys.toml can rebind by itself, if any.
+func (m *Model) keyView() string {
+	switch {
+	case m.tab == 0 && m.chats.reading:
+		return "reading"
+	case m.tab == 1 && m.contacts.heardView:
+		return "heard"
+	case m.tab == 2 && m.mapv.path != nil:
+		return "path"
+	case m.tab == 4 && !m.adm.opened && !m.adm.local:
+		return "list"
+	case m.tab == 4:
+		return []string{"status", "health", "settings", "neighbours", "access", "regions", "telemetry", "log", ""}[m.adm.pane]
 	}
 	return ""
 }
 
-// rebound is what a pressed key stands for: the screen's binding first, then one for everywhere.
+// rebound is what a pressed key stands for, from the most particular section that binds it.
 func (m *Model) rebound(s string) (string, bool) {
-	if to, ok := m.opt.Keys[m.keyScope()][s]; ok {
-		return to, true
+	for _, scope := range m.keyScopes() {
+		if to, ok := m.opt.Keys[scope][s]; ok {
+			return to, true
+		}
 	}
-	to, ok := m.opt.Keys["all"][s]
-	return to, ok
+	return "", false
 }
 
 // myKeys are the rebindings in force here, as key and what it stands for, sorted.
 func (m *Model) myKeys() [][2]string {
 	seen := map[string]bool{}
 	var out [][2]string
-	for _, scope := range []string{m.keyScope(), "all"} {
+	for _, scope := range m.keyScopes() {
 		for from, to := range m.opt.Keys[scope] {
 			if !seen[from] {
 				seen[from] = true

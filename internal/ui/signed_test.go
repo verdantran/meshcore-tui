@@ -72,17 +72,18 @@ func TestSignedMessages(t *testing.T) {
 
 	// Pin it from the message; then it reads ✓.
 	h.key(tea.KeyRight)
-	if !strings.Contains(h.screen(), "p pin key") {
-		t.Error("p is offered")
+	if !strings.Contains(h.screen(), "K pin key") {
+		t.Error("K is offered")
 	}
-	h.keys("p")
+	h.keys("K")
 	if !strings.Contains(h.screen(), "✓ signed") || !strings.Contains(h.lastLog(), "PINNED  Zed") {
 		t.Errorf("pinned:\n%s", h.screen())
 	}
-	h.keys("p")
-	if !strings.Contains(h.lastLog(), "already pinned") {
-		t.Error("pinning again")
+	h.keys("K")
+	if _, ok := h.m.pins()["Zed"]; ok {
+		t.Error("K again unpins")
 	}
+	h.keys("K")
 	h.key(tea.KeyEscape)
 
 	// The signature before its message waits for it.
@@ -105,9 +106,13 @@ func TestSignedMessages(t *testing.T) {
 		t.Errorf("impersonation:\n%s", h.screen())
 	}
 	h.key(tea.KeyRight)
-	h.keys("p")
-	if !strings.Contains(h.lastLog(), "P replaces it") {
-		t.Error("replacing a pin takes P")
+	h.keys("K")
+	if h.m.asking == nil || !strings.Contains(h.screen(), "REPLACE IT") {
+		t.Error("replacing a pin asks first")
+	}
+	h.key(tea.KeyEscape)
+	if p := h.m.pins()["Zed"]; p.Key == other.pub {
+		t.Error("any other key keeps the pin")
 	}
 	h.key(tea.KeyEscape)
 
@@ -142,13 +147,13 @@ func TestSignedMessages(t *testing.T) {
 		t.Errorf("a key that's someone else's:\n%s", h.screen())
 	}
 	h.key(tea.KeyRight)
-	h.keys("p")
-	if _, ok := h.m.pins()["Bob"]; ok || !strings.Contains(h.lastLog(), "would let them post as Bob") {
-		t.Errorf("p refuses another's key: %s", h.lastLog())
+	h.keys("K")
+	if _, ok := h.m.pins()["Bob"]; ok || !strings.Contains(h.screen(), "LETTING THEM POST AS BOB") {
+		t.Errorf("K asks before pinning another's key:\n%s", h.screen())
 	}
-	h.keys("P")
+	h.keys("y")
 	if p := h.m.pins()["Bob"]; p.Key != other.pub {
-		t.Error("P pins it anyway")
+		t.Error("y pins it anyway")
 	}
 	h.key(tea.KeyEscape)
 	// Junk and other data types are ignored; a signature for a channel we don't have waits and expires.

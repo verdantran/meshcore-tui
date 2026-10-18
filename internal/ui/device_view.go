@@ -76,7 +76,7 @@ func (m *Model) renderDevice(w, rows int) []string {
 	out = append(out, "")
 	hint := list[dm.sel].hint
 	if hint == "" {
-		hint = map[rowKind]string{rowEdit: "enter edits", rowToggle: "enter changes it", rowAction: "enter"}[list[dm.sel].kind]
+		hint = map[rowKind]string{rowEdit: "enter edit", rowToggle: "enter change it", rowAction: "enter run"}[list[dm.sel].kind]
 	}
 	out = append(out, th.Fg(th.Dim, false).Render(clip(hint, w)))
 	for len(out) < rows-1 {
@@ -139,7 +139,7 @@ func (m *Model) devEditLines(w int) []string {
 			out = append(out, th.Fg(th.Dim, false).Render(l))
 		}
 	}
-	return append(out, "", th.Fg(th.Dim, false).Render("enter sends it to the radio · esc cancels"))
+	return append(out, "", th.Fg(th.Dim, false).Render("enter send it to the radio · esc cancel"))
 }
 
 func (m *Model) presetLines(w int) []string {
@@ -169,16 +169,16 @@ func (m *Model) devConfirmLines(w int) []string {
 	}
 	out = append(out, "")
 	if c.word == "" {
-		return append(out, th.Fg(th.Text, false).Render("y goes ahead · any other key cancels"))
+		return append(out, th.Fg(th.Text, false).Render("y go ahead · any other key cancel"))
 	}
 	return append(out, th.Fg(th.Text, false).Render("Type "+c.word+" to go ahead:"),
 		th.Fg(th.Magenta, true).Render("▸ ")+m.device.input.render(th, w-2, false), "",
-		th.Fg(th.Dim, false).Render("esc cancels"))
+		th.Fg(th.Dim, false).Render("enter go ahead · esc cancel"))
 }
 
 func (m *Model) keyLines(w int) []string {
 	th, dm := m.th, &m.device
-	out := []string{th.Fg(th.Red, true).Render("PRIVATE KEY") + th.Fg(th.Dim, false).Render("  ·  c copies · any key hides it"), ""}
+	out := []string{th.Fg(th.Red, true).Render("PRIVATE KEY") + th.Fg(th.Dim, false).Render("  ·  y copy · any other key hide it"), ""}
 	if dm.key == "" {
 		return append(out, m.waiting("reading it from the radio…"))
 	}

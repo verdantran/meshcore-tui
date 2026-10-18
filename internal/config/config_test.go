@@ -110,6 +110,14 @@ func TestLoadKeys(t *testing.T) {
 	if err != nil || k["all"]["ctrl+n"] != "down" || k["map"]["w"] != "up" || k["map"]["x"] != "" {
 		t.Errorf("keys = %v %v", k, err)
 	}
+	os.WriteFile(path, []byte("[admin]\nu = \"r\"\n[admin.settings]\nu = \"\"\n[panes]\nb = \"s\"\n"), 0o644)
+	if k, err := LoadKeys(path); err != nil || k["admin"]["u"] != "r" || k["admin.settings"]["u"] != "" || k["panes"]["b"] != "s" {
+		t.Errorf("views within a screen have sections of their own: %v %v", k, err)
+	}
+	os.WriteFile(path, []byte("[admin.setings]\nu = \"\"\n"), 0o644)
+	if _, err := LoadKeys(path); err == nil || !strings.Contains(err.Error(), "unknown section [admin.setings]") {
+		t.Errorf("a misspelt view is caught: %v", err)
+	}
 	os.WriteFile(path, []byte("[maps]\nw = \"up\"\n"), 0o644)
 	if _, err := LoadKeys(path); err == nil || !strings.Contains(err.Error(), "unknown section [maps]") {
 		t.Errorf("a misspelt section is caught: %v", err)

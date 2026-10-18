@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/verdantran/meshcore-tui/internal/admin"
 	"github.com/verdantran/meshcore-tui/internal/chat"
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/radio"
@@ -35,9 +36,9 @@ type chatsModel struct {
 	msgs    []store.Message
 	scroll  int // messages hidden below the bottom of the pane
 
-	filter    string // "/" narrows the open conversation to matching messages
-	filtering bool   // typing the filter
-	focus     int64  // a message jumped to from search, marked until the next move
+	filter    lineEdit // "/" narrows the open conversation to matching messages
+	filtering bool     // typing the filter
+	focus     int64    // a message jumped to from search, marked until the next move
 
 	reading bool  // moving through the open conversation's messages, to reply to one or see its route
 	cur     int64 // the message picked while reading
@@ -63,7 +64,7 @@ type chatsModel struct {
 	mention *mentionCycle // tab completing an @name in the compose box
 
 	chanStage chanStage // adding, sharing or removing a channel
-	chanInput string
+	chanInput lineEdit
 	chanName  string
 	shareCh   radio.Channel
 }
@@ -130,8 +131,8 @@ func (m *Model) refreshChats() {
 		m.chat.MarkRead(cur.Convo)
 		c.infos[c.sel].Unread = 0
 	}
-	if c.filter != "" {
-		found, _ := m.chat.Search(c.filter, cur.Convo, historyLen)
+	if c.filter.text != "" {
+		found, _ := m.chat.Search(c.filter.text, cur.Convo, historyLen)
 		c.msgs = make([]store.Message, len(found))
 		for i, f := range found {
 			c.msgs[len(found)-1-i] = f // search returns newest first; the pane wants oldest first
@@ -324,20 +325,7 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		return m.channelKey(s)
 	}
 	if c.filtering {
-		switch s {
-		case "esc":
-			c.filter, c.filtering = "", false
-		case "enter":
-			c.filtering = false
-		case "backspace":
-			c.filter = dropLast(c.filter)
-		case "space":
-			c.filter += " "
-		default:
-			if len([]rune(s)) == 1 {
-				c.filter += s
-			}
-		}
+		filterKey(&c.filter, &c.filtering, s)
 		c.scroll = 0
 		m.refreshChats()
 		return nil, true
@@ -366,37 +354,57 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 	}
 	switch s {
 	case "/":
-		c.filtering, c.filter = true, ""
+		c.filtering, c.filter = true, lineEdit{}
 	case "esc":
-		if c.filter == "" {
+		if c.filter.text == "" {
 			return nil, false
 		}
-		c.filter = ""
+		c.filter = lineEdit{}
 		m.refreshChats()
 	case "up", "k":
 		if c.sel > 0 {
 			c.sel--
-			c.scroll, c.focus, c.filter, c.reading = 0, 0, "", false
+			c.scroll, c.focus, c.filter, c.reading = 0, 0, lineEdit{}, false
 			m.refreshChats()
 		}
 	case "down", "j":
 		if c.sel < len(c.infos)-1 {
 			c.sel++
-			c.scroll, c.focus, c.filter, c.reading = 0, 0, "", false
+			c.scroll, c.focus, c.filter, c.reading = 0, 0, lineEdit{}, false
 			m.refreshChats()
 		}
 	case "enter", "i":
 		if len(c.infos) > 0 {
 			c.writing = true
 		}
-	case "n", "s", "x", "r":
+	case "n", "e", "x":
 		return m.channelKey(s)
-	case "L":
-		if ct, ok := m.selectedRoom(); ok {
-			m.loginFromChats(ct)
-			return nil, true
+	case "r":
+		if i := m.newestReceived(); i >= 0 {
+			c.reading, c.cur = true, c.msgs[i].ID
+			return m.readingKey("r")
 		}
-		return nil, false
+		m.addLog(m.now, "REPLY  nothing received here to reply to", radio.ToneInfo)
+	case "g", "home":
+		if c.sel != 0 && len(c.infos) > 0 {
+			c.sel, c.scroll, c.focus, c.filter, c.reading = 0, 0, 0, lineEdit{}, false
+			m.refreshChats()
+		}
+	case "G", "end":
+		if last := len(c.infos) - 1; c.sel != last && last >= 0 {
+			c.sel, c.scroll, c.focus, c.filter, c.reading = last, 0, 0, lineEdit{}, false
+			m.refreshChats()
+		}
+	case "L":
+		ct, ok := m.selectedRoom()
+		if !ok {
+			return nil, false
+		}
+		if sess, ok := m.admin.Find(ct.Key); ok && sess.State == admin.LoggedIn {
+			return m.logout(ct), true
+		}
+		m.loginFromChats(ct)
+		return nil, true
 	case "right":
 		if len(c.msgs) > 0 {
 			c.reading, c.cur = true, c.msgs[max(len(c.msgs)-1-c.scroll, 0)].ID
@@ -412,9 +420,9 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		m.addLog(m.now, "RETRY  nothing here failed to send", radio.ToneInfo)
 	case "S":
 		m.toggleChannelSigning()
-	case "pgup", "K":
+	case "pgup", "ctrl+u":
 		c.scroll = min(c.scroll+5, max(len(c.msgs)-1, 0))
-	case "pgdown", "J":
+	case "pgdown", "ctrl+d":
 		c.scroll = max(c.scroll-5, 0)
 	default:
 		return nil, false
@@ -456,7 +464,9 @@ func (m *Model) readingKey(s string) (tea.Cmd, bool) {
 		i = max(i-1, 0)
 	case "down", "j":
 		i = min(i+1, len(c.msgs)-1)
-	case "g", "end":
+	case "g", "home":
+		i = 0
+	case "G", "end":
 		i = len(c.msgs) - 1
 	case "left", "esc":
 		c.reading = false
@@ -480,8 +490,8 @@ func (m *Model) readingKey(s string) (tea.Cmd, bool) {
 	case "M":
 		m.showMessagePath(c.msgs[i])
 		return nil, true
-	case "p", "P":
-		m.pinPicked(c.msgs[i], s == "P")
+	case "K":
+		m.pinPicked(c.msgs[i])
 		return nil, true
 	case "y":
 		msg := c.msgs[i]
@@ -642,13 +652,9 @@ func (m *Model) convoPane(w, rows int) []string {
 		}
 	}
 	head := title + th.Fg(th.Dim, false).Render("  "+route)
-	if c.filter != "" || c.filtering {
-		cursor := ""
-		if c.filtering {
-			cursor = th.Fg(th.Text, true).Render("█")
-		}
-		head = title + th.Fg(th.Yellow, true).Render("  / ") + th.Fg(th.Text, false).Render(c.filter) + cursor +
-			th.Fg(th.Dim, false).Render(fmt.Sprintf("  · %d matching · esc clears", len(c.msgs)))
+	if c.filter.text != "" || c.filtering {
+		head = title + th.Fg(th.Yellow, true).Render("  / ") + filterText(th, c.filter, c.filtering, 24) +
+			th.Fg(th.Dim, false).Render(fmt.Sprintf("  · %d matching · esc clear", len(c.msgs)))
 	}
 
 	// Compose line, always at the bottom.
@@ -678,7 +684,7 @@ func (m *Model) convoPane(w, rows int) []string {
 	if c.writing {
 		compose = th.Fg(th.Magenta, true).Render("▸ ") + c.input.render(th, w-3-visibleWidth(counter), false)
 	} else {
-		compose = th.Fg(th.Dim, false).Render("▸ enter to write · ↑↓ conversations · → pick a message to reply to or see its route · / filter · ctrl+f search all")
+		compose = th.Fg(th.Dim, false).Render("▸ enter write · ↑↓ conversations · → pick a message · r reply · / filter · ctrl+f search all")
 		if c.reading {
 			compose = th.Fg(th.Magenta, true).Render("▸ ") + th.Fg(th.Text, false).Render("↑↓ messages · ") +
 				th.Fg(th.Cyan, true).Render("r") + th.Fg(th.Text, false).Render(" reply · ") +
@@ -724,7 +730,7 @@ func (m *Model) convoPane(w, rows int) []string {
 	body := lines[start:end]
 	if len(c.msgs) == 0 {
 		body = []string{th.Fg(th.Dim, false).Render("No messages yet. Press enter to write the first one.")}
-		if c.filter != "" {
+		if c.filter.text != "" {
 			body = []string{th.Fg(th.Dim, false).Render("Nothing here matches.")}
 		}
 	}
@@ -761,7 +767,7 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 	meta := m.messageMeta(msg)
 	if picked {
 		if _, pinned := m.pins()[msg.Sender]; msg.Sig == store.SigValid && !msg.Out && !pinned {
-			meta = th.Fg(th.Cyan, true).Render("p") + th.Fg(th.Dim, false).Render(" pin key · ") + meta
+			meta = th.Fg(th.Cyan, true).Render("K") + th.Fg(th.Dim, false).Render(" pin key · ") + meta
 		}
 		meta = th.Fg(th.Cyan, true).Render("r") + th.Fg(th.Dim, false).Render(" reply · ") +
 			th.Fg(th.Cyan, true).Render("M") + th.Fg(th.Dim, false).Render(" route · ") +
@@ -779,7 +785,7 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 	gap := w - visibleWidth(headLine) - visibleWidth(meta)
 	out := []string{headLine + strings.Repeat(" ", max(gap, 1)) + meta}
 	for _, l := range strings.Split(ansi.Wrap(text, max(w-8, 10), ""), "\n") {
-		out = append(out, bar+"      "+m.highlight(l, m.chats.filter, th.Text))
+		out = append(out, bar+"      "+m.highlight(l, m.chats.filter.text, th.Text))
 	}
 	if picked {
 		for i := range out {

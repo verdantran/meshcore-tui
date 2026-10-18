@@ -14,7 +14,7 @@
 ┃   signature             INVALID               0050  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
 ┃   app data              unnamed · unknown ty  0060  00 00 00 00 00 00 00 00                      ┃
 ┃                                                                                                  ┃
-┃ [ ] step through fields · space pause · R ro                                                     ┃
+┃ enter map · [ ] fields · space pause · F rou                                                     ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
@@ -29,7 +29,7 @@
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 28dc3c5724d8d9ec
+styles 367c9d8e9d7fc7f3
 == 120ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -46,7 +46,7 @@ styles 28dc3c5724d8d9ec
 ┃   signature             INVALID               0050  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
 ┃   app data              unnamed · unknown ty  0060  00 00 00 00 00 00 00 00                      ┃
 ┃                                                                                                  ┃
-┃ [ ] step through fields · space pause · R ro                                                     ┃
+┃ enter map · [ ] fields · space pause · F rou                                                     ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
@@ -61,7 +61,7 @@ styles 28dc3c5724d8d9ec
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
                                                                                                   11
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 4cc8b6c5841469ad
+styles f6317758e6da1bd2
 == 700ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -78,7 +78,7 @@ styles 4cc8b6c5841469ad
 ┃   signature             INVALID               0050  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ┃
 ┃   app data              unnamed · unknown ty  0060  00 00 00 00 00 00 00 00                      ┃
 ┃                                                                                                  ┃
-┃ [ ] step through fields · space pause · R ro                                                     ┃
+┃ enter map · [ ] fields · space pause · F rou                                                     ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
 ┃                                                                                                  ┃
@@ -93,4 +93,4 @@ styles 4cc8b6c5841469ad
  [10:03:00] ▸ LINK ESTABLISHED  MeshCore-k4 · Heltec V4
                                                                                           11 01 A3 0
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 222cb46f8c11c6a8
+styles 23e9b6a7de53680f

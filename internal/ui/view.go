@@ -299,7 +299,14 @@ func (m *Model) body(w, h int) []string {
 	}
 
 	if m.help {
-		box := m.panel("HELP", m.helpLines(), w, mainH, th.Cyan, true)
+		lines, room := m.helpLines(), mainH-2
+		title := "HELP"
+		if len(lines) > room {
+			start := min(m.helpScroll, len(lines)-room)
+			lines = lines[start : start+room]
+			title = fmt.Sprintf("HELP · %d%% · j k scroll", (start+room)*100/len(m.helpLines()))
+		}
+		box := m.panel(title, lines, w, mainH, th.Cyan, true)
 		return append(box, debug...)
 	}
 	if m.search.open {
@@ -439,10 +446,13 @@ func (m *Model) footer() []string {
 	}
 	keys := th.Fg(th.Dim, false).Render(" 1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit")
 	if m.repeaterMode() {
-		keys = th.Fg(th.Dim, false).Render(" 1-9 screens · ← → next · : command · ? help · T theme · v motion · q quit")
+		keys = th.Fg(th.Dim, false).Render(" 1-9 screens · ←→ next · : command · ? help · T theme · v motion · q quit")
 	}
 	if m.pal.open {
 		keys = m.paletteLine()
+	}
+	if m.asking != nil {
+		keys = " " + m.askLine()
 	}
 	if m.paneKey {
 		keys = th.Fg(th.Magenta, true).Render(" PANES ") + th.Fg(th.Muted, false).Render(" v split right · s split down · ←↑↓→ move · w next · q close · z zoom · < > - + = size")
