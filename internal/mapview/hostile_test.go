@@ -127,3 +127,18 @@ func groupSlowly(marks []sMark, zoom float64) [][]sMark {
 	}
 	return groups
 }
+
+func TestLabelsMeasuredAsDrawn(t *testing.T) {
+	c := NewCanvas(20, 2, theme.RGB{})
+	name := "👨‍👩‍👧 Bob"
+	c.Text(0, 0, name, theme.RGB{}, false)
+	used := 0
+	for x := range 20 {
+		if ce := c.at(x, 0); ce != nil && (ce.text != 0 || ce.cont) {
+			used = x + 1
+		}
+	}
+	if used != textWidth(name) {
+		t.Errorf("Text used %d cells, textWidth says %d", used, textWidth(name))
+	}
+}

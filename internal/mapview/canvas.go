@@ -117,8 +117,15 @@ func (c *Canvas) Text(cx, cy int, s string, col theme.RGB, bold bool) {
 	}
 }
 
-// textWidth is how many cells Text will use.
-func textWidth(s string) int { return ansi.StringWidth(s) }
+// textWidth is how many cells Text will use: it lays a label out a character at a time, so a joined emoji
+// takes the cells of each of its parts.
+func textWidth(s string) int {
+	w := 0
+	for _, r := range s {
+		w += ansi.StringWidth(string(r))
+	}
+	return w
+}
 
 // Label writes text on its own background strip, for the credit and notices over the map.
 func (c *Canvas) Label(cx, cy int, s string, fg, bg theme.RGB) {
