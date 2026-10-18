@@ -103,7 +103,7 @@ func TestTilesFor(t *testing.T) {
 func tileServer(t *testing.T, fail func(path string) bool) (*httptest.Server, *atomic.Int32) {
 	var hits atomic.Int32
 	var srv *httptest.Server
-	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("User-Agent") != "test-agent" {
 			t.Errorf("user agent %q", r.Header.Get("User-Agent"))
 		}
@@ -126,7 +126,7 @@ func TestFetchResumeAndSave(t *testing.T) {
 	stop := atomic.Bool{}
 	srv, hits := tileServer(t, func(p string) bool { return stop.Load() && strings.HasPrefix(p, "/t/") })
 	dir := t.TempDir()
-	f := Fetcher{Index: srv.URL + "/planet", Agent: "test-agent", Dir: filepath.Join(dir, "tiles")}
+	f := Fetcher{Index: srv.URL + "/planet", Agent: "test-agent", Dir: filepath.Join(dir, "tiles"), Client: srv.Client()}
 	box := Box{-2.9, 51.3, -2.3, 51.6}
 	tiles := TilesFor(box)
 	var progress atomic.Int32
@@ -185,21 +185,21 @@ func TestFetchFailures(t *testing.T) {
 		t.Errorf("too many tiles: %v", err)
 	}
 	srv, _ := tileServer(t, func(p string) bool { return p == "/planet" })
-	if _, _, err := (Fetcher{Index: srv.URL + "/planet", Agent: "test-agent"}).Fetch(ctx, nil, []Tile{{1, 1}}, nil); err == nil {
+	if _, _, err := (Fetcher{Index: srv.URL + "/planet", Agent: "test-agent", Client: srv.Client()}).Fetch(ctx, nil, []Tile{{1, 1}}, nil); err == nil {
 		t.Error("no tile list")
 	}
-	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("[]")) }))
+	bad := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("[]")) }))
 	defer bad.Close()
-	if _, _, err := (Fetcher{Index: bad.URL}).Fetch(ctx, nil, []Tile{{1, 1}}, nil); err == nil || !strings.Contains(err.Error(), "tile list") {
+	if _, _, err := (Fetcher{Index: bad.URL, Client: bad.Client()}).Fetch(ctx, nil, []Tile{{1, 1}}, nil); err == nil || !strings.Contains(err.Error(), "tile list") {
 		t.Errorf("unreadable list: %v", err)
 	}
-	if _, _, err := (Fetcher{Index: "http://127.0.0.1:1/none"}).Fetch(ctx, nil, []Tile{{1, 1}}, nil); err == nil {
+	if _, _, err := (Fetcher{Index: "https://127.0.0.1:1/none"}).Fetch(ctx, nil, []Tile{{1, 1}}, nil); err == nil {
 		t.Error("nothing listening")
 	}
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
 	srv2, _ := tileServer(t, nil)
-	if _, _, err := (Fetcher{Index: srv2.URL + "/planet", Agent: "test-agent"}).Fetch(cancelled, nil, []Tile{{1, 1}}, nil); err == nil {
+	if _, _, err := (Fetcher{Index: srv2.URL + "/planet", Agent: "test-agent", Client: srv2.Client()}).Fetch(cancelled, nil, []Tile{{1, 1}}, nil); err == nil {
 		t.Error("cancelled")
 	}
 	if (Fetcher{}).ClearCache() != nil {

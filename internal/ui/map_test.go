@@ -469,9 +469,10 @@ func TestMapLinkSignal(t *testing.T) {
 	}
 }
 
-func emptyTileServer(t *testing.T, status int, hold chan struct{}) *httptest.Server {
+// useTileServer points the map's downloads at a server whose tiles are empty.
+func useTileServer(t *testing.T, h *harness, status int, hold chan struct{}) *httptest.Server {
 	var srv *httptest.Server
-	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/planet" {
 			w.Write([]byte(`{"tiles":["` + srv.URL + `/t/{z}/{x}/{y}.pbf"]}`))
 			return
@@ -488,14 +489,15 @@ func emptyTileServer(t *testing.T, status int, hold chan struct{}) *httptest.Ser
 		}
 	}))
 	t.Cleanup(srv.Close)
+	h.m.opt.MapIndex, h.m.opt.MapClient = srv.URL+"/planet", srv.Client()
 	return srv
 }
 
 func TestMapDownload(t *testing.T) {
 	h := newHarness(t)
 	hold := make(chan struct{})
-	srv := emptyTileServer(t, http.StatusOK, hold)
-	h.m.opt.MapDir, h.m.opt.MapIndex = t.TempDir(), srv.URL+"/planet"
+	useTileServer(t, h, http.StatusOK, hold)
+	h.m.opt.MapDir = t.TempDir()
 	h.openMap()
 	h.keys("d")
 	if scr := h.screen(); !h.m.mapv.fetching || !strings.Contains(scr, "DOWNLOADING") || !strings.Contains(scr, "of 12 tiles") {
@@ -572,7 +574,8 @@ func TestMapDownloadStopsAndFails(t *testing.T) {
 	h := newHarness(t)
 	hold := make(chan struct{})
 	defer close(hold)
-	h.m.opt.MapDir, h.m.opt.MapIndex = t.TempDir(), emptyTileServer(t, http.StatusOK, hold).URL+"/planet"
+	h.m.opt.MapDir = t.TempDir()
+	useTileServer(t, h, http.StatusOK, hold)
 	h.openMap()
 	h.keys("d")
 	h.key(tea.KeyEscape)
@@ -582,7 +585,7 @@ func TestMapDownloadStopsAndFails(t *testing.T) {
 	}
 	h.key(tea.KeyEscape) // nothing to stop or unpick: the key falls through
 
-	h.m.opt.MapIndex = emptyTileServer(t, http.StatusServiceUnavailable, nil).URL + "/planet"
+	useTileServer(t, h, http.StatusServiceUnavailable, nil)
 	h.keys("d")
 	h.until("failed", func() bool { return !h.m.mapv.fetching })
 	if !strings.Contains(h.screen(), "OpenFreeMap answered 503") || !h.m.mapv.noteBad {
@@ -590,7 +593,7 @@ func TestMapDownloadStopsAndFails(t *testing.T) {
 	}
 
 	// Nowhere to save it.
-	h.m.opt.MapIndex = emptyTileServer(t, http.StatusOK, nil).URL + "/planet"
+	useTileServer(t, h, http.StatusOK, nil)
 	file := h.m.opt.MapDir + "/blocker"
 	os.WriteFile(file, nil, 0o644)
 	h.m.opt.MapDir = file

@@ -9,12 +9,14 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/verdantran/meshcore-tui/internal/privfile"
 	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
@@ -29,6 +31,7 @@ const (
 
 	maxTile      = 32 << 20  // a tile unzipped; the largest seen is under 1 MB
 	maxDetail    = 512 << 20 // the saved detail unzipped, for MaxTiles of the busiest tiles
+	maxResponse  = 8 << 20
 	fetchTimeout = 30 * time.Second
 )
 
@@ -143,28 +146,14 @@ func LoadDetail(path string) (*Detail, error) {
 
 // Save writes the file atomically, so a crash never leaves a broken one.
 func (d *Detail) Save(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	return privfile.WriteWith(path, func(w io.Writer) error {
+		zw := gzip.NewWriter(w)
+		err := json.NewEncoder(zw).Encode(d)
+		if cerr := zw.Close(); err == nil {
+			err = cerr
+		}
 		return err
-	}
-	tmp := path + ".tmp"
-	os.Remove(tmp)
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		return err
-	}
-	zw := gzip.NewWriter(f)
-	err = json.NewEncoder(zw).Encode(d)
-	if cerr := zw.Close(); err == nil {
-		err = cerr
-	}
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	return os.Rename(tmp, path)
+	})
 }
 
 // Fetcher downloads tiles. Tiles land in Dir as they arrive, so a download that stops part way resumes.
@@ -177,15 +166,36 @@ type Fetcher struct {
 
 const OpenFreeMap = "https://tiles.openfreemap.org/planet"
 
-func (f Fetcher) get(ctx context.Context, url string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+// get fetches over https from the index's host only, redirects included: anywhere else could learn where
+// the mesh is.
+func (f Fetcher) get(ctx context.Context, u string) ([]byte, error) {
+	index, err := url.Parse(f.Index)
 	if err != nil {
 		return nil, err
 	}
+	allowed := func(to *url.URL) error {
+		if to.Scheme != "https" || to.Host != index.Host {
+			return fmt.Errorf("won't fetch from anywhere but https://%s", index.Host)
+		}
+		return nil
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := allowed(req.URL); err != nil {
+		return nil, err
+	}
 	req.Header.Set("User-Agent", f.Agent)
-	client := f.Client
-	if client == nil {
-		client = &http.Client{Timeout: fetchTimeout}
+	client := &http.Client{Timeout: fetchTimeout}
+	if f.Client != nil {
+		*client = *f.Client
+	}
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		return allowed(req.URL)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -195,7 +205,11 @@ func (f Fetcher) get(ctx context.Context, url string) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("OpenFreeMap answered %s", resp.Status)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	b, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse+1))
+	if err == nil && len(b) > maxResponse {
+		err = fmt.Errorf("OpenFreeMap sent more than %d MB", maxResponse>>20)
+	}
+	return b, err
 }
 
 // Fetch downloads tiles and adds what the map draws from them to d, which may be nil to start afresh.
@@ -235,13 +249,17 @@ func (f Fetcher) Fetch(ctx context.Context, d *Detail, tiles []Tile, progress fu
 			defer wg.Done()
 			defer func() { <-sem }()
 			cache := filepath.Join(f.Dir, fmt.Sprintf("%d-%d-%d.pbf", DetailZoom, t[0], t[1]))
-			data, err := os.ReadFile(cache)
+			data, err := []byte(nil), error(os.ErrNotExist)
+			if f.Dir != "" {
+				data, err = os.ReadFile(cache)
+			}
 			fresh := 0
 			if err != nil && ctx.Err() == nil {
-				url := strings.NewReplacer("{z}", fmt.Sprint(DetailZoom), "{x}", fmt.Sprint(t[0]), "{y}", fmt.Sprint(t[1])).Replace(tj.Tiles[0])
-				if data, err = f.get(ctx, url); err == nil && f.Dir != "" {
-					os.MkdirAll(f.Dir, 0o700)
-					os.WriteFile(cache, data, 0o600)
+				u := strings.NewReplacer("{z}", fmt.Sprint(DetailZoom), "{x}", fmt.Sprint(t[0]), "{y}", fmt.Sprint(t[1])).Replace(tj.Tiles[0])
+				if data, err = f.get(ctx, u); err == nil && f.Dir != "" {
+					if err = privfile.Write(cache, data); err != nil {
+						err = fmt.Errorf("tiles couldn't be saved: %w", err)
+					}
 				}
 				fresh = len(data)
 			}

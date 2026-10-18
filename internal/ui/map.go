@@ -251,7 +251,7 @@ func (m *Model) fetcher() mapview.Fetcher {
 	if idx == "" {
 		idx = mapview.OpenFreeMap
 	}
-	return mapview.Fetcher{Index: idx, Agent: mapAgent, Dir: filepath.Join(m.mapDir(), "tiles")}
+	return mapview.Fetcher{Index: idx, Agent: mapAgent, Dir: filepath.Join(m.mapDir(), "tiles"), Client: m.opt.MapClient}
 }
 
 // fetchDetail downloads street detail for the tiles the mesh's area is missing; with all set, it fetches

@@ -4,6 +4,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -49,6 +50,7 @@ type Options struct {
 	Keychain  admin.Keychain      // node passwords; nil keeps them only while the program runs
 	MapDir    string              // street detail and its download; empty uses the data directory
 	MapIndex  string              // where the street detail's tile list is; empty uses OpenFreeMap
+	MapClient *http.Client        // fetches street detail; nil uses the default
 	Notes     []string            // warnings from startup, put in the event log
 	ASCII     bool                // plain ASCII in place of braille, box drawing and symbols
 	Keys      config.Keys         // keys.toml: a key pressed does what another does by default
