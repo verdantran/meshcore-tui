@@ -12,6 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/verdantran/meshcore-tui/internal/mapview"
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/theme"
@@ -111,6 +112,11 @@ func oneLine(s string) string { return strings.ReplaceAll(s, "\n", " ") }
 // renderWidth measures text as the renderer lays it out: per character, as wcwidth does, unless the terminal
 // says it clusters graphemes (mode 2027).
 var renderWidth = ansi.WcWidth
+
+func setRenderWidth(m ansi.Method) {
+	renderWidth = m
+	mapview.SetWidth(m)
+}
 
 // Layout helpers. Every rendered row is fitted to the terminal width exactly.
 

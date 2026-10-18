@@ -214,7 +214,7 @@ func TestBluetoothNamesCantDriveTheTerminal(t *testing.T) {
 
 // A family emoji is one character to some terminals and four to the rest; rows end at the edge either way.
 func TestRowsEndAtTheEdgeWithJoinedEmoji(t *testing.T) {
-	defer func(m ansi.Method) { renderWidth = m }(renderWidth)
+	defer setRenderWidth(renderWidth)
 	family := "👨\u200d👩\u200d👧\u200d👦"
 	for _, method := range []ansi.Method{ansi.WcWidth, ansi.GraphemeWidth} {
 		h := newHarness(t)

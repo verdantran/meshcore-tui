@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/clipperhouse/uax29/v2/graphemes"
 
 	"github.com/verdantran/meshcore-tui/internal/theme"
 )
@@ -16,11 +17,16 @@ type cell struct {
 	prio  int
 	fg    theme.RGB
 	bg    theme.RGB
-	text  rune
+	text  string // a whole grapheme cluster, so the terminal joins only what was measured joined
 	bold  bool
 	solid bool // text with its own background, kept legible over anything
-	cont  bool // covered by the wide character in the cell before
+	cont  bool // covered by the wide character in a cell before
 }
+
+var labelWidth = ansi.WcWidth
+
+// SetWidth measures labels with the method the terminal draws with, so a joined emoji takes the cells it's drawn in.
+func SetWidth(m ansi.Method) { labelWidth = m }
 
 // Canvas is a grid of cells, each a 2×4 braille dot block with one foreground and one background colour.
 type Canvas struct {
@@ -65,7 +71,7 @@ func (c *Canvas) Dot(x, y int, col theme.RGB, prio int) {
 		return
 	}
 	ce := c.at(x/2, y/4)
-	if ce == nil || ce.text != 0 || ce.cont || prio < ce.prio {
+	if ce == nil || ce.text != "" || ce.cont || prio < ce.prio {
 		return
 	}
 	if prio > ce.prio {
@@ -94,35 +100,40 @@ func (c *Canvas) Line(x0, y0, x1, y1 float64, col theme.RGB, prio, dash int) {
 	}
 }
 
-// Text writes a label. Wide characters such as emoji take two cells; ones that would be cut off are dropped.
+// Text writes a label a grapheme cluster at a time. Wide ones such as emoji take more than one cell; ones
+// that would be cut off become blanks.
 func (c *Canvas) Text(cx, cy int, s string, col theme.RGB, bold bool) {
 	x := cx
-	for _, r := range s {
-		w := ansi.StringWidth(string(r))
+	g := graphemes.FromString(s)
+	for g.Next() {
+		cl := g.Value()
+		w := labelWidth.StringWidth(cl)
 		if w == 0 {
 			continue
 		}
-		ce := c.at(x, cy)
-		if ce != nil {
-			ce.text, ce.fg, ce.bold, ce.mask, ce.cont = r, col, bold, 0, false
-			if w == 2 {
-				if next := c.at(x+1, cy); next != nil {
-					next.text, next.mask, next.cont, next.fg = 0, 0, true, col
-				} else {
-					ce.text = ' '
-				}
+		fits := x >= 0 && x+w <= c.W
+		for i := range w {
+			ce := c.at(x+i, cy)
+			switch {
+			case ce == nil:
+			case !fits:
+				ce.text, ce.fg, ce.bold, ce.mask, ce.cont = " ", col, bold, 0, false
+			case i == 0:
+				ce.text, ce.fg, ce.bold, ce.mask, ce.cont = cl, col, bold, 0, false
+			default:
+				ce.text, ce.mask, ce.cont, ce.fg = "", 0, true, col
 			}
 		}
 		x += w
 	}
 }
 
-// textWidth is how many cells Text will use: it lays a label out a character at a time, so a joined emoji
-// takes the cells of each of its parts.
+// textWidth is how many cells Text will use.
 func textWidth(s string) int {
 	w := 0
-	for _, r := range s {
-		w += ansi.StringWidth(string(r))
+	g := graphemes.FromString(s)
+	for g.Next() {
+		w += labelWidth.StringWidth(g.Value())
 	}
 	return w
 }
@@ -141,7 +152,7 @@ func (c *Canvas) Label(cx, cy int, s string, fg, bg theme.RGB) {
 func (c *Canvas) Free(cx, cy, n, limit int) bool {
 	for i := 0; i < n; i++ {
 		ce := c.at(cx+i, cy)
-		if ce == nil || ce.text != 0 || ce.cont || ce.prio >= limit {
+		if ce == nil || ce.text != "" || ce.cont || ce.prio >= limit {
 			return false
 		}
 	}
@@ -298,17 +309,14 @@ func (c *Canvas) RenderRow(y int, colour bool) string {
 			continue
 		}
 		glyph := ' '
-		switch {
-		case ce.text != 0:
-			glyph = ce.text
-		case ce.mask != 0:
+		if ce.text == "" && ce.mask != 0 {
 			glyph = rune(0x2800 + int(ce.mask))
 		}
 		if colour {
 			if !hasBg || ce.bg != bg {
 				b, bg, hasBg = appendColour(b, 48, ce.bg), ce.bg, true
 			}
-			if glyph != ' ' {
+			if ce.text != "" && ce.text != " " || ce.text == "" && glyph != ' ' {
 				if !hasFg || ce.fg != fg {
 					b, fg, hasFg = appendColour(b, 38, ce.fg), ce.fg, true
 				}
@@ -317,7 +325,11 @@ func (c *Canvas) RenderRow(y int, colour bool) string {
 				}
 			}
 		}
-		b = utf8.AppendRune(b, glyph)
+		if ce.text != "" {
+			b = append(b, ce.text...)
+		} else {
+			b = utf8.AppendRune(b, glyph)
+		}
 	}
 	if colour {
 		b = append(b, "\x1b[0m"...)

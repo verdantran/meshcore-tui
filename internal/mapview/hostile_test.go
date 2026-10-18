@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
@@ -128,13 +130,33 @@ func groupSlowly(marks []sMark, zoom float64) [][]sMark {
 	return groups
 }
 
+// TestLabelRowsKeepWidth: flags and skin tones are joined by a terminal that clusters graphemes and drawn
+// apart by one that doesn't; either way a row with them is as wide as the canvas.
+func TestLabelRowsKeepWidth(t *testing.T) {
+	defer SetWidth(labelWidth)
+	for _, m := range []ansi.Method{ansi.WcWidth, ansi.GraphemeWidth} {
+		SetWidth(m)
+		for _, label := range []string{"🇬🇧 Bob", "👍🏽 Ann", "👨‍👩‍👧 Fam", "é 1️⃣", "東京🇯🇵"} {
+			c := NewCanvas(16, 1, theme.RGB{})
+			c.Text(1, 0, label, theme.RGB{R: 1}, false)
+			c.Text(14, 0, "🇬🇧", theme.RGB{R: 1}, false)
+			if row := c.RenderRow(0, true); m.StringWidth(row) != c.W {
+				t.Errorf("%v: %q draws %d wide in %d: %q", m, label, m.StringWidth(row), c.W, row)
+			}
+			if got := m.StringWidth(label); textWidth(label) != got {
+				t.Errorf("%v: textWidth(%q) = %d, drawn %d", m, label, textWidth(label), got)
+			}
+		}
+	}
+}
+
 func TestLabelsMeasuredAsDrawn(t *testing.T) {
 	c := NewCanvas(20, 2, theme.RGB{})
 	name := "👨‍👩‍👧 Bob"
 	c.Text(0, 0, name, theme.RGB{}, false)
 	used := 0
 	for x := range 20 {
-		if ce := c.at(x, 0); ce != nil && (ce.text != 0 || ce.cont) {
+		if ce := c.at(x, 0); ce != nil && (ce.text != "" || ce.cont) {
 			used = x + 1
 		}
 	}
