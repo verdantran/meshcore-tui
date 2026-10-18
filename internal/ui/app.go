@@ -544,7 +544,8 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 	if s == "ctrl+c" {
 		return nil, true
 	}
-	if !m.typing() {
+	// A question takes the key you pressed, so no binding can turn "no" into "yes".
+	if !m.typing() && !m.confirming() {
 		if to, ok := m.rebound(s); ok {
 			if to == "" {
 				return nil, false

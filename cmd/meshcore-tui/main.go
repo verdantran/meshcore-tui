@@ -194,12 +194,12 @@ func run(args []string, env func(string) string, stderr io.Writer) int {
 		return 2
 	}
 	if err != nil {
-		fmt.Fprintln(stderr, err)
+		fmt.Fprintln(stderr, untrusted.Line(err.Error())) // a parse error can quote a handed file's text
 		return 2
 	}
 	db, err := openStore(filepath.Join(config.DataDir(), "meshcore-tui.db"), stderr)
 	if err != nil {
-		fmt.Fprintln(stderr, err)
+		fmt.Fprintln(stderr, untrusted.Line(err.Error()))
 		return 1
 	}
 	defer db.Close()

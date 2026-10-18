@@ -123,6 +123,18 @@ func TestLoadKeys(t *testing.T) {
 	if _, err := LoadKeys(path); err == nil || !strings.Contains(err.Error(), "unknown section [maps]") {
 		t.Errorf("a misspelt section is caught: %v", err)
 	}
+	for _, body := range []string{"[all]\nn = \"y\"\n", "[admin.list]\nesc = \"y\"\n"} {
+		os.WriteFile(path, []byte(body), 0o644)
+		if _, err := LoadKeys(path); err == nil || !strings.Contains(err.Error(), "bound to y") {
+			t.Errorf("%q: nothing may stand for yes: %v", body, err)
+		}
+	}
+	for _, body := range []string{`["\u001b]0;owned\u0007"]` + "\nw = \"up\"\n", "[all]\n" + `"\u001b[2J" = 3`} {
+		os.WriteFile(path, []byte(body), 0o644)
+		if _, err := LoadKeys(path); err == nil || strings.ContainsAny(err.Error(), "\x1b\x07") {
+			t.Errorf("%q: a name reaches the terminal as it is: %q", body, err)
+		}
+	}
 }
 
 func TestConfigIsPrivate(t *testing.T) {

@@ -227,3 +227,34 @@ func TestMouseWheelAndOverlays(t *testing.T) {
 		t.Errorf("clicking a pane's name opens it: %d", h.m.adm.pane)
 	}
 }
+
+func TestBindingsCantAnswerYes(t *testing.T) {
+	h := newHarness(t)
+	h.m.opt.Keys = config.Keys{"all": {"n": "y", "esc": "y", "z": "y"}}
+	h.keys("2")
+	before := len(h.m.chat.Contacts())
+	h.keys("x")
+	h.keys("n")
+	h.settle()
+	if len(h.m.chat.Contacts()) != before || h.m.contacts.overlay != noOverlay {
+		t.Fatal("n bound to y removed a contact")
+	}
+	h.keys("x")
+	h.key(tea.KeyEscape)
+	h.settle()
+	if len(h.m.chat.Contacts()) != before {
+		t.Fatal("esc bound to y removed a contact")
+	}
+
+	ran := false
+	h.m.ask("erase everything?", "erase", func() tea.Cmd { ran = true; return nil })
+	h.keys("z")
+	if ran || h.m.asking != nil {
+		t.Fatal("z bound to y answered a question")
+	}
+	h.m.ask("erase everything?", "erase", func() tea.Cmd { ran = true; return nil })
+	h.keys("y")
+	if !ran {
+		t.Fatal("y itself still answers")
+	}
+}

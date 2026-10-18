@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 // KeyScopes are keys.toml's sections: everywhere, then the connect screen and each main screen, the key after
@@ -34,11 +36,14 @@ func LoadKeys(path string) (Keys, error) {
 	var walk func(scope string, t map[string]any) error
 	walk = func(scope string, t map[string]any) error {
 		if !slices.Contains(KeyScopes, scope) {
-			return fmt.Errorf("unknown section [%s]; use %s", scope, strings.Join(KeyScopes, ", "))
+			return fmt.Errorf("unknown section [%s]; use %s", untrusted.Line(scope), strings.Join(KeyScopes, ", "))
 		}
 		for from, v := range t {
 			switch v := v.(type) {
 			case string:
+				if v == "y" {
+					return fmt.Errorf("[%s] %q: nothing can be bound to y, the key that answers yes", scope, from)
+				}
 				if k[scope] == nil {
 					k[scope] = map[string]string{}
 				}
@@ -48,7 +53,7 @@ func LoadKeys(path string) (Keys, error) {
 					return err
 				}
 			default:
-				return fmt.Errorf("[%s] %s: a key is bound to another key's name, in quotes", scope, from)
+				return fmt.Errorf("[%s] %q: a key is bound to another key's name, in quotes", scope, from)
 			}
 		}
 		return nil
@@ -56,7 +61,7 @@ func LoadKeys(path string) (Keys, error) {
 	for scope, v := range raw {
 		t, ok := v.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("%s: bindings go under a section, such as [all]", scope)
+			return nil, fmt.Errorf("%q: bindings go under a section, such as [all]", scope)
 		}
 		if err := walk(scope, t); err != nil {
 			return nil, err

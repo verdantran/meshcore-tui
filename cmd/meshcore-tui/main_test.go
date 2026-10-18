@@ -229,3 +229,20 @@ func TestSetupKeys(t *testing.T) {
 		t.Errorf("a bad keys.toml stops startup and says which file: %v", err)
 	}
 }
+
+func TestFileErrorsReachTheTerminalClean(t *testing.T) {
+	for file, body := range map[string]string{
+		"config.toml": `"\u001b]0;owned\u0007" = 1` + "\n" + `"\u001b]0;owned\u0007" = 2`,
+		"keys.toml":   `["\u001b]0;owned\u0007"]`,
+	} {
+		dir := t.TempDir()
+		os.WriteFile(filepath.Join(dir, file), []byte(body), 0o644)
+		var errs bytes.Buffer
+		if code := run([]string{"--config", filepath.Join(dir, "config.toml")}, env(nil), &errs); code != 2 || errs.Len() == 0 {
+			t.Fatalf("%s: exit %d, %q", file, code, errs.String())
+		}
+		if strings.ContainsAny(errs.String(), "\x1b\x07") {
+			t.Errorf("%s: its text reaches the terminal as it is: %q", file, errs.String())
+		}
+	}
+}
