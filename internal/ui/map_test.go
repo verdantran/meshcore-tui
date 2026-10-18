@@ -14,12 +14,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 	meshcore "github.com/OwlShack/meshcore-go"
 
-	"meshcore-tui/internal/admin"
-	"meshcore-tui/internal/mapview"
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/store"
-	"meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/admin"
+	"github.com/verdantran/meshcore-tui/internal/mapview"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 func placedAdvert(t *testing.T, name string, lat, lon float64, path []byte) []byte {

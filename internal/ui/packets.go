@@ -3,7 +3,7 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
-	"meshcore-tui/internal/chat"
+	"github.com/verdantran/meshcore-tui/internal/chat"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,11 +12,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"meshcore-tui/internal/config"
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/packets"
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/config"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/packets"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 const (

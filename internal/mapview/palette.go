@@ -1,6 +1,6 @@
 package mapview
 
-import "meshcore-tui/internal/theme"
+import "github.com/verdantran/meshcore-tui/internal/theme"
 
 // Palette is the map's colours, worked out from a theme so every theme gets a matching map.
 type Palette struct {

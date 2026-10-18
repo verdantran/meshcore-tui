@@ -12,9 +12,9 @@ import (
 	meshcore "github.com/OwlShack/meshcore-go"
 	"github.com/OwlShack/meshcore-go/companion"
 
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 // moveTo selects a Device row by id.

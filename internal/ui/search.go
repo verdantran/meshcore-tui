@@ -7,11 +7,11 @@ import (
 	"sort"
 	"strings"
 
-	"meshcore-tui/internal/chat"
-	"meshcore-tui/internal/config"
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/store"
-	"meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/chat"
+	"github.com/verdantran/meshcore-tui/internal/config"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 // searchModel is the ctrl+f overlay that searches every conversation.

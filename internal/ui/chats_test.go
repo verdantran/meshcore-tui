@@ -10,10 +10,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/store"
-	"meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 // scriptRadio records sends and acks nothing on its own; tests deliver acks as events.

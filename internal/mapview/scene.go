@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 type Kind int

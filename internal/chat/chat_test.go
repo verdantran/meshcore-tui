@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/store"
 )
 
 var (

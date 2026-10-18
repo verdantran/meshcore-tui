@@ -11,10 +11,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	meshcore "github.com/OwlShack/meshcore-go"
 
-	"meshcore-tui/internal/admin"
-	"meshcore-tui/internal/config"
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/admin"
+	"github.com/verdantran/meshcore-tui/internal/config"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 type adminPane int

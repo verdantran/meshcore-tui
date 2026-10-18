@@ -10,8 +10,8 @@ import (
 
 	meshcore "github.com/OwlShack/meshcore-go"
 
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/signing"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/signing"
 )
 
 // Field is one decoded value and the bytes [Start, End) it occupies in the raw packet.

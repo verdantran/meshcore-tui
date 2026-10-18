@@ -15,8 +15,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 func TestNearAndBoxes(t *testing.T) {

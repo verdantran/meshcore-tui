@@ -12,11 +12,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	meshcore "github.com/OwlShack/meshcore-go"
 
-	"meshcore-tui/internal/config"
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/signing"
-	"meshcore-tui/internal/sim"
-	"meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/config"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/signing"
+	"github.com/verdantran/meshcore-tui/internal/sim"
+	"github.com/verdantran/meshcore-tui/internal/store"
 )
 
 type signer struct {

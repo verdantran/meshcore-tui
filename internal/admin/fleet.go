@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 // Alerts are what the fleet view flags for a node.

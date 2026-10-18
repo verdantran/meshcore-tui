@@ -9,10 +9,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/packets"
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/packets"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 const (

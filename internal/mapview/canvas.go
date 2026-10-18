@@ -8,7 +8,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 type cell struct {

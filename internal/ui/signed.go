@@ -10,13 +10,13 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"meshcore-tui/internal/admin"
-	"meshcore-tui/internal/chat"
-	"meshcore-tui/internal/packets"
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/signing"
-	"meshcore-tui/internal/store"
-	"meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/admin"
+	"github.com/verdantran/meshcore-tui/internal/chat"
+	"github.com/verdantran/meshcore-tui/internal/packets"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/signing"
+	"github.com/verdantran/meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 // Signed channel messages (SIGNING.md, and SPEC §7): a signed message is sent as usual, then a datagram on

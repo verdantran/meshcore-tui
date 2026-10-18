@@ -11,8 +11,8 @@ import (
 
 	meshcore "github.com/OwlShack/meshcore-go"
 
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/sim"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/sim"
 )
 
 func next[T radio.Event](t *testing.T, ch <-chan radio.Event) T {

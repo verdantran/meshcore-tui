@@ -8,11 +8,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"meshcore-tui/internal/chat"
-	"meshcore-tui/internal/mapview"
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/chat"
+	"github.com/verdantran/meshcore-tui/internal/mapview"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/store"
 )
 
 // pathView is the map showing a single path, opened with M from wherever a route is mentioned: a packet,

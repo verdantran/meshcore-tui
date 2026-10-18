@@ -11,11 +11,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"meshcore-tui/internal/chat"
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/store"
-	"meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/chat"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 const (

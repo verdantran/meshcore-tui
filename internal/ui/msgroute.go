@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"meshcore-tui/internal/packets"
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/packets"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/store"
 )
 
 // A received message tells us only how many hops it took; the packet that carried it names them. The two

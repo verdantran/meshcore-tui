@@ -10,11 +10,11 @@ import (
 
 	"go.bug.st/serial/enumerator"
 
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/repeaterserial"
-	"meshcore-tui/internal/sim"
-	"meshcore-tui/internal/ui"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/repeaterserial"
+	"github.com/verdantran/meshcore-tui/internal/sim"
+	"github.com/verdantran/meshcore-tui/internal/ui"
 )
 
 func noEnv(string) string { return "" }

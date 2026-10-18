@@ -17,15 +17,15 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"go.bug.st/serial/enumerator"
 
-	"meshcore-tui/internal/admin"
-	"meshcore-tui/internal/config"
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/repeaterserial"
-	"meshcore-tui/internal/sim"
-	"meshcore-tui/internal/store"
-	"meshcore-tui/internal/theme"
-	"meshcore-tui/internal/ui"
+	"github.com/verdantran/meshcore-tui/internal/admin"
+	"github.com/verdantran/meshcore-tui/internal/config"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/repeaterserial"
+	"github.com/verdantran/meshcore-tui/internal/sim"
+	"github.com/verdantran/meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/ui"
 )
 
 // likelyRadios are USB vendor IDs of boards that run MeshCore companion firmware.

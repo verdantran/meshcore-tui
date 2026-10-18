@@ -8,9 +8,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"meshcore-tui/internal/notify"
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/notify"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/store"
 )
 
 // Notifications that land close together are grouped into one alert.

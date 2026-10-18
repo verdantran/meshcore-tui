@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 // devSettings is the simulated companion's own configuration, changed by the Device screen.

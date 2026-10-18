@@ -8,7 +8,7 @@ import (
 
 	meshcore "github.com/OwlShack/meshcore-go"
 
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 var (

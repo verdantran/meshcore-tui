@@ -11,7 +11,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 //go:embed settings.toml

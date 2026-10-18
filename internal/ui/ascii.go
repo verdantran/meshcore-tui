@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/clipperhouse/uax29/v2/graphemes"
 
-	"meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/motion"
 )
 
 // asciiFor stands in for each symbol the screens draw, one cell for one cell.

@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/motion"
 )
 
 const (

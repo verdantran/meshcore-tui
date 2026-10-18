@@ -8,8 +8,8 @@ import (
 
 	meshcore "github.com/OwlShack/meshcore-go"
 
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/signing"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/signing"
 )
 
 func build(t *testing.T, route, typ byte, path, payload []byte) []byte {

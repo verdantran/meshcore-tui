@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"rsc.io/qr"
 
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 func (m *Model) renderContacts(w, rows int) []string {

@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 func TestPasteAndEmoji(t *testing.T) {

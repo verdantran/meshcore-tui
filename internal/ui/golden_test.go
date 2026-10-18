@@ -10,11 +10,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	meshcore "github.com/OwlShack/meshcore-go"
 
-	"meshcore-tui/internal/admin"
-	"meshcore-tui/internal/golden"
-	"meshcore-tui/internal/mapview"
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/admin"
+	"github.com/verdantran/meshcore-tui/internal/golden"
+	"github.com/verdantran/meshcore-tui/internal/mapview"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 // The animations in SPEC §6.2, each recorded at its start, midpoint and end under the fake clock.

@@ -12,8 +12,8 @@ import (
 
 	meshcore "github.com/OwlShack/meshcore-go"
 
-	"meshcore-tui/internal/admin"
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/admin"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 // Passwords for the simulated servers. An empty password logs in as a guest.

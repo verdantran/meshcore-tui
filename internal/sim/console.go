@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 // Console is a repeater's serial console as the firmware drives it over USB: each command ends in \r,

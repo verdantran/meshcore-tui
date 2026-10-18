@@ -14,11 +14,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"meshcore-tui/internal/config"
-	"meshcore-tui/internal/mapview"
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/packets"
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/config"
+	"github.com/verdantran/meshcore-tui/internal/mapview"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/packets"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 const (

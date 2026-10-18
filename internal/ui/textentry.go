@@ -8,8 +8,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/rivo/uniseg"
 
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 // typing reports whether a text field has the keyboard, so typed and pasted text goes into it rather than

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"meshcore-tui/internal/golden"
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/golden"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 // Each map animation at its start, midpoint and end, over a fixed view of Bristol.

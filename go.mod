@@ -1,4 +1,4 @@
-module meshcore-tui
+module github.com/verdantran/meshcore-tui
 
 go 1.26.7
 

@@ -10,9 +10,9 @@ import (
 
 	meshcore "github.com/OwlShack/meshcore-go"
 
-	"meshcore-tui/internal/packets"
-	"meshcore-tui/internal/radio"
-	"meshcore-tui/internal/signing"
+	"github.com/verdantran/meshcore-tui/internal/packets"
+	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/signing"
 )
 
 func TestBootThenPacketsThatDecode(t *testing.T) {

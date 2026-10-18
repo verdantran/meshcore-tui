@@ -12,7 +12,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 // Convo identifies a conversation: "ch:<idx>" for a channel, "dm:<key hex>" for a contact,

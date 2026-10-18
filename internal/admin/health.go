@@ -6,7 +6,7 @@ import (
 
 	meshcore "github.com/OwlShack/meshcore-go"
 
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 // PointFrom decodes a status reply. Room servers send a longer reply than repeaters.

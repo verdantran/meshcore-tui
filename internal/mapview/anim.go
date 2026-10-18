@@ -4,8 +4,8 @@ import (
 	"math"
 	"time"
 
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/theme"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 type AnimKind int

@@ -14,8 +14,8 @@ import (
 
 	meshcore "github.com/OwlShack/meshcore-go"
 
-	"meshcore-tui/internal/admin"
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/admin"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 var ErrConsoleOnly = errors.New("this is a repeater's own console; messaging and contacts need a companion radio")

@@ -8,7 +8,7 @@ import (
 
 	"go.bug.st/serial"
 
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 // USB is whatever answers on a serial port: a companion radio if the handshake works, otherwise a

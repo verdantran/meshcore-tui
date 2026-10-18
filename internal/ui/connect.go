@@ -8,7 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/motion"
 )
 
 const bleScanFor = 10 * time.Second

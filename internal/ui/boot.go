@@ -8,8 +8,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 // expectedSteps sizes the boot progress bar; real links send the same sequence.

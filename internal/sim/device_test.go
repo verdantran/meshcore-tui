@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 func TestSimDevice(t *testing.T) {

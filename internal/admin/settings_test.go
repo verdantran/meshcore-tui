@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 func TestSchemaIsSound(t *testing.T) {

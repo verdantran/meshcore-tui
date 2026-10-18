@@ -8,8 +8,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"meshcore-tui/internal/motion"
-	"meshcore-tui/internal/sim"
+	"github.com/verdantran/meshcore-tui/internal/motion"
+	"github.com/verdantran/meshcore-tui/internal/sim"
 )
 
 // busyHarness is the simulator with its traffic on, at 200×60, after a while of the mesh talking.

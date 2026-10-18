@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
 const dev = "C04F19"
