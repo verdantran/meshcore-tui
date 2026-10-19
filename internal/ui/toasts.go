@@ -41,6 +41,19 @@ func (m *Model) toasting() bool {
 	return false
 }
 
+// toastSliding reports a toast sliding in or out; its timer bar in between needs only the slower clock.
+func (m *Model) toastSliding() bool {
+	if !m.level.Allows(motion.Wipe) {
+		return false
+	}
+	for _, t := range m.toasts {
+		if age := m.now.Sub(t.at); age >= 0 && age < toastFor && (age < toastSlide || age > toastFor-toastSlide) {
+			return true
+		}
+	}
+	return false
+}
+
 // overlayToasts lays the live toasts inside the right edge of the panes, below the tabs, newest at the top.
 // Each slides in from the edge and out again, and its bottom border is the time it has left.
 func (m *Model) overlayToasts(lines []string) {

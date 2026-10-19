@@ -197,6 +197,57 @@ func TestIdleMainScreenStopsTicking(t *testing.T) {
 	}
 }
 
+func TestReducedMotionUsesTheSlowClock(t *testing.T) {
+	for _, level := range []motion.Level{motion.Full, motion.Reduced} {
+		m, c := newTestModel(t, level, 100, 30)
+		boot(m, c)
+		bootDone(t, m, c)
+		tick(m, c, 30*time.Second)
+		m.stats.rxLamp = c.t
+		tick(m, c, 0)
+		want := beaconFrame
+		if level == motion.Full {
+			want = motion.FrameDur
+		}
+		if !m.animating() || m.frameEvery() != want {
+			t.Errorf("%s: the receive lamp ticks every %v, want %v", level, m.frameEvery(), want)
+		}
+	}
+}
+
+func TestToastMovesOnlyWhileSliding(t *testing.T) {
+	cases := []struct {
+		level           motion.Level
+		in, middle, out time.Duration // 0: the clock stops
+	}{
+		{motion.Full, motion.FrameDur, beaconFrame, motion.FrameDur},
+		{motion.Reduced, beaconFrame, beaconFrame, beaconFrame},
+		{motion.Off, 0, 0, 0},
+	}
+	for _, cs := range cases {
+		m, c := newTestModel(t, cs.level, 100, 30)
+		boot(m, c)
+		bootDone(t, m, c)
+		tick(m, c, 30*time.Second)
+		m.pushToast("Alice", "are you about tonight?")
+		for _, at := range []struct {
+			after time.Duration
+			want  time.Duration
+		}{{toastSlide / 2, cs.in}, {toastFor / 2, cs.middle}, {toastFor - toastSlide/2, cs.out}} {
+			c.t = m.toasts[0].at.Add(at.after)
+			tick(m, c, 0)
+			if got := m.frameEvery(); m.animating() != (at.want != 0) || (at.want != 0 && got != at.want) {
+				t.Errorf("%s, %v in: animating %v every %v, want %v", cs.level, at.after, m.animating(), got, at.want)
+			}
+		}
+		c.t = m.toasts[0].at.Add(toastFor)
+		tick(m, c, 0)
+		if m.animating() {
+			t.Errorf("%s: the clock runs on after the toast has gone", cs.level)
+		}
+	}
+}
+
 func TestThemeCycleCrossfades(t *testing.T) {
 	m, c := newTestModel(t, motion.Full, 100, 30)
 	boot(m, c)

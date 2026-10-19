@@ -388,16 +388,23 @@ func (m *Model) ensureTick() tea.Cmd {
 		return nil
 	}
 	m.ticking = true
-	every := motion.FrameDur
-	if !m.moving() {
-		every = beaconFrame // only the beacon or a pulse is running, slow enough not to need 30 a second
+	return tea.Tick(m.frameEvery(), func(t time.Time) tea.Msg { return frameMsg(t) })
+}
+
+// frameEvery is the frame clock's period. Nothing slides at reduced, and the beacon, a pulse or a
+// toast's timer bar don't need 30 frames a second.
+func (m *Model) frameEvery() time.Duration {
+	if m.level == motion.Full && m.moving() {
+		return motion.FrameDur
 	}
-	return tea.Tick(every, func(t time.Time) tea.Msg { return frameMsg(t) })
+	return beaconFrame
 }
 
 const beaconFrame = time.Second / 12
 
-func (m *Model) animating() bool { return m.moving() || m.mapBeaconOn() || m.pulsing() }
+func (m *Model) animating() bool {
+	return m.moving() || m.mapBeaconOn() || m.pulsing() || (m.level != motion.Off && m.toasting())
+}
 
 // pulsePeriod is the slow glow of something waiting on you; it runs on the beacon's slower frame clock.
 const pulsePeriod = 1200 * time.Millisecond
@@ -444,7 +451,7 @@ func (m *Model) moving() bool {
 	case phaseBoot:
 		return !m.boot.failed || motion.Running(m.glitch, glitchDur*3, now) || m.boot.typing(m.level, now)
 	}
-	return m.toasting() || motion.Running(m.mainAt, slideDur, now) ||
+	return m.toastSliding() || motion.Running(m.mainAt, slideDur, now) ||
 		motion.Running(m.tabAt, wipeDur, now) ||
 		motion.Running(m.stats.rxLamp, headerLampDur, now) || motion.Running(m.stats.txLamp, headerLampDur, now) ||
 		motion.Running(m.stats.snrAt, countDur, now) || motion.Running(m.stats.battAt, countDur, now) ||
