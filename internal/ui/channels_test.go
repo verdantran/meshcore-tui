@@ -331,3 +331,83 @@ func TestWiFiSaysItIsUnencrypted(t *testing.T) {
 	}
 	h.key(tea.KeyEscape)
 }
+
+func TestAddChannelRow(t *testing.T) {
+	h := newHarness(t)
+	at := h.m.lastChannel()
+	h.m.chats.sel = at
+	h.key(tea.KeyDown)
+	if !h.m.chats.onAdd || !strings.Contains(h.screen(), "+ add a channel") || !strings.Contains(h.screen(), "enter add a channel") {
+		t.Fatalf("down from the last channel picks the add row:\n%s", h.screen())
+	}
+	h.key(tea.KeyEnter)
+	if h.m.chats.chanStage != chanName {
+		t.Fatal("enter on the row opens the form")
+	}
+	h.key(tea.KeyEscape)
+	if h.m.chats.chanStage != chanNone || !h.m.chats.onAdd {
+		t.Fatal("esc goes back to the row")
+	}
+	h.key(tea.KeyDown)
+	if h.m.chats.onAdd || h.m.chats.sel != at+1 {
+		t.Fatalf("down again reaches the first direct conversation, sel %d", h.m.chats.sel)
+	}
+	h.key(tea.KeyUp)
+	h.key(tea.KeyUp)
+	if h.m.chats.onAdd || h.m.chats.sel != at {
+		t.Fatal("up passes back over the row to the last channel")
+	}
+	h.keys("/")
+	if strings.Contains(h.screen(), "+ add a channel") {
+		t.Error("a filter hides the row")
+	}
+}
+
+func TestJoinHashtagFromAMessage(t *testing.T) {
+	h := newHarness(t)
+	pub, _ := h.channel("Public")
+	h.m.jumpToConvo(store.ChannelConvo(pub.Idx))
+	h.m.Update(eventMsg{radio.Incoming{At: h.m.now, Channel: true, ChannelIdx: pub.Idx, SentAt: h.m.now,
+		Text: "Carol: is #hilltop still a thing? try #bath, issue #12 or a&#x"}})
+	h.settle()
+	h.key(tea.KeyRight)
+	if !strings.Contains(h.screen(), "J join #bath") {
+		t.Fatalf("a channel we're in, a number and an entity are passed over for #bath:\n%s", h.screen())
+	}
+	h.keys("J")
+	h.until("joined", func() bool { _, ok := h.channel("#bath"); return ok })
+	if !strings.Contains(h.lastLog(), "JOINED  #bath") {
+		t.Error(h.lastLog())
+	}
+	h.m.chats.reading = true
+	h.m.jumpToConvo(store.ChannelConvo(pub.Idx))
+	h.key(tea.KeyRight)
+	if strings.Contains(h.screen(), "J join") {
+		t.Error("nothing left to join, so no hint")
+	}
+}
+
+func TestFinderJoinsAndAddsChannels(t *testing.T) {
+	h := newHarness(t)
+	h.keys(":")
+	h.typeFast("#cardiff")
+	if !strings.Contains(h.screen(), "join #cardiff") {
+		t.Fatalf("a hashtag not joined is offered:\n%s", h.screen())
+	}
+	h.key(tea.KeyEnter)
+	h.until("joined", func() bool { _, ok := h.channel("#cardiff"); return ok })
+
+	h.keys(":")
+	h.typeFast("#bristol")
+	if strings.Contains(h.screen(), "join #bristol") {
+		t.Error("a channel we're in isn't offered to join")
+	}
+	h.key(tea.KeyEscape)
+
+	h.keys(":")
+	h.typeFast("add a ch")
+	h.key(tea.KeyEnter)
+	if h.m.tab != 0 || h.m.chats.chanStage != chanName {
+		t.Error("add a channel opens the form")
+	}
+}

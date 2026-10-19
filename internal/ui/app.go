@@ -983,7 +983,8 @@ func (m *Model) screenKeys() []string {
 			key("R", "send your newest failed message again; on a picked one, R or enter sends that one"),
 			key("L", "log in to or out of the room server whose conversation is open"),
 			key("m", "mute the open conversation, or unmute it: its messages still arrive, without notifications; :mute 8h mutes for a while"),
-			key("n", "add a channel: #name, a private one with its secret, or a shared link"),
+			key("n", "add a channel: #name, a private one with its secret, or a shared link; the + row under the channels does the same"),
+			key("J", "on a picked message that mentions a #channel you're not in, join it"),
 			key("e x", "share or leave the channel that's open; :channel rename renames it"), ""}
 	}
 	return nil

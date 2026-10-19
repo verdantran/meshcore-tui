@@ -29,7 +29,7 @@ type target struct {
 
 // finderSources list the targets, each kind from its own source; a new kind is a new source.
 var finderSources = []func(m *Model) []target{
-	screenTargets, conversationTargets, contactTargets, commandTargets, themeTargets, motionTargets,
+	screenTargets, conversationTargets, addChannelTargets, contactTargets, commandTargets, themeTargets, motionTargets,
 }
 
 const (
@@ -44,6 +44,7 @@ type finder struct {
 	moved   bool     // the selection was moved, so enter goes there even when the input is a command
 	recent  []string // ids, most recently used first
 	folds   map[string][]rune
+	join    target // "join #name" for a hashtag channel typed that we're not in
 }
 
 type match struct {
@@ -145,8 +146,22 @@ func (m *Model) refind() {
 		}
 		return len(a.t.fold) - len(b.t.fold)
 	})
+	if name := strings.TrimSpace(in); m.joinable(name) {
+		f.join = target{kind: "channel", label: "join " + name, id: "join " + name, act: func(m *Model) tea.Cmd { return m.joinHashtag(name) }}
+		// Half a name of a channel we're in shouldn't push it down.
+		at := 0
+		if slices.ContainsFunc(m.chat.Channels(), func(ch radio.Channel) bool {
+			return len(ch.Name) >= len(name) && strings.EqualFold(ch.Name[:len(name)], name)
+		}) {
+			at = len(f.matches)
+		}
+		f.matches = slices.Insert(f.matches, at, match{t: &f.join})
+	}
 	for i := range f.matches[:min(finderRows, len(f.matches))] {
 		mt := &f.matches[i]
+		if mt.t == &f.join {
+			continue
+		}
 		var at []int
 		fuzzy(q, mt.t.fold, &at)
 		for _, j := range at {
@@ -333,10 +348,20 @@ func conversationTargets(m *Model) []target {
 	return out
 }
 
+func addChannelTargets(m *Model) []target {
+	if m.chat == nil || m.repeaterMode() {
+		return nil
+	}
+	return []target{{kind: "channel", label: "add a channel", id: "add channel", act: func(m *Model) tea.Cmd {
+		m.startAddChannel("")
+		return nil
+	}}}
+}
+
 func (m *Model) goToConvo(cv store.Convo) tea.Cmd {
 	m.setTab(0)
 	c := &m.chats
-	c.filter, c.filtering, c.writing, c.reading = lineEdit{}, false, false, false
+	c.filter, c.filtering, c.writing, c.reading, c.onAdd = lineEdit{}, false, false, false, false
 	if i := m.convoIndex(cv); i >= 0 {
 		c.sel, c.scroll = i, 0
 		m.refreshChats()

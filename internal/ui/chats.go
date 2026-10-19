@@ -76,6 +76,7 @@ type chatsModel struct {
 	emojiOff int           // 1 + where a shortcode's list was closed with esc, so it stays closed
 
 	chanStage chanStage // adding, sharing or removing a channel
+	onAdd     bool      // the "+ add a channel" row is picked; sel stays where it was
 	chanInput lineEdit
 	chanName  string
 	shareCh   radio.Channel
@@ -418,6 +419,17 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		}
 		return nil, true
 	}
+	if c.onAdd {
+		switch s {
+		case "enter", "i", "n":
+			return m.channelKey("n")
+		case "up", "k", "down", "j":
+		case "/", "g", "home", "G", "end":
+			c.onAdd = false
+		default:
+			return nil, false
+		}
+	}
 	switch s {
 	case "/":
 		c.filtering, c.filter = true, lineEdit{}
@@ -428,17 +440,39 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		c.filter = lineEdit{}
 		m.refreshChats()
 	case "up", "k":
-		if c.sel > 0 {
+		at := m.lastChannel()
+		switch {
+		case c.onAdd && at >= 0:
+			c.onAdd, c.sel = false, at
+		case c.onAdd:
+			return nil, true
+		case m.addRowShown() && c.sel == at+1:
+			c.onAdd = true
+			return nil, true
+		case c.sel > 0:
 			c.sel--
-			c.scroll, c.focus, c.filter, c.reading = 0, 0, lineEdit{}, false
-			m.refreshChats()
+		default:
+			return nil, true
 		}
+		c.scroll, c.focus, c.filter, c.reading = 0, 0, lineEdit{}, false
+		m.refreshChats()
 	case "down", "j":
-		if c.sel < len(c.infos)-1 {
+		at := m.lastChannel()
+		switch {
+		case c.onAdd && at+1 < len(c.infos):
+			c.onAdd, c.sel = false, at+1
+		case c.onAdd:
+			return nil, true
+		case m.addRowShown() && c.sel == at && at >= 0:
+			c.onAdd = true
+			return nil, true
+		case c.sel < len(c.infos)-1:
 			c.sel++
-			c.scroll, c.focus, c.filter, c.reading = 0, 0, lineEdit{}, false
-			m.refreshChats()
+		default:
+			return nil, true
 		}
+		c.scroll, c.focus, c.filter, c.reading = 0, 0, lineEdit{}, false
+		m.refreshChats()
 	case "enter", "i":
 		if len(c.infos) > 0 {
 			c.writing = true
@@ -496,6 +530,37 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		return nil, false
 	}
 	return nil, true
+}
+
+// joinHint offers J while the picked message mentions a hashtag channel we're not in.
+func (m *Model) joinHint() string {
+	i := m.picked()
+	if i < 0 {
+		return ""
+	}
+	name := m.hashtagIn(m.chats.msgs[i].Text)
+	if name == "" {
+		return ""
+	}
+	th := m.th
+	return th.Paint(th.Cyan, true, "J") + th.Paint(th.Text, false, " join "+untrusted.Line(name)+" · ")
+}
+
+// lastChannel is the index of the last channel in the list, which the add row sits under; -1 when there are none.
+func (m *Model) lastChannel() int {
+	last := -1
+	for i, info := range m.chats.infos {
+		if info.Kind == chat.KindChannel {
+			last = i
+		}
+	}
+	return last
+}
+
+// addRowShown reports whether the list has its "+ add a channel" row; a filter hides it.
+func (m *Model) addRowShown() bool {
+	c := &m.chats
+	return m.chat != nil && !m.repeaterMode() && c.filter.text == "" && !c.filtering
 }
 
 // newestReceived is the newest received message in view, or -1.
@@ -561,6 +626,13 @@ func (m *Model) readingKey(s string) (tea.Cmd, bool) {
 	case "K":
 		m.pinPicked(c.msgs[i])
 		return nil, true
+	case "J":
+		name := m.hashtagIn(c.msgs[i].Text)
+		if name == "" {
+			m.addLog(m.now, "JOIN  this message doesn't mention a #channel you're not in", radio.ToneInfo)
+			return nil, true
+		}
+		return m.joinHashtag(name), true
 	case "y":
 		msg := c.msgs[i]
 		m.addLog(m.now, "COPIED  "+msg.Sender+"'s message, to the clipboard", radio.ToneOK)
@@ -651,13 +723,18 @@ func (m *Model) renderChats(inner, rows int) []string {
 	if c.chanStage != chanNone && m.chat != nil {
 		return m.channelLines(inner, rows)
 	}
-	if m.chat == nil || len(c.infos) == 0 {
+	if m.chat == nil {
 		return []string{th.Fg(th.Dim, false).Render("No conversations yet. Channels and contacts appear here once the radio has synced.")}
 	}
 	listW := min(max(inner/4, 20), 32)
 	paneW := inner - listW - 3
 	left := m.convoList(listW, rows)
-	right := m.convoPane(paneW, rows)
+	var right []string
+	if c.onAdd || len(c.infos) == 0 {
+		right = m.addPreview(paneW)
+	} else {
+		right = m.convoPane(paneW, rows)
+	}
 	sep := th.Fg(th.Line, false).Render(" │ ")
 	out := make([]string, rows)
 	for i := range out {
@@ -679,6 +756,19 @@ func (m *Model) convoList(w, rows int) []string {
 	// Two groups: channels, then everyone else (rooms are marked with ■ among direct conversations).
 	group := -1
 	selRow := 0
+	at, shown := m.lastChannel(), m.addRowShown()
+	addRow := func() {
+		if c.onAdd {
+			selRow = len(out)
+			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(" + add a channel", w-1)))
+			return
+		}
+		out = append(out, th.Paint(th.Dim, false, " + add a channel"))
+	}
+	if shown && at < 0 {
+		out = append(out, th.Fg(th.Muted, true).Render("CHANNELS"))
+		addRow()
+	}
 	for i, info := range c.infos {
 		g := 1
 		if info.Kind == chat.KindChannel {
@@ -711,10 +801,13 @@ func (m *Model) convoList(w, rows int) []string {
 		icon := map[chat.Kind]string{chat.KindChannel: "#", chat.KindDirect: "●", chat.KindRoom: "■"}[info.Kind]
 		title := strings.TrimPrefix(info.Title, "#")
 		name := truncate(title, w-4-visibleWidth(badge))
-		if i == c.sel {
+		if i == c.sel && !c.onAdd {
 			selRow = len(out)
 			row := fit(" "+icon+" "+name, w-1-visibleWidth(badge))
 			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(row)+badge)
+			if shown && i == at {
+				addRow()
+			}
 			continue
 		}
 		col := th.Muted
@@ -726,6 +819,9 @@ func (m *Model) convoList(w, rows int) []string {
 			iconCol = th.Violet
 		}
 		out = append(out, " "+th.Fg(iconCol, false).Render(icon)+" "+th.Fg(col, info.Unread > 0 && !muted).Render(fit(name, w-3-visibleWidth(badge)))+badge)
+		if shown && i == at {
+			addRow()
+		}
 	}
 	// Keep the selection in view.
 	if len(out) > rows {
@@ -800,9 +896,10 @@ func (m *Model) convoPane(w, rows int) []string {
 			m.retryHint()+
 			th.Paint(th.Cyan, true, "M")+th.Paint(th.Text, false, " route on the map · ")+
 			th.Paint(th.Cyan, true, "y")+th.Paint(th.Text, false, " copy · ")+
+			m.joinHint()+
 			th.Paint(th.Dim, false, "← back to conversations"), w)
 	default:
-		compose = fit(th.Paint(th.Dim, false, "▸ "+fitHints([]string{"enter write", "↑↓ conversations", "→ pick a message",
+		compose = fit(th.Paint(th.Dim, false, "▸ "+fitHints([]string{"enter write", "↑↓ conversations", "n add channel", "→ pick a message",
 			"r reply", "/ filter", "ctrl+f search all"}, w-2)), w)
 	}
 

@@ -249,7 +249,7 @@ func TestChatsHintKeepsWholeHints(t *testing.T) {
 	if strings.Contains(got, "/147") {
 		t.Errorf("the counter shows only while writing:\n%s", got)
 	}
-	if !strings.Contains(got, "/ filter") || strings.Contains(got, "ctr ") {
+	if !strings.Contains(got, "n add channel") || strings.Contains(got, "ctr ") {
 		t.Errorf("hints are dropped whole, never cut short:\n%s", got)
 	}
 }

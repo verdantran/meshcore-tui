@@ -5,7 +5,7 @@
 ┃ CHANNELS                 │ ▌Public  channel · flood                                              ┃
 ┃ ▌ # Public               │                                                                       ┃
 ┃  # bristol               │                                                                       ┃
-┃                          │                                                                       ┃
+┃  + add a channel         │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
@@ -23,13 +23,13 @@
 ┃                          │                                                                       ┃
 ┃                          │ ▌10:03 Zed                                          1 hop · SNR +6.00 ┃
 ┃                          │ ▌      5*9▟78 $0 00+ ▒#1% 2*FB4▟2E                                    ┃
-┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply         ┃
+┃                          │ ▸ enter write · ↑↓ conversations · n add channel · → pick a message   ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ █
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles f884374da16a267d
+styles 01db80de800a41ec
 == 160ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -37,7 +37,7 @@ styles f884374da16a267d
 ┃ CHANNELS                 │ ▌Public  channel · flood                                              ┃
 ┃ ▌ # Public               │                                                                       ┃
 ┃  # bristol               │                                                                       ┃
-┃                          │                                                                       ┃
+┃  + add a channel         │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
@@ -55,13 +55,13 @@ styles f884374da16a267d
 ┃                          │                                                                       ┃
 ┃                          │ ▌10:03 Zed                                          1 hop · SNR +6.00 ┃
 ┃                          │ ▌      anyone on the hill toniE▚█\                                    ┃
-┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply         ┃
+┃                          │ ▸ enter write · ↑↓ conversations · n add channel · → pick a message   ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ MSG  Public · Zed: any█
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles f349b0d6fee171c1
+styles 27693ea29ea85c8e
 == 320ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -69,7 +69,7 @@ styles f349b0d6fee171c1
 ┃ CHANNELS                 │ ▌Public  channel · flood                                              ┃
 ┃ ▌ # Public               │                                                                       ┃
 ┃  # bristol               │                                                                       ┃
-┃                          │                                                                       ┃
+┃  + add a channel         │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
@@ -87,13 +87,13 @@ styles f349b0d6fee171c1
 ┃                          │                                                                       ┃
 ┃                          │ ▌10:03 Zed                                          1 hop · SNR +6.00 ┃
 ┃                          │ ▌      anyone on the hill tonight?                                    ┃
-┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply         ┃
+┃                          │ ▸ enter write · ↑↓ conversations · n add channel · → pick a message   ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ MSG  Public · Zed: anyone on the hill tonigh█
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 5f6c6cb313a0a828
+styles 9aad209aa95711ef
 == 700ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -101,7 +101,7 @@ styles 5f6c6cb313a0a828
 ┃ CHANNELS                 │ ▌Public  channel · flood                                              ┃
 ┃ ▌ # Public               │                                                                       ┃
 ┃  # bristol               │                                                                       ┃
-┃                          │                                                                       ┃
+┃  + add a channel         │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
@@ -119,10 +119,10 @@ styles 5f6c6cb313a0a828
 ┃                          │                                                                       ┃
 ┃                          │  10:03 Zed                                          1 hop · SNR +6.00 ┃
 ┃                          │        anyone on the hill tonight?                                    ┃
-┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply         ┃
+┃                          │ ▸ enter write · ↑↓ conversations · n add channel · → pick a message   ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 2 contacts · 2 channels · theme neon · motion full
  [10:03:03] ▸ MSG  Public · Zed: anyone on the hill tonight?
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles af4eb2336bc6f4d0
+styles 62ab893ded5fa033

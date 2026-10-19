@@ -5,7 +5,7 @@
 ┃ CHANNELS                 │ ▌Public  channel · flood                                              ┃
 ┃ ▌ # Public               │                                                                       ┃
 ┃  # bristol               │                                                                       ┃
-┃                          │                                                                       ┃
+┃  + add a channel         │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
@@ -17,13 +17,13 @@
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │ No messages yet. Press enter to write the first one.                  ┃
-┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply         ┃
-┏━ GO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-┃  Alice                                              contact  ┃ full
-┃▌ channel                                            command  ┃rds are asked for
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2/2 ━┛
+┏━ GO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓n add channel · → pick a message   ┃
+┃  Alice                                              contact  ┃━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+┃▌ add a channel                                      channel  ┃ full
+┃  channel                                            command  ┃rds are asked for
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2/3 ━┛
  mc▸ al   ↑↓ choose · enter go · tab complete · esc close
-styles ff2ad0f037752b34
+styles bc78a16716769953
 == 40 wide ==
  MeshCore-k4  RX ●  TX ●       ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKET
@@ -31,7 +31,7 @@ styles ff2ad0f037752b34
 ┃ CHANNELS             │ ▌Public  chan ┃
 ┃ ▌ # Public           │               ┃
 ┃  # bristol           │               ┃
-┃                      │               ┃
+┃  + add a channel     │               ┃
 ┃                      │               ┃
 ┃                      │               ┃
 ┃                      │               ┃
@@ -43,10 +43,10 @@ styles ff2ad0f037752b34
 ┃                      │               ┃
 ┃                      │               ┃
 ┃                      │ No messages y ┃
-┃                      │ ▸ enter write ┃
 ┏━ GO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃  Alice                      contact  ┃
-┃▌ channel                    command  ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2/2 ━┛
+┃▌ add a channel              channel  ┃
+┃  channel                    command  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2/3 ━┛
  mc▸ al   ↑↓ choose · enter go · tab c…
-styles 2ecca7f030e4c52a
+styles 41ab2cb9ce58563c

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"regexp"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -64,6 +65,7 @@ func (m *Model) channelsMsg(msg channelsMsg) tea.Cmd {
 	m.addLog(m.now, msg.what, radio.ToneOK)
 	m.refreshChats()
 	if msg.focus != "" {
+		c.onAdd = false
 		for i, info := range c.infos {
 			if info.Convo == msg.focus {
 				c.sel = i
@@ -113,7 +115,7 @@ func (m *Model) channelKey(s string) (tea.Cmd, bool) {
 	case chanNone:
 		switch s {
 		case "n":
-			c.chanStage, c.chanInput, c.chanName = chanName, lineEdit{}, ""
+			m.startAddChannel("")
 			return nil, true
 		case "e", "x":
 			ch, ok := m.selectedChannel()
@@ -188,6 +190,63 @@ func (m *Model) channelKey(s string) (tea.Cmd, bool) {
 		}
 	}
 	return nil, true
+}
+
+var hashtagWord = regexp.MustCompile(`(?:^|[^\p{L}\p{N}_&/#])(#[\p{L}\p{N}_-]*[\p{L}\p{N}_])`)
+
+// joinable reports whether name is a hashtag channel, well formed and not one we're in already.
+func (m *Model) joinable(name string) bool {
+	if m.chat == nil || len(name) < 2 || name[0] != '#' || strings.ContainsAny(name[1:], " #") {
+		return false
+	}
+	if strings.Trim(name[1:], "0123456789") == "" {
+		return false // #1 is a number, not a channel
+	}
+	_, in := m.chat.ChannelNamed(name, -1)
+	return !in
+}
+
+// hashtagIn is the first hashtag channel a message mentions that we're not in, or "".
+func (m *Model) hashtagIn(text string) string {
+	for _, sm := range hashtagWord.FindAllStringSubmatch(untrusted.Text(text), -1) {
+		if m.joinable(sm[1]) {
+			return sm[1]
+		}
+	}
+	return ""
+}
+
+// joinHashtag joins a hashtag channel straight away; anyone can, so there's nothing to ask.
+func (m *Model) joinHashtag(name string) tea.Cmd {
+	cmd, err := m.addChannel(name, "")
+	if err != nil {
+		m.fail("CHANNEL  " + err.Error())
+		return nil
+	}
+	m.setTab(0)
+	return cmd
+}
+
+// startAddChannel opens the add-a-channel form on Chats, with name already typed in.
+func (m *Model) startAddChannel(name string) {
+	m.setTab(0)
+	c := &m.chats
+	c.writing, c.reading = false, false
+	c.chanStage, c.chanInput, c.chanName = chanName, newLine(name), ""
+}
+
+// addPreview fills the conversation pane while the add row is picked, saying what adding a channel does.
+func (m *Model) addPreview(w int) []string {
+	th := m.th
+	out := []string{th.Fg(th.Muted, true).Render("ADD A CHANNEL") + th.Fg(th.Dim, false).Render(fmt.Sprintf("  ·  %d of %d slots used", len(m.chat.Channels()), m.slots())), ""}
+	for _, text := range []string{"Join a public hashtag channel by its name, like #bristol, join a private one with its secret or a link someone shared, or make a new private channel to share.",
+		"Picking a message that mentions a #channel you're not in offers J to join it, and ctrl+k finds #names too."} {
+		for _, l := range strings.Split(renderWidth.Wrap(text, w, " "), "\n") {
+			out = append(out, th.Fg(th.Dim, false).Render(l))
+		}
+		out = append(out, "")
+	}
+	return append(out, th.Paint(th.Dim, false, "▸ ")+th.Paint(th.Cyan, true, "enter")+th.Paint(th.Dim, false, " add a channel · ↑↓ conversations"))
 }
 
 func (m *Model) channelLines(w, rows int) []string {

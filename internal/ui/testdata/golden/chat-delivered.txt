@@ -5,10 +5,10 @@
 ┃ CHANNELS                 │ ▌Alice  direct · 2 hops A3·1E · M shows it                            ┃
 ┃  # Public                │                                                                       ┃
 ┃  # bristol               │                                                                       ┃
+┃  + add a channel         │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃ DIRECT                   │                                                                       ┃
 ┃ ▌ ● Alice                │                                                                       ┃
-┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
@@ -29,7 +29,7 @@
  [10:03:00] ▸ RADIO NOT VERIFIED  it can't sign, so saved passwords are asked for
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles b9b327882e0eca00
+styles dca3e0344d14ce2d
 == 0s ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -37,10 +37,10 @@ styles b9b327882e0eca00
 ┃ CHANNELS                 │ ▌Alice  direct · 2 hops A3·1E · M shows it                            ┃
 ┃  # Public                │                                                                       ┃
 ┃  # bristol               │                                                                       ┃
+┃  + add a channel         │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃ DIRECT                   │                                                                       ┃
 ┃ ▌ ● Alice                │                                                                       ┃
-┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
@@ -61,7 +61,7 @@ styles b9b327882e0eca00
  [10:03:03] ▸ █
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 0357a845933bc9dd
+styles 1851ae41f6cc58ee
 == 225ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -69,10 +69,10 @@ styles 0357a845933bc9dd
 ┃ CHANNELS                 │ ▌Alice  direct · 2 hops A3·1E · M shows it                            ┃
 ┃  # Public                │                                                                       ┃
 ┃  # bristol               │                                                                       ┃
+┃  + add a channel         │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃ DIRECT                   │                                                                       ┃
 ┃ ▌ ● Alice                │                                                                       ┃
-┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
@@ -93,7 +93,7 @@ styles 0357a845933bc9dd
  [10:03:03] ▸ DELIVERED  ✓ Alice  1.4s
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 31a0087fe0e76bdf
+styles 866538635679d9bc
 == 450ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -101,10 +101,10 @@ styles 31a0087fe0e76bdf
 ┃ CHANNELS                 │ ▌Alice  direct · 2 hops A3·1E · M shows it                            ┃
 ┃  # Public                │                                                                       ┃
 ┃  # bristol               │                                                                       ┃
+┃  + add a channel         │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃ DIRECT                   │                                                                       ┃
 ┃ ▌ ● Alice                │                                                                       ┃
-┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
@@ -125,4 +125,4 @@ styles 31a0087fe0e76bdf
  [10:03:03] ▸ DELIVERED  ✓ Alice  1.4s
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles b0baa4687ac262ee
+styles 94049244c691253f

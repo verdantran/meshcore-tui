@@ -589,7 +589,7 @@ func (m *Model) contactAction(s string, ct radio.Contact) (tea.Cmd, bool) {
 func (m *Model) jumpToConvo(cv store.Convo) {
 	m.setTab(0)
 	ch := &m.chats
-	ch.filter, ch.filtering = lineEdit{}, false
+	ch.filter, ch.filtering, ch.onAdd = lineEdit{}, false, false
 	if strings.HasPrefix(string(cv), "dm:") {
 		m.openDraft(cv)
 		return
