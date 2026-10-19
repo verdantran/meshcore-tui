@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -94,7 +95,7 @@ func (m *Model) contactTable(w, rows int) []string {
 			heard = "never"
 		}
 		if i == c.sel {
-			line := fmt.Sprintf("%s %s %-9s %-9s %s %-4s %02X", star, col(ct.Name, nameW), ct.Type, heard, col(routeText(ct), routeW), loc, ct.Key[0])
+			line := fmt.Sprintf("%s %s %-9s %-9s %s %-4s %s", star, col(ct.Name, nameW), ct.Type, heard, col(routeText(ct), routeW), loc, m.keyHash(ct.Key))
 			out = append(out, th.Paint(th.Magenta, true, "▌")+m.raised(fit(line, w-1)))
 			continue
 		}
@@ -104,7 +105,7 @@ func (m *Model) contactTable(w, rows int) []string {
 			th.Paint(th.Dim, false, fmt.Sprintf("%-9s", heard))+" "+
 			th.Paint(th.Muted, false, col(routeText(ct), routeW))+" "+
 			th.Paint(th.Dim, false, fmt.Sprintf("%-4s", loc))+" "+
-			th.Paint(th.Muted, false, fmt.Sprintf("%02X", ct.Key[0])), w, c.arrived[ct.Key]))
+			th.Paint(th.Muted, false, m.keyHash(ct.Key)), w, c.arrived[ct.Key]))
 	}
 	return out
 }
@@ -136,12 +137,12 @@ func (m *Model) contactDetail(w int) []string {
 	if ct.PathLen == 0 {
 		route = "direct: in range, no repeaters"
 	} else if ct.PathLen > 0 {
-		route = fmt.Sprintf("direct: %d hops via %s", ct.PathLen, hashes(ct.Path))
+		route = fmt.Sprintf("direct: %d hops via %s", ct.PathLen, hashes(ct.Path, ct.HashSize))
 	}
 	if t, ok := c.discovering[ct.Key]; ok {
 		route += th.Fg(th.Yellow, false).Render("   discovering " + motion.RampBar(now, 3) + " " + ago(now.Sub(t)))
 	} else if f, ok := c.found[ct.Key]; ok {
-		route += th.Fg(th.Green, false).Render(fmt.Sprintf("   found: out %s · back %s", orFlood(f.Out), orFlood(f.In)))
+		route += th.Fg(th.Green, false).Render(fmt.Sprintf("   found: out %s · back %s", orFlood(f.Out, f.OutSize), orFlood(f.In, f.InSize)))
 	}
 	out = append(out, label("route")+val(route))
 
@@ -149,7 +150,7 @@ func (m *Model) contactDetail(w int) []string {
 	if ap, ok := c.advert[ct.Key]; ok {
 		via := "straight from them, no repeaters"
 		if len(ap.Path) > 0 {
-			via = fmt.Sprintf("%d hops via %s", len(ap.Path), hashes(ap.Path))
+			via = fmt.Sprintf("%d hops via %s", len(ap.Path)/max(ap.HashSize, 1), hashes(ap.Path, ap.HashSize))
 		}
 		adv = val(fmt.Sprintf("%s, heard %s", via, ago(now.Sub(ap.At))))
 	}
@@ -180,7 +181,7 @@ func (m *Model) traceLine(ct radio.Contact) string {
 	th, c, now := m.th, &m.contacts, m.now
 	tag, ok := c.lastTrace[ct.Key]
 	if !ok {
-		if _, can := tracePath(ct); !can {
+		if _, _, can := tracePath(ct, m.pathHash()); !can {
 			return th.Fg(th.Dim, false).Render("needs a stored route; discover one with d")
 		}
 		return th.Fg(th.Dim, false).Render("press t to trace " + routeText(ct))
@@ -188,11 +189,12 @@ func (m *Model) traceLine(ct radio.Contact) string {
 	run := c.traces[tag]
 	switch {
 	case run.lost:
-		return th.Fg(th.Red, true).Render("[FAIL]") + th.Fg(th.Red, false).Render(" no answer along "+hashes(run.path))
+		return th.Fg(th.Red, true).Render("[FAIL]") + th.Fg(th.Red, false).Render(" no answer along "+hashes(run.path, run.size))
 	case run.result == nil:
-		return th.Fg(th.Yellow, true).Render(motion.RampBar(now, 3)) + th.Fg(th.Yellow, false).Render(" tracing "+hashes(run.path)+" · "+ago(now.Sub(run.started)))
+		return th.Fg(th.Yellow, true).Render(motion.RampBar(now, 3)) + th.Fg(th.Yellow, false).Render(" tracing "+hashes(run.path, run.size)+" · "+ago(now.Sub(run.started)))
 	}
 	r := run.result
+	hops := splitPath(r.Hashes, max(r.HashSize, 1), true)
 	steps := len(r.SNRs) + 1
 	shown := steps
 	if m.level.Allows(motion.Wipe) {
@@ -204,8 +206,8 @@ func (m *Model) traceLine(ct radio.Contact) string {
 		snr, to := float64(r.LastSNR), "me"
 		if i < len(r.SNRs) {
 			snr, to = float64(r.SNRs[i]), "??"
-			if i < len(r.Hashes) {
-				to = fmt.Sprintf("%02X", r.Hashes[i])
+			if i < len(hops) {
+				to = fmt.Sprintf("%X", hops[i])
 			}
 		}
 		b.WriteString(th.Fg(th.Dim, false).Render(" ─"))
@@ -226,7 +228,7 @@ func (m *Model) heardLines(w, rows int) []string {
 		if len(out) >= rows {
 			break
 		}
-		line := fmt.Sprintf(" %s %-9s %02X  heard %s", col(h.c.Name, 24), h.c.Type, h.c.Key[0], ago(m.now.Sub(h.at)))
+		line := fmt.Sprintf(" %s %-9s %s  heard %s", col(h.c.Name, 24), h.c.Type, m.keyHash(h.c.Key), ago(m.now.Sub(h.at)))
 		if i == c.heardSel {
 			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(line, w-1)))
 			continue
@@ -295,8 +297,8 @@ func (m *Model) editorLines(w, rows int) []string {
 	th, c := m.th, &m.contacts
 	ct, _ := m.selectedContact()
 	chips := th.Fg(th.Text, true).Render("me")
-	for _, h := range c.editPath {
-		chips += th.Fg(th.Dim, false).Render(" › ") + th.Fg(th.Cyan, true).Render(fmt.Sprintf("%02X", h))
+	for h := range slices.Chunk(c.editPath, c.editSize) {
+		chips += th.Fg(th.Dim, false).Render(" › ") + th.Fg(th.Cyan, true).Render(fmt.Sprintf("%X", h))
 	}
 	chips += th.Fg(th.Dim, false).Render(" › ") + th.Fg(typeColour(th, ct.Type), true).Render(ct.Name)
 	if len(c.editPath) == 0 {
@@ -305,18 +307,18 @@ func (m *Model) editorLines(w, rows int) []string {
 	out := []string{th.Fg(th.Muted, true).Render("SET ROUTE TO "+strings.ToUpper(ct.Name)) +
 		th.Fg(th.Dim, false).Render("  ·  ↑↓ choose · enter add hop · backspace remove hop · s save · esc cancel"), "", chips, ""}
 	reps := m.repeaters()
-	byHash := map[byte][]string{}
+	byHash := map[string][]string{}
 	for _, r := range reps {
-		byHash[r.Key[0]] = append(byHash[r.Key[0]], r.Name)
+		byHash[string(r.Key[:c.editSize])] = append(byHash[string(r.Key[:c.editSize])], r.Name)
 	}
 	start := min(max(c.editSel-(rows-6)/2, 0), max(len(reps)-(rows-5), 0))
 	for i := start; i < len(reps) && len(out) < rows; i++ {
 		r := reps[i]
 		note := ""
-		if len(byHash[r.Key[0]]) > 1 {
-			note = "  shares its hash with " + strings.Join(without(byHash[r.Key[0]], r.Name), ", ")
+		if same := byHash[string(r.Key[:c.editSize])]; len(same) > 1 {
+			note = "  shares its hash with " + strings.Join(without(same, r.Name), ", ")
 		}
-		line := fmt.Sprintf(" %02X  %s %s", r.Key[0], col(r.Name, 22), routeText(r))
+		line := fmt.Sprintf(" %X  %s %s", r.Key[:c.editSize], col(r.Name, 22), routeText(r))
 		if i == c.editSel {
 			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(line, w-1)))
 			continue

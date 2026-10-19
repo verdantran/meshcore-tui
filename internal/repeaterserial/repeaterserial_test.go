@@ -298,7 +298,7 @@ func TestRepeater(t *testing.T) {
 		}
 	}
 	r.SendText(ctx, self.Key, "x")
-	r.Trace(ctx, nil)
+	r.Trace(ctx, nil, 1)
 	r.ExportContact(ctx, self.Key)
 	r.AutoAdd(ctx)
 	r.AdvertPath(ctx, self.Key)
@@ -431,7 +431,7 @@ func TestUSBFindsARepeater(t *testing.T) {
 	u.ResetPath(ctx, self.Key)
 	u.SaveContact(ctx, self)
 	u.RemoveContact(ctx, self.Key)
-	u.Trace(ctx, nil)
+	u.Trace(ctx, nil, 1)
 	u.DiscoverPath(ctx, self.Key)
 	u.AdvertPath(ctx, self.Key)
 	u.ExportContact(ctx, self.Key)

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sort"
@@ -9,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/verdantran/meshcore-tui/internal/mapview"
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/packets"
 	"github.com/verdantran/meshcore-tui/internal/radio"
@@ -211,15 +213,46 @@ type meshTally struct {
 	packets  int
 	adverts  map[time.Time]map[string]bool // by the hour they were heard
 	hops     map[int]int
-	hashes   map[byte]int
-	snr      [6]int // below -10, -10..-5, -5..0, 0..5, 5..10, 10 and up
+	hashes   map[string]*hopCount // by the hop's bytes, as long as its packet's hashes
+	snr      [6]int               // below -10, -10..-5, -5..0, 0..5, 5..10, 10 and up
 	channels map[string]int
 }
 
-const maxAdvertNames = 4096 // per hour: names cost nothing to make up
+// hopCount is the packets a path hash carried, and who each one named it as, surely or as the likeliest.
+type hopCount struct {
+	n     int
+	picks map[[32]byte]int
+}
+
+const (
+	maxAdvertNames = 4096 // per hour: names cost nothing to make up
+	maxHopHashes   = 1024 // longer hashes than a byte cost nothing to make up either
+)
 
 func newMeshTally() meshTally {
-	return meshTally{adverts: map[time.Time]map[string]bool{}, hops: map[int]int{}, hashes: map[byte]int{}, channels: map[string]int{}}
+	return meshTally{adverts: map[time.Time]map[string]bool{}, hops: map[int]int{}, hashes: map[string]*hopCount{}, channels: map[string]int{}}
+}
+
+// hop counts a path hash. When there are too many, the least counted makes room.
+func (t *meshTally) hop(h packets.Hop) {
+	c, ok := t.hashes[string(h.Hash)]
+	if !ok {
+		if len(t.hashes) >= maxHopHashes {
+			least := ""
+			for k, c := range t.hashes {
+				if least == "" || c.n < t.hashes[least].n || c.n == t.hashes[least].n && k < least {
+					least = k
+				}
+			}
+			delete(t.hashes, least)
+		}
+		c = &hopCount{picks: map[[32]byte]int{}}
+		t.hashes[string(h.Hash)] = c
+	}
+	c.n++
+	if h.Key != ([32]byte{}) {
+		c.picks[h.Key]++
+	}
 }
 
 // add counts one copy of a packet; first is false for repeats, which only add their signal. Only open
@@ -247,8 +280,8 @@ func (t *meshTally) add(d packets.Decoded, snr float32, first, open bool, now ti
 	if d.Err == nil && d.Flood {
 		size := max(d.HashSize, 1)
 		t.hops[min(len(d.Path)/size, 7)]++
-		for i := 0; i+size <= len(d.Path); i += size {
-			t.hashes[d.Path[i]]++
+		for _, h := range d.Hops {
+			t.hop(h)
 		}
 	}
 	if d.Type == "GRP_TXT" {
@@ -288,12 +321,12 @@ func (m *Model) meshLines(w int) []string {
 
 	out = append(out, "", th.Fg(th.Text, true).Render("Busiest repeaters")+th.Fg(th.Dim, false).Render("  by packets carried"))
 	type count struct {
-		hash byte
+		hash string
 		n    int
 	}
 	var busiest []count
-	for h, n := range hashes {
-		busiest = append(busiest, count{h, n})
+	for h, c := range hashes {
+		busiest = append(busiest, count{h, c.n})
 	}
 	sort.Slice(busiest, func(i, j int) bool {
 		return busiest[i].n > busiest[j].n || busiest[i].n == busiest[j].n && busiest[i].hash < busiest[j].hash
@@ -305,7 +338,7 @@ func (m *Model) meshLines(w int) []string {
 		if i == 5 {
 			break
 		}
-		out = append(out, m.barLine(fmt.Sprintf("%02X %s", c.hash, m.hashName(c.hash)), c.n, busiest[0].n, barW, th.Cyan))
+		out = append(out, m.barLine(strings.TrimSpace(fmt.Sprintf("%X %s", c.hash, m.hashName([]byte(c.hash), hashes[c.hash].picks))), c.n, busiest[0].n, barW, th.Cyan))
 	}
 
 	out = append(out, "", th.Fg(th.Text, true).Render("Hops travelled")+th.Fg(th.Dim, false).Render("  flood packets"))
@@ -365,19 +398,30 @@ func (m *Model) meshLines(w int) []string {
 	return out
 }
 
-// hashName names the repeaters a path hash could be; several share each byte.
-func (m *Model) hashName(h byte) string {
+// hashName names the repeater or room a path hash is: the one whose key starts with it, or, when several
+// do, the one its packets' routes most often made likeliest, marked as a guess, or else all of them.
+func (m *Model) hashName(h []byte, picks map[[32]byte]int) string {
 	if m.chat == nil {
 		return ""
 	}
-	var names []string
+	var nodes []mapview.Node
 	for _, c := range m.chat.Contacts() {
-		if c.Type == radio.TypeRepeater && c.Key[0] == h {
-			names = append(names, c.Name)
+		if (c.Type == radio.TypeRepeater || c.Type == radio.TypeRoom) && bytes.HasPrefix(c.Key[:], h) {
+			nodes = append(nodes, mapview.Node{Name: c.Name, Key: c.Key})
 		}
 	}
-	sort.Strings(names)
-	return strings.Join(names, " or ")
+	if len(nodes) == 0 {
+		return ""
+	}
+	hop := mapview.Hop{Hash: h}
+	for i := range nodes {
+		hop.Nodes = append(hop.Nodes, i)
+	}
+	sort.SliceStable(hop.Nodes, func(a, b int) bool { return picks[nodes[hop.Nodes[a]].Key] > picks[nodes[hop.Nodes[b]].Key] })
+	if len(nodes) > 1 && picks[nodes[hop.Nodes[0]].Key] > picks[nodes[hop.Nodes[1]].Key] {
+		hop.Guess = true
+	}
+	return hop.Label(nodes)
 }
 
 func (m *Model) barLine(label string, n, most, w int, colour theme.RGB) string {

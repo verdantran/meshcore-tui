@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"strings"
@@ -301,12 +302,10 @@ func (m *Model) showContactPath(ct radio.Contact) {
 		if run := cm.traces[tag]; run != nil && run.result != nil {
 			res := run.result
 			// A trace goes out along the route and back the same way; the map shows the way out.
-			out := res.Hashes[:(len(res.Hashes)+1)/2]
-			var hops [][]byte
-			for _, h := range out {
-				hops = append(hops, []byte{h})
-			}
-			if ct.Type == radio.TypeRepeater && len(hops) > 0 && hops[len(hops)-1][0] == ct.Key[0] {
+			all := splitPath(res.Hashes, max(res.HashSize, 1), true)
+			out := all[:(len(all)+1)/2]
+			hops := out
+			if ct.Type == radio.TypeRepeater && len(hops) > 0 && bytes.HasPrefix(ct.Key[:], hops[len(hops)-1]) {
 				hops = hops[:len(hops)-1] // the last hop out is the repeater itself
 			}
 			snrs := make([]float64, len(hops)+1)
@@ -323,12 +322,12 @@ func (m *Model) showContactPath(ct radio.Contact) {
 	}
 	if ct.PathLen >= 0 {
 		m.showPath("your route to "+ct.Name, ct.Name, []mapRoute{{what: "stored route", from: mapEnd{me: true},
-			to: mapEnd{key: ct.Key, name: ct.Name}, hops: splitPath(ct.Path, 1, true), at: m.now}})
+			to: mapEnd{key: ct.Key, name: ct.Name}, hops: splitPath(ct.Path, max(ct.HashSize, 1), true), at: m.now}})
 		return
 	}
 	if ap, ok := cm.advert[ct.Key]; ok {
 		m.showPath(ct.Name+"'s advert", "me", []mapRoute{{what: "advert path", from: mapEnd{key: ct.Key, name: ct.Name},
-			to: mapEnd{me: true}, hops: splitPath(ap.Path, 1, true), at: ap.At}})
+			to: mapEnd{me: true}, hops: splitPath(ap.Path, max(ap.HashSize, 1), true), at: ap.At}})
 		return
 	}
 	m.addLog(m.now, "MAP  no route to "+ct.Name+" is known: messages to it flood. t on Contacts traces one", radio.ToneWarn)

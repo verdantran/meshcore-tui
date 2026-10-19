@@ -176,8 +176,8 @@ func (u *USB) SaveContact(ctx context.Context, c radio.Contact) error {
 func (u *USB) RemoveContact(ctx context.Context, k [32]byte) error {
 	return u.cur().RemoveContact(ctx, k)
 }
-func (u *USB) Trace(ctx context.Context, path []byte) (uint32, error) {
-	return u.cur().Trace(ctx, path)
+func (u *USB) Trace(ctx context.Context, path []byte, size int) (uint32, error) {
+	return u.cur().Trace(ctx, path, size)
 }
 func (u *USB) DiscoverPath(ctx context.Context, k [32]byte) error {
 	return u.cur().DiscoverPath(ctx, k)

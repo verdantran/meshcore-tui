@@ -151,7 +151,7 @@ func (m *Model) packetChannel(d packets.Decoded) (radio.Channel, bool) {
 }
 
 func (m *Model) book() packets.Book {
-	b := packets.Book{Self: m.ready.Self.PubKey}
+	b := packets.Book{Self: m.ready.Self.PubKey, Nodes: m.mapNodes()}
 	if m.chat != nil {
 		b.Channels, b.Contacts = m.chat.Channels(), m.chat.Contacts()
 	}
@@ -230,7 +230,7 @@ func (m *Model) shows(r *packetRow) bool {
 		return false
 	}
 	q := strings.ToLower(in.filter.text)
-	return q == "" || strings.Contains(strings.ToLower(r.dec.Summary+" "+r.dec.Type+" "+hashes(r.dec.Path)), q)
+	return q == "" || strings.Contains(strings.ToLower(r.dec.Summary+" "+r.dec.Type+" "+hashes(r.dec.Path, r.dec.HashSize)), q)
 }
 
 // visiblePackets is the filtered list, newest first. While paused, rows that arrived since stay hidden.
@@ -442,7 +442,7 @@ func (m *Model) packetTable(list []*packetRow, w, rows int) []string {
 		} else if n > 1 {
 			times = fmt.Sprintf("%d", n)
 		}
-		path := hashes(r.dec.Path)
+		path := hashes(r.dec.Path, r.dec.HashSize)
 		if path == "" {
 			path = "—"
 		}
@@ -519,7 +519,7 @@ func (m *Model) packetDetail(w, rows int) []string {
 	if n := r.heard(); n > 1 {
 		var via []string
 		for _, c := range r.copies {
-			via = append(via, fmt.Sprintf("%s (%+.1f)", orFlood(c.path), c.snr))
+			via = append(via, fmt.Sprintf("%s (%+.1f)", orFlood(c.path, r.dec.HashSize), c.snr))
 		}
 		head := fmt.Sprintf("heard %d times: ", n)
 		if r.extra > 0 {
@@ -602,7 +602,7 @@ func (m *Model) exportPackets() error {
 	for i := len(list) - 1; i >= 0; i-- {
 		r := list[i]
 		j := packetJSON{Time: r.first, SNR: r.copies[0].snr, RSSI: r.copies[0].rssi, Route: r.dec.Route, Type: r.dec.Type,
-			Path: hashes(r.dec.Path), Hex: r.dec.MaskedHex(), Summary: r.dec.Summary, Channel: r.dec.Channel, Copies: r.heard()}
+			Path: hashes(r.dec.Path, r.dec.HashSize), Hex: r.dec.MaskedHex(), Summary: r.dec.Summary, Channel: r.dec.Channel, Copies: r.heard()}
 		if r.dec.Decrypted {
 			j.Decrypted = r.dec.Sender + ": " + r.dec.Text
 		}

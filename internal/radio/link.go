@@ -270,7 +270,7 @@ func (l *Link) sync(ctx context.Context) {
 			Lat: float64(self.AdvertLatitude) / 1e6, Lon: float64(self.AdvertLongitude) / 1e6,
 		},
 		Device: DeviceInfo{Model: untrusted.Line(dev.Model), Firmware: untrusted.Line(dev.FirmwareVersionStr), BuildDate: untrusted.Line(dev.FirmwareBuildDate), MaxContacts: int(dev.MaxContacts), MaxChannels: int(dev.MaxChannels),
-			PinSet: dev.FirmwareVersion >= 3 && dev.BLEPin != 0},
+			PinSet: dev.FirmwareVersion >= 3 && dev.BLEPin != 0, PathHash: int(dev.PathHashMode) + 1},
 		Contacts:    len(contacts),
 		Channels:    len(channels),
 		Battery:     Battery{batt.BatteryMilliVolts},
@@ -573,12 +573,14 @@ func (l *Link) registerPushes() {
 			for i, b := range p.PathSnrs {
 				snrs[i] = meshcore.PathSNRdB(b)
 			}
-			l.emit(TraceResult{Tag: p.Tag, Hashes: p.PathHashes, SNRs: snrs, LastSNR: p.LastSNR})
+			l.emit(TraceResult{Tag: p.Tag, Hashes: p.PathHashes, HashSize: 1 << (p.Flags & 3), SNRs: snrs, LastSNR: p.LastSNR})
 		}
 	})
 	c.OnPush(companion.PushPathDiscoveryResponse, func(r companion.Response) {
 		if p, ok := r.Data.(companion.PushPathDiscoveryResp); ok {
-			l.emit(PathFound{Prefix: p.PubKeyPrefix, Out: p.OutPath, In: p.InPath})
+			out, _ := meshcore.PathLenFields(p.OutPathLen)
+			in, _ := meshcore.PathLenFields(p.InPathLen)
+			l.emit(PathFound{Prefix: p.PubKeyPrefix, Out: p.OutPath, In: p.InPath, OutSize: int(out), InSize: int(in)})
 		}
 	})
 	c.OnPush(companion.PushPathUpdated, func(r companion.Response) {
@@ -724,14 +726,19 @@ func (l *Link) RemoveContact(ctx context.Context, key [32]byte) error {
 	return l.client.RemoveContact(ctx, meshcore.NewIdentity(key))
 }
 
-// Trace sends a trace along path (1-byte hop hashes); the tag matches the TraceResult that comes back.
-func (l *Link) Trace(ctx context.Context, path []byte) (uint32, error) {
+// Trace sends a trace along path; the tag matches the TraceResult that comes back. The trace's flags carry
+// the hop size as a power of two, so it's 1, 2 or 4 bytes.
+func (l *Link) Trace(ctx context.Context, path []byte, hashSize int) (uint32, error) {
+	flag, ok := map[int]byte{1: 0, 2: 1, 4: 2}[hashSize]
+	if !ok || len(path)%hashSize != 0 {
+		return 0, fmt.Errorf("a trace can't carry %d-byte hops", hashSize)
+	}
 	var b [4]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		return 0, err
 	}
 	tag := binary.LittleEndian.Uint32(b[:])
-	_, err := l.client.SendTracePath(ctx, tag, 0, 0, path)
+	_, err := l.client.SendTracePath(ctx, tag, 0, flag, path)
 	return tag, err
 }
 
@@ -745,7 +752,8 @@ func (l *Link) AdvertPath(ctx context.Context, key [32]byte) (AdvertPath, error)
 	if err != nil {
 		return AdvertPath{}, err
 	}
-	return AdvertPath{At: time.Unix(int64(r.RecvTimestamp), 0), Path: r.Path}, nil
+	size, _ := meshcore.PathLenFields(r.PathLen)
+	return AdvertPath{At: time.Unix(int64(r.RecvTimestamp), 0), Path: r.Path, HashSize: int(size)}, nil
 }
 
 func (l *Link) ExportContact(ctx context.Context, key [32]byte) (string, error) {

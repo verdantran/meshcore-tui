@@ -85,7 +85,7 @@ func TestConnectSequence(t *testing.T) {
 	if ready.Self.Name != "MeshCore-k4" || ready.Self.Params() != "869.618 SF8 BW62.5" || ready.Self.Lat != 51.44 {
 		t.Errorf("self = %+v", ready.Self)
 	}
-	if ready.Device.Model != "Heltec V4" || ready.Device.Firmware != "v1.17.1" || ready.Device.MaxChannels != 4 {
+	if ready.Device.Model != "Heltec V4" || ready.Device.Firmware != "v1.17.1" || ready.Device.MaxChannels != 4 || ready.Device.PathHash != 2 {
 		t.Errorf("device = %+v", ready.Device)
 	}
 	if ready.Battery.MilliVolts != 4020 || ready.Contacts != 2 || ready.Channels != 2 {
@@ -163,8 +163,17 @@ func TestPushes(t *testing.T) {
 		t.Errorf("trace = %+v", tr)
 	}
 	f.push(companion.PushPathDiscoveryResp{PubKeyPrefix: [6]byte{0x3A}, OutPathLen: 2, OutPath: []byte{0xA3, 0x1E}, InPathLen: 1, InPath: []byte{0x1E}}.ToBytes())
-	if pf := next[PathFound](t, l, nil); len(pf.Out) != 2 || len(pf.In) != 1 {
+	if pf := next[PathFound](t, l, nil); len(pf.Out) != 2 || len(pf.In) != 1 || pf.OutSize != 1 {
 		t.Errorf("path found = %+v", pf)
+	}
+	// 2-byte hops: the trace's flags and the path lengths' top bits say so.
+	f.push(companion.PushTraceDataResponse{PathLen: 4, Flags: 1, Tag: 78, PathHashes: []byte{0xA3, 0x01, 0x1E, 0x02}, PathSnrs: []byte{28, 0xF8}, LastSNR: 6}.ToBytes())
+	if tr := next[TraceResult](t, l, nil); tr.HashSize != 2 || len(tr.Hashes) != 4 || len(tr.SNRs) != 2 {
+		t.Errorf("2-byte trace = %+v", tr)
+	}
+	f.push(companion.PushPathDiscoveryResp{PubKeyPrefix: [6]byte{0x3A}, OutPathLen: meshcore.MakePathLen(2, 1), OutPath: []byte{0xA3, 0x01}, InPathLen: 0}.ToBytes())
+	if pf := next[PathFound](t, l, nil); pf.OutSize != 2 || len(pf.Out) != 2 {
+		t.Errorf("2-byte path found = %+v", pf)
 	}
 }
 
@@ -217,7 +226,10 @@ func TestCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tag, err := l.Trace(ctx, []byte{0xA3, 0x1E, 0xA3})
+	if _, err := l.Trace(ctx, []byte{0xA3, 0x01, 0x02}, 3); err == nil {
+		t.Error("a trace can't carry 3-byte hops")
+	}
+	tag, err := l.Trace(ctx, []byte{0xA3, 0x1E, 0xA3}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

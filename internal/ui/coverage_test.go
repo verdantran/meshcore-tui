@@ -561,7 +561,7 @@ func TestMonoAndHelpers(t *testing.T) {
 	if wipe("x", 10, 1, theme.Neon) != "x" {
 		t.Error("a finished wipe leaves the line alone")
 	}
-	if orFlood(nil) != "in range" || orFlood([]byte{0xA3}) != "A3" {
+	if orFlood(nil, 1) != "in range" || orFlood([]byte{0xA3}, 1) != "A3" || orFlood([]byte{0xA3, 0x01, 0x1E, 0x02}, 2) != "A301·1E02" {
 		t.Error("orFlood")
 	}
 	for typ := radio.ContactType(1); typ <= 4; typ++ {

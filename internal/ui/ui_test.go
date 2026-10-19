@@ -32,13 +32,13 @@ func (s *stubRadio) ResetPath(context.Context, [32]byte) error      { return nil
 func (s *stubRadio) SyncContacts(context.Context) ([]radio.Contact, error) {
 	return nil, nil
 }
-func (s *stubRadio) SaveContact(context.Context, radio.Contact) error { return nil }
-func (s *stubRadio) RemoveContact(context.Context, [32]byte) error    { return nil }
-func (s *stubRadio) Trace(context.Context, []byte) (uint32, error)    { return 1, nil }
-func (s *stubRadio) DiscoverPath(context.Context, [32]byte) error     { return nil }
-func (s *stubRadio) ImportContact(context.Context, string) error      { return nil }
-func (s *stubRadio) SetAutoAdd(context.Context, radio.AutoAdd) error  { return nil }
-func (s *stubRadio) AutoAdd(context.Context) (radio.AutoAdd, error)   { return radio.AutoAdd{}, nil }
+func (s *stubRadio) SaveContact(context.Context, radio.Contact) error   { return nil }
+func (s *stubRadio) RemoveContact(context.Context, [32]byte) error      { return nil }
+func (s *stubRadio) Trace(context.Context, []byte, int) (uint32, error) { return 1, nil }
+func (s *stubRadio) DiscoverPath(context.Context, [32]byte) error       { return nil }
+func (s *stubRadio) ImportContact(context.Context, string) error        { return nil }
+func (s *stubRadio) SetAutoAdd(context.Context, radio.AutoAdd) error    { return nil }
+func (s *stubRadio) AutoAdd(context.Context) (radio.AutoAdd, error)     { return radio.AutoAdd{}, nil }
 func (s *stubRadio) ExportContact(context.Context, [32]byte) (string, error) {
 	return radio.LinkPrefix + "00", nil
 }

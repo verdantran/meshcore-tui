@@ -27,8 +27,8 @@ type Radio interface {
 	SyncContacts(ctx context.Context) ([]Contact, error)
 	SaveContact(ctx context.Context, c Contact) error // add, or update the route and flags
 	RemoveContact(ctx context.Context, key [32]byte) error
-	Trace(ctx context.Context, path []byte) (tag uint32, err error) // answered by a TraceResult
-	DiscoverPath(ctx context.Context, key [32]byte) error           // answered by a PathFound
+	Trace(ctx context.Context, path []byte, hashSize int) (tag uint32, err error) // hashSize 1, 2 or 4; answered by a TraceResult
+	DiscoverPath(ctx context.Context, key [32]byte) error                         // answered by a PathFound
 	AdvertPath(ctx context.Context, key [32]byte) (AdvertPath, error)
 	ExportContact(ctx context.Context, key [32]byte) (string, error) // a meshcore:// link
 	ImportContact(ctx context.Context, link string) error
@@ -101,8 +101,9 @@ const LinkPrefix = "meshcore://"
 
 // AdvertPath is the route a contact's latest advert took to reach us.
 type AdvertPath struct {
-	At   time.Time
-	Path []byte
+	At       time.Time
+	Path     []byte
+	HashSize int // bytes per hop in Path; 0 reads as 1
 }
 
 // AutoAdd controls which kinds of newly heard node the radio adds as contacts by itself.
@@ -123,17 +124,18 @@ type ContactsFull struct{}
 
 // TraceResult carries the signal at each hop of a trace; Tag matches the Trace call.
 type TraceResult struct {
-	Tag     uint32
-	Hashes  []byte
-	SNRs    []float32 // what each hop heard, in path order
-	LastSNR float32   // what we heard on the way back
+	Tag      uint32
+	Hashes   []byte
+	HashSize int       // bytes per hop in Hashes; 0 reads as 1
+	SNRs     []float32 // what each hop heard, in path order
+	LastSNR  float32   // what we heard on the way back
 }
 
 // PathFound is a fresh route from path discovery, in both directions.
 type PathFound struct {
-	Prefix [6]byte
-	Out    []byte
-	In     []byte
+	Prefix          [6]byte
+	Out, In         []byte
+	OutSize, InSize int // bytes per hop; 0 reads as 1
 }
 
 // MaxText is the firmware's MAX_TEXT_LEN in bytes. Channel messages share it with the "name: " prefix.
@@ -268,6 +270,7 @@ type DeviceInfo struct {
 	MaxContacts int
 	MaxChannels int
 	PinSet      bool // it pairs over Bluetooth only with its PIN, so that link is encrypted
+	PathHash    int  // bytes per hop in the paths it starts; 0 reads as 1
 }
 
 // Ready is sent once the connect sequence has finished.

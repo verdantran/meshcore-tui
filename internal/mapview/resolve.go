@@ -24,7 +24,8 @@ func Stops(from int, hops [][]byte, nodes []Node, self int) []Stop {
 // Index finds the repeaters and rooms a hop could be by their first key byte, so many routes over the same
 // nodes don't each scan them all. Nodes appended to the slice later are picked up as it's used.
 type Index struct {
-	by  [256][]int
+	by  [256][]int // placed
+	all [256][]int // placed or not
 	n   int
 	sum uint64
 }
@@ -32,7 +33,11 @@ type Index struct {
 func (x *Index) add(nodes []Node) {
 	for ; x.n < len(nodes); x.n++ {
 		n := nodes[x.n]
-		if (n.Kind == KindRepeater || n.Kind == KindRoom) && !n.Pos.Unplaced() {
+		if n.Kind != KindRepeater && n.Kind != KindRoom {
+			continue
+		}
+		x.all[n.Key[0]] = append(x.all[n.Key[0]], x.n)
+		if !n.Pos.Unplaced() {
 			x.by[n.Key[0]] = append(x.by[n.Key[0]], x.n)
 			h := fnv.New64a()
 			var b [24]byte
@@ -76,6 +81,78 @@ func (x *Index) Stops(from int, hops [][]byte, nodes []Node, self int) []Stop {
 		}
 	}
 	return stops
+}
+
+// Matches are the repeaters and rooms, placed or not, whose keys start with h.
+func (x *Index) Matches(h []byte, nodes []Node) []int {
+	x.add(nodes)
+	if len(h) == 0 {
+		return nil
+	}
+	var out []int
+	for _, i := range x.all[h[0]] {
+		if bytes.HasPrefix(nodes[i].Key[:], h) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// Hop is who a path hash names: every repeater or room whose key starts with it.
+type Hop struct {
+	Hash  []byte
+	Nodes []int
+	Guess bool // several share it, and where they are makes Nodes[0] the likeliest
+}
+
+// Hops names a path's hashes for showing them. Unlike Stops it counts unplaced nodes too, so a hash several
+// share is only a guess when every one of them is placed and the route ranks one above the rest.
+func (x *Index) Hops(from int, hops [][]byte, nodes []Node, self int) []Hop {
+	var stops []Stop
+	out := make([]Hop, len(hops))
+	for i, h := range hops {
+		hop := Hop{Hash: h, Nodes: x.Matches(h, nodes)}
+		if len(hop.Nodes) > 1 && placed(hop.Nodes, nodes) {
+			if stops == nil {
+				stops = x.Stops(from, hops, nodes, self)
+			}
+			if st := stops[i+1]; len(st.Nodes) > 1 && st.Weights[0] > st.Weights[1] {
+				hop.Nodes, hop.Guess = st.Nodes, true
+			}
+		}
+		out[i] = hop
+	}
+	return out
+}
+
+func placed(is []int, nodes []Node) bool {
+	for _, i := range is {
+		if nodes[i].Pos.Unplaced() {
+			return false
+		}
+	}
+	return true
+}
+
+// Label is how a hop reads: its one node's name, the likeliest with a "?", or the names it could be.
+func (h Hop) Label(nodes []Node) string {
+	switch {
+	case len(h.Nodes) == 0:
+		return fmt.Sprintf("%X", h.Hash)
+	case len(h.Nodes) == 1:
+		return nodes[h.Nodes[0]].Name
+	case h.Guess:
+		return nodes[h.Nodes[0]].Name + "?"
+	}
+	names := make([]string, len(h.Nodes))
+	for k, i := range h.Nodes {
+		names[k] = nodes[i].Name
+	}
+	sort.Strings(names)
+	if len(names) > MaxCandidates {
+		names = append(names[:MaxCandidates], fmt.Sprintf("%d more", len(names)-MaxCandidates))
+	}
+	return strings.Join(names, " or ")
 }
 
 func one(n int) Stop {

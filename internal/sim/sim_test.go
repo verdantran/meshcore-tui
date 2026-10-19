@@ -110,7 +110,7 @@ func TestContactOperations(t *testing.T) {
 	book, _ := s.SyncContacts(ctx)
 	n := len(book)
 
-	tag, err := s.Trace(ctx, []byte{0xA3, 0x1E, 0xA3})
+	tag, err := s.Trace(ctx, []byte{0xA3, 0x1E, 0xA3}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +248,7 @@ func TestMessagingCalls(t *testing.T) {
 	if s.reroute([]byte{1}) != nil {
 		t.Error("reroute of junk")
 	}
-	if _, err := s.Trace(ctx, []byte{0xEE}); err != nil {
+	if _, err := s.Trace(ctx, []byte{0xEE}, 1); err != nil {
 		t.Error("a trace through an unknown hash is sent, just never answered")
 	}
 	for _, f := range []func() error{
@@ -421,5 +421,47 @@ func TestSimSigns(t *testing.T) {
 	d, ok := signing.Parse(signedDatagram(ident(peopleHash("Alice"), "Alice"), "#bristol", 1760000000, "meet"))
 	if !ok || !d.Verify(alice, "#bristol", "meet") {
 		t.Error("Alice's signatures check out against her key")
+	}
+}
+
+// With the device set to 2-byte path hashes, the paths it makes up tell Kelston and Lansdown apart.
+func TestTwoBytePaths(t *testing.T) {
+	s := New(9).Fast()
+	ctx := context.Background()
+	if err := s.SetPathHashMode(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	book := packets.Book{Self: device.self.PubKey, Contacts: contacts()}
+	for range 200 {
+		raw, _, _ := s.packet(time.Now())
+		if raw == nil {
+			continue
+		}
+		d := packets.Decode(raw, book)
+		if d.Err != nil || d.HashSize != 2 {
+			t.Fatalf("packet = %s, %d-byte hops", d.Summary, d.HashSize)
+		}
+		for _, h := range d.Hops {
+			if h.Key == ([32]byte{}) || h.Guess {
+				t.Fatalf("hop %X isn't named surely: %+v", h.Hash, h)
+			}
+		}
+	}
+	kelston := key(0x5F, "Kelston")
+	tag, err := s.Trace(ctx, kelston[:2], 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr := waitFor[radio.TraceResult](t, s); tr.Tag != tag || tr.HashSize != 2 || len(tr.SNRs) != 1 {
+		t.Fatalf("trace result = %+v", tr)
+	}
+	if _, err := s.Trace(ctx, kelston[:3], 3); err == nil {
+		t.Error("a trace can't carry 3-byte hops")
+	}
+	if err := s.DiscoverPath(ctx, key(0x3A, "Alice")); err != nil {
+		t.Fatal(err)
+	}
+	if pf := waitFor[radio.PathFound](t, s); pf.OutSize != 2 || len(pf.Out)%2 != 0 || len(pf.Out) == 0 {
+		t.Fatalf("path found = %+v", pf)
 	}
 }

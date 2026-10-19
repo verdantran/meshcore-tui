@@ -3,6 +3,7 @@
 package packets
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	meshcore "github.com/OwlShack/meshcore-go"
 
+	"github.com/verdantran/meshcore-tui/internal/mapview"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/signing"
 	"github.com/verdantran/meshcore-tui/internal/untrusted"
@@ -45,6 +47,7 @@ type Decoded struct {
 	Flood        bool
 	HashSize     int
 	Path         []byte
+	Hops         []Hop
 	HasTransport bool
 	Fields       []Field
 	Summary      string
@@ -69,31 +72,73 @@ type Decoded struct {
 	Lat, Lon float64
 }
 
-// Book is what we know that helps decoding: channel secrets and contact names.
+// Book is what we know that helps decoding: channel secrets, and contacts for naming path hops.
 type Book struct {
 	Self     [32]byte
 	Channels []radio.Channel
 	Contacts []radio.Contact
+	// Nodes are where everyone is, us first, for telling apart repeaters that share a hash; left empty,
+	// they're made from Self and Contacts.
+	Nodes []mapview.Node
 }
 
-// Name resolves a 1-byte path hash to a contact name, marking guesses when several share it.
-func (b Book) Name(h byte) string {
-	if h == b.Self[0] && b.Self != [32]byte{} {
-		return "me"
+// Hop is one hash in a packet's path. Key is the node it names, or the likeliest when Guess; zero when
+// it could be any of several, or no one known.
+type Hop struct {
+	Hash  []byte
+	Key   [32]byte
+	Guess bool
+}
+
+func (b Book) nodes() []mapview.Node {
+	if len(b.Nodes) > 0 {
+		return b.Nodes
 	}
-	var names []string
+	nodes := []mapview.Node{{Name: "me", Kind: mapview.KindSelf, Key: b.Self}}
 	for _, c := range b.Contacts {
-		if c.Key[0] == h {
-			names = append(names, c.Name)
+		kind := mapview.KindOther
+		switch c.Type {
+		case radio.TypeRepeater:
+			kind = mapview.KindRepeater
+		case radio.TypeRoom:
+			kind = mapview.KindRoom
+		}
+		nodes = append(nodes, mapview.Node{Name: c.Name, Kind: kind, Pos: mapview.LatLon{Lat: c.Lat, Lon: c.Lon}, Key: c.Key})
+	}
+	return nodes
+}
+
+// hops names each hash in a path, from the sender (if known) to us when toUs, using where the candidates are
+// to pick between repeaters that share a hash.
+func (b Book) hops(hashes [][]byte, sender [32]byte, toUs bool) ([]string, []Hop) {
+	nodes := b.nodes()
+	from, self := -1, -1
+	if toUs && !nodes[0].Pos.Unplaced() {
+		self = 0
+	}
+	for i, n := range nodes {
+		if sender != ([32]byte{}) && n.Key == sender && !n.Pos.Unplaced() {
+			from = i
+			break
 		}
 	}
-	switch len(names) {
-	case 0:
-		return fmt.Sprintf("%02X", h)
-	case 1:
-		return names[0]
+	var x mapview.Index
+	names, out := make([]string, len(hashes)), make([]Hop, len(hashes))
+	for i, h := range x.Hops(from, hashes, nodes, self) {
+		out[i].Hash = h.Hash
+		switch {
+		case b.Self != ([32]byte{}) && bytes.HasPrefix(b.Self[:], h.Hash):
+			names[i] = "me"
+			continue
+		case len(h.Nodes) > 1 && !h.Guess:
+			names[i] = fmt.Sprintf("%X (%s)", h.Hash, h.Label(nodes))
+			continue
+		case len(h.Nodes) > 0:
+			out[i].Key, out[i].Guess = nodes[h.Nodes[0]].Key, h.Guess
+		}
+		names[i] = h.Label(nodes)
 	}
-	return fmt.Sprintf("%02X (%s?)", h, strings.Join(names, " or "))
+	return names, out
 }
 
 func hexs(b []byte) string {
@@ -150,14 +195,12 @@ func decode(raw []byte, book Book) Decoded {
 	add("path length", fmt.Sprintf("0x%02X  %s", p.PathLength, hopsText), i, i+1, PartPath)
 	i++
 	if len(p.Path) > 0 {
-		var names []string
-		for _, h := range p.PathHashes() {
-			if len(h) == 1 {
-				names = append(names, book.Name(h[0]))
-			} else {
-				names = append(names, hexs(h))
-			}
+		var sender [32]byte
+		if p.PayloadType() == meshcore.PayloadTypeAdvert && len(p.Payload) >= 32 {
+			copy(sender[:], p.Payload)
 		}
+		var names []string
+		names, d.Hops = book.hops(p.PathHashes(), sender, true)
 		add("path", strings.Join(names, " → "), i, i+len(p.Path), PartPath)
 		i += len(p.Path)
 	}
@@ -289,10 +332,12 @@ func (d *Decoded) decodePayload(p *meshcore.Packet, at int, book Book) {
 		d.field("tag", fmt.Sprintf("%08X", t.Tag), at, at+4, PartMeta)
 		d.field("auth", fmt.Sprintf("%08X", t.AuthCode), at+4, at+8, PartMeta)
 		d.field("flags", fmt.Sprintf("0x%02X", t.Flags), at+8, at+9, PartMeta)
-		var via []string
-		for _, h := range t.PathHashes {
-			via = append(via, book.Name(h))
+		size := int(t.PathHashSize())
+		var hashes [][]byte
+		for i := 0; i+size <= len(t.PathHashes); i += size {
+			hashes = append(hashes, t.PathHashes[i:i+size])
 		}
+		via, _ := book.hops(hashes, [32]byte{}, false)
 		d.field("route", strings.Join(via, " → "), at+9, end, PartAddress)
 		d.Summary = "trace via " + strings.Join(via, " → ")
 	case meshcore.PayloadTypeAnonReq:

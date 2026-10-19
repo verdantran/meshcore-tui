@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -31,6 +32,7 @@ const (
 	mapAgent   = "meshcore-tui (+https://github.com/verdantran/meshcore-tui)"
 	mapMargin  = 0.12
 	linkMaxAge = 24 * time.Hour // older trace readings no longer colour a link
+	linkKeep   = 1024           // link readings remembered from traces and packets, at most
 
 	trafficFloor = 0.1 // below this a link has gone quiet and isn't drawn
 	trafficShare = 0.1 // nor is one with less than this share of the busiest link's traffic
@@ -111,8 +113,9 @@ func splitPath(path []byte, size int, flood bool) [][]byte {
 }
 
 type linkReading struct {
-	snr float64
-	at  time.Time
+	a, b []byte // the hash or key at either end
+	snr  float64
+	at   time.Time
 }
 
 // flow is the traffic seen crossing one link: a count that decays, as of when it was last added to.
@@ -158,10 +161,10 @@ type mapModel struct {
 
 	routes  []mapRoute // newest first
 	anims   []mapview.Anim
-	links   map[[2]byte]linkReading // signal between two nodes, by their first key bytes
-	flows   map[string]*flow        // recent traffic over each link, by the two nodes
-	path    *pathView               // one path on its own, opened with M from elsewhere
-	event   string                  // the latest packet, typed out under the map
+	links   map[string]linkReading // signal between two nodes, by linkKey
+	flows   map[string]*flow       // recent traffic over each link, by the two nodes
+	path    *pathView              // one path on its own, opened with M from elsewhere
+	event   string                 // the latest packet, typed out under the map
 	eventAt time.Time
 
 	fetching   bool
@@ -186,7 +189,7 @@ type mapModel struct {
 }
 
 func newMapModel() mapModel {
-	return mapModel{layers: mapview.Layers{Labels: true, Roads: true, Routes: true, Traffic: true, Selected: -1}, links: map[[2]byte]linkReading{},
+	return mapModel{layers: mapview.Layers{Labels: true, Roads: true, Routes: true, Traffic: true, Selected: -1}, links: map[string]linkReading{},
 		flows: map[string]*flow{}, stops: map[string][]mapview.Stop{}, fetchDone: &atomic.Int32{}}
 }
 
@@ -375,18 +378,24 @@ func (m *Model) placedPoints() []mapview.LatLon {
 	return pts
 }
 
-// linkSNR is what's known of the signal between two nodes, from a trace or a repeater's neighbour list.
-func (m *Model) linkSNR(a, b byte) (float64, bool) {
-	r, ok := m.linkTable()[[2]byte{min(a, b), max(a, b)}]
+// linkSNR is what's known of the signal between two nodes, each named by a path hash or a key, from a trace
+// or a repeater's neighbour list.
+func (m *Model) linkSNR(a, b []byte) (float64, bool) {
+	r, ok := m.linkTable().find(a, b)
 	return r.snr, ok
 }
 
-// linkTable is every link's latest reading, by the first key bytes at either end, lowest first.
-func (m *Model) linkTable() map[[2]byte]linkReading {
-	t := map[[2]byte]linkReading{}
-	for pair, r := range m.mapv.links {
+// linkTable is every link's readings, by the first bytes at either end, lowest first.
+type linkTable map[[2]byte][]linkReading
+
+func pairOf(a, b []byte) [2]byte { return [2]byte{min(a[0], b[0]), max(a[0], b[0])} }
+
+func (m *Model) linkTable() linkTable {
+	t := linkTable{}
+	add := func(r linkReading) { t[pairOf(r.a, r.b)] = append(t[pairOf(r.a, r.b)], r) }
+	for _, r := range m.mapv.links {
 		if m.now.Sub(r.at) < linkMaxAge {
-			t[pair] = r
+			add(r)
 		}
 	}
 	for _, c := range m.allNodes() {
@@ -395,20 +404,58 @@ func (m *Model) linkTable() map[[2]byte]linkReading {
 			continue
 		}
 		for _, n := range sess.Neighbours {
-			if len(n.Prefix) == 0 {
-				continue
-			}
-			pair := [2]byte{min(c.Key[0], n.Prefix[0]), max(c.Key[0], n.Prefix[0])}
-			if best, ok := t[pair]; !ok || sess.NeighbourAt.After(best.at) {
-				t[pair] = linkReading{float64(n.SNR), sess.NeighbourAt}
+			if len(n.Prefix) > 0 {
+				add(linkReading{c.Key[:], n.Prefix, float64(n.SNR), sess.NeighbourAt})
 			}
 		}
 	}
 	return t
 }
 
-func (m *Model) noteLink(a, b byte, snr float64) {
-	m.mapv.links[[2]byte{min(a, b), max(a, b)}] = linkReading{snr, m.now}
+// find is the newest reading between two ends. Ends are matched as far as both are known, so a 1-byte
+// hash matches any key that starts with it.
+func (t linkTable) find(a, b []byte) (linkReading, bool) {
+	var best linkReading
+	found := false
+	if len(a) == 0 || len(b) == 0 {
+		return best, false
+	}
+	for _, r := range t[pairOf(a, b)] {
+		if (samePrefix(r.a, a) && samePrefix(r.b, b) || samePrefix(r.a, b) && samePrefix(r.b, a)) && (!found || r.at.After(best.at)) {
+			best, found = r, true
+		}
+	}
+	return best, found
+}
+
+func samePrefix(x, y []byte) bool {
+	n := min(len(x), len(y))
+	return n > 0 && bytes.Equal(x[:n], y[:n])
+}
+
+func linkKey(a, b []byte) string {
+	if bytes.Compare(a, b) > 0 {
+		a, b = b, a
+	}
+	return fmt.Sprintf("%X|%X", a, b)
+}
+
+// noteLink remembers a link's signal. Hashes come off air, so the oldest is forgotten past linkKeep.
+func (m *Model) noteLink(a, b []byte, snr float64) {
+	if len(a) == 0 || len(b) == 0 {
+		return
+	}
+	links, k := m.mapv.links, linkKey(a, b)
+	if _, ok := links[k]; !ok && len(links) >= linkKeep {
+		oldest := ""
+		for key, r := range links {
+			if oldest == "" || r.at.Before(links[oldest].at) {
+				oldest = key
+			}
+		}
+		delete(links, oldest)
+	}
+	links[k] = linkReading{bytes.Clone(a), bytes.Clone(b), snr, m.now}
 }
 
 // resolve places a route against the nodes as they are now, adding an end that isn't a contact but has a location.
@@ -422,7 +469,7 @@ type resolver struct {
 	m     *Model
 	nodes []mapview.Node
 	index mapview.Index
-	links map[[2]byte]linkReading
+	links linkTable
 }
 
 func (m *Model) resolver(nodes []mapview.Node) *resolver {
@@ -459,9 +506,8 @@ func (rs *resolver) resolve(r mapRoute) mapview.Route {
 	}
 	from, to := place(r.from), place(r.to)
 	stops := rs.stops(r, from, to, nodes)
-	// Each hop's link, by the first key byte at either end.
-	firsts := make([]byte, len(stops))
-	ok := make([]bool, len(stops))
+	// Each hop's link, by the hash or key at either end.
+	ends := make([][]byte, len(stops))
 	endKey := func(e mapEnd, idx int) ([32]byte, bool) {
 		switch {
 		case e.me:
@@ -474,13 +520,13 @@ func (rs *resolver) resolve(r mapRoute) mapview.Route {
 		return [32]byte{}, false
 	}
 	if k, has := endKey(r.from, from); has {
-		firsts[0], ok[0] = k[0], true
+		ends[0] = k[:]
 	}
 	for i, h := range r.hops {
-		firsts[i+1], ok[i+1] = h[0], true
+		ends[i+1] = h
 	}
 	if k, has := endKey(r.to, to); has {
-		firsts[len(stops)-1], ok[len(stops)-1] = k[0], true
+		ends[len(stops)-1] = k[:]
 	}
 	links := make([]mapview.Link, len(stops)-1)
 	for i := range links {
@@ -491,11 +537,11 @@ func (rs *resolver) resolve(r mapRoute) mapview.Route {
 			}
 		case i == len(links)-1 && r.measured:
 			links[i] = mapview.Link{SNR: r.lastSNR, Known: true} // measured by our radio
-		case ok[i] && ok[i+1]:
+		case ends[i] != nil && ends[i+1] != nil:
 			if rs.links == nil {
 				rs.links = m.linkTable()
 			}
-			if l, known := rs.links[[2]byte{min(firsts[i], firsts[i+1]), max(firsts[i], firsts[i+1])}]; known {
+			if l, known := rs.links.find(ends[i], ends[i+1]); known {
 				links[i] = mapview.Link{SNR: l.snr, Known: true}
 			}
 		}
@@ -531,7 +577,7 @@ func (m *Model) mapHeard(dec packets.Decoded, snr float32) {
 	mv := &m.mapv
 	r := m.packetRoute(dec, dec.Path, snr, m.now)
 	if len(r.hops) > 0 {
-		m.noteLink(r.hops[len(r.hops)-1][0], m.ready.Self.PubKey[0], float64(snr))
+		m.noteLink(r.hops[len(r.hops)-1], m.ready.Self.PubKey[:], float64(snr))
 	}
 	mv.routes = append([]mapRoute{r}, mv.routes...)
 	if len(mv.routes) > mapRoutes {
@@ -718,8 +764,8 @@ func (m *Model) addAnim(a mapview.Anim) {
 func (m *Model) mapEvent(e radio.Event) {
 	switch e := e.(type) {
 	case radio.TraceResult:
-		prev := m.ready.Self.PubKey[0]
-		for i, h := range e.Hashes {
+		prev := m.ready.Self.PubKey[:]
+		for i, h := range splitPath(e.Hashes, max(e.HashSize, 1), true) {
 			if i < len(e.SNRs) {
 				m.noteLink(prev, h, float64(e.SNRs[i]))
 			}

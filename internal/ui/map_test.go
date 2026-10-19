@@ -476,11 +476,11 @@ func TestMapLinkSignal(t *testing.T) {
 	purdown := h.contact("Purdown")
 	sess := h.m.admin.Session(purdown)
 	sess.Neighbours, sess.NeighbourAt = []admin.NeighbourRow{{Prefix: []byte{0xA3, 1, 2, 3}, SNR: 9.5}}, h.m.now
-	if snr, ok := h.m.linkSNR(0xA3, 0x77); !ok || snr != 9.5 {
+	if snr, ok := h.m.linkSNR([]byte{0xA3}, []byte{0x77}); !ok || snr != 9.5 {
 		t.Errorf("neighbour reading = %v %v", snr, ok)
 	}
-	h.m.mapv.links[[2]byte{0x01, 0x02}] = linkReading{3, h.m.now.Add(-2 * linkMaxAge)}
-	if _, ok := h.m.linkSNR(0x01, 0x02); ok {
+	h.m.mapv.links["01|02"] = linkReading{[]byte{0x01}, []byte{0x02}, 3, h.m.now.Add(-2 * linkMaxAge)}
+	if _, ok := h.m.linkSNR([]byte{0x01}, []byte{0x02}); ok {
 		t.Error("old readings expire")
 	}
 	// Our own transmissions ring out from us.

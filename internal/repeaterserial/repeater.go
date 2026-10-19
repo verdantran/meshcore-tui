@@ -411,12 +411,12 @@ func (r *Repeater) SyncContacts(ctx context.Context) ([]radio.Contact, error) {
 func (r *Repeater) SendText(context.Context, [32]byte, string) (radio.Sent, error) {
 	return radio.Sent{}, ErrConsoleOnly
 }
-func (r *Repeater) SendChannel(context.Context, int, string) error   { return ErrConsoleOnly }
-func (r *Repeater) ResetPath(context.Context, [32]byte) error        { return ErrConsoleOnly }
-func (r *Repeater) SaveContact(context.Context, radio.Contact) error { return ErrConsoleOnly }
-func (r *Repeater) RemoveContact(context.Context, [32]byte) error    { return ErrConsoleOnly }
-func (r *Repeater) Trace(context.Context, []byte) (uint32, error)    { return 0, ErrConsoleOnly }
-func (r *Repeater) DiscoverPath(context.Context, [32]byte) error     { return ErrConsoleOnly }
+func (r *Repeater) SendChannel(context.Context, int, string) error     { return ErrConsoleOnly }
+func (r *Repeater) ResetPath(context.Context, [32]byte) error          { return ErrConsoleOnly }
+func (r *Repeater) SaveContact(context.Context, radio.Contact) error   { return ErrConsoleOnly }
+func (r *Repeater) RemoveContact(context.Context, [32]byte) error      { return ErrConsoleOnly }
+func (r *Repeater) Trace(context.Context, []byte, int) (uint32, error) { return 0, ErrConsoleOnly }
+func (r *Repeater) DiscoverPath(context.Context, [32]byte) error       { return ErrConsoleOnly }
 func (r *Repeater) ExportContact(context.Context, [32]byte) (string, error) {
 	return "", ErrConsoleOnly
 }

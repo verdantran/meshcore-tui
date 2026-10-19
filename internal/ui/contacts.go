@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -58,6 +59,7 @@ type heardNode struct {
 type traceRun struct {
 	key     [32]byte
 	path    []byte
+	size    int // bytes per hop in path
 	started time.Time
 	result  *radio.TraceResult
 	at      time.Time // when the result arrived, for the hop-by-hop reveal
@@ -87,6 +89,7 @@ type contactsModel struct {
 	overlay   overlay
 	link      string
 	editPath  []byte
+	editSize  int // bytes per hop in editPath
 	editSel   int
 	importIn  lineEdit
 	importing linkContact // the link waiting for y, and who it says it is
@@ -116,6 +119,7 @@ type advertPathMsg struct {
 type traceStartedMsg struct {
 	key  [32]byte
 	path []byte
+	size int
 	tag  uint32
 	err  error
 }
@@ -172,10 +176,11 @@ func typeColour(th theme.Theme, t radio.ContactType) theme.RGB {
 	return th.Text
 }
 
-func hashes(b []byte) string {
-	parts := make([]string, len(b))
-	for i, h := range b {
-		parts[i] = fmt.Sprintf("%02X", h)
+// hashes shows a path hop by hop, size bytes to a hop.
+func hashes(b []byte, size int) string {
+	var parts []string
+	for h := range slices.Chunk(b, max(size, 1)) {
+		parts = append(parts, fmt.Sprintf("%X", h))
 	}
 	return strings.Join(parts, "·")
 }
@@ -187,7 +192,20 @@ func routeText(c radio.Contact) string {
 	if c.PathLen == 0 {
 		return "direct, in range"
 	}
-	return fmt.Sprintf("direct %s", hashes(c.Path))
+	return fmt.Sprintf("direct %s", hashes(c.Path, c.HashSize))
+}
+
+// pathHash is how many bytes per hop the radio puts in the paths it starts.
+func (m *Model) pathHash() int {
+	if m.device.loaded {
+		return m.device.s.PathHashMode + 1
+	}
+	return max(m.ready.Device.PathHash, 1)
+}
+
+// keyHash is a node's key cut to the radio's path hash, as its hops show it.
+func (m *Model) keyHash(k [32]byte) string {
+	return fmt.Sprintf("%X", k[:min(m.pathHash(), len(k))])
 }
 
 // rows is the contact table after the type filter, text filter and sort.
@@ -260,37 +278,49 @@ func (m *Model) onSelectContact() tea.Cmd {
 }
 
 // tracePath is the round trip for a contact: out along its route and back, so we hear each hop both ways.
-// A repeater with no stored route is traced as a direct neighbour.
-func tracePath(ct radio.Contact) ([]byte, bool) {
-	var out []byte
+// A repeater with no stored route is traced as a direct neighbour. Hops are the radio's size where they can
+// be: no longer than the stored route's, which can't be lengthened, and a power of two, which is all a
+// trace's flags can say.
+func tracePath(ct radio.Contact, size int) ([]byte, int, bool) {
+	if ct.PathLen > 0 {
+		size = min(size, max(ct.HashSize, 1))
+	}
+	if size >= 2 {
+		size = 2
+	}
+	var out [][]byte
 	switch {
 	case ct.PathLen > 0:
-		out = append(out, ct.Path...)
+		for h := range slices.Chunk(ct.Path, max(ct.HashSize, 1)) {
+			if len(h) < size {
+				return nil, 0, false
+			}
+			out = append(out, h[:size])
+		}
 		if ct.Type == radio.TypeRepeater {
-			out = append(out, ct.Key[0])
+			out = append(out, ct.Key[:size])
 		}
 	case ct.Type == radio.TypeRepeater:
-		out = []byte{ct.Key[0]}
+		out = [][]byte{ct.Key[:size]}
 	default:
-		return nil, false
+		return nil, 0, false
 	}
-	back := append([]byte(nil), out...)
-	for i := len(back) - 2; i >= 0; i-- {
-		out = append(out, back[i])
+	for i := len(out) - 2; i >= 0; i-- {
+		out = append(out, out[i])
 	}
-	return out, true
+	return slices.Concat(out...), size, true
 }
 
 func (m *Model) startTrace(ct radio.Contact) tea.Cmd {
-	path, ok := tracePath(ct)
+	path, size, ok := tracePath(ct, m.pathHash())
 	if !ok {
 		m.fail("TRACE  " + ct.Name + " has no stored route; run path discovery (d) first")
 		return nil
 	}
 	r := m.radio
 	return m.radioCall(func(ctx context.Context) tea.Msg {
-		tag, err := r.Trace(ctx, path)
-		return traceStartedMsg{ct.Key, path, tag, err}
+		tag, err := r.Trace(ctx, path, size)
+		return traceStartedMsg{ct.Key, path, size, tag, err}
 	})
 }
 
@@ -340,24 +370,24 @@ func (m *Model) contactsEvent(e radio.Event) tea.Cmd {
 		}
 		delete(c.discovering, ct.Key)
 		c.found[ct.Key] = e
-		m.addLog(m.now, fmt.Sprintf("ROUTE FOUND  %s  out %s · back %s", ct.Name, orFlood(e.Out), orFlood(e.In)), radio.ToneOK)
+		m.addLog(m.now, fmt.Sprintf("ROUTE FOUND  %s  out %s · back %s", ct.Name, orFlood(e.Out, e.OutSize), orFlood(e.In, e.InSize)), radio.ToneOK)
 		return m.syncContacts()
 	}
 	return nil
 }
 
-func orFlood(b []byte) string {
+func orFlood(b []byte, size int) string {
 	if len(b) == 0 {
 		return "in range"
 	}
-	return hashes(b)
+	return hashes(b, size)
 }
 
 func traceSummary(r radio.TraceResult) string {
 	parts := []string{}
-	for i, h := range r.Hashes {
+	for i, h := range splitPath(r.Hashes, max(r.HashSize, 1), true) {
 		if i < len(r.SNRs) {
-			parts = append(parts, fmt.Sprintf("%02X %+.1f", h, r.SNRs[i]))
+			parts = append(parts, fmt.Sprintf("%X %+.1f", h, r.SNRs[i]))
 		}
 	}
 	return strings.Join(parts, " · ") + fmt.Sprintf(" · back %+.1f", r.LastSNR)
@@ -394,9 +424,9 @@ func (m *Model) contactsMsg(msg tea.Msg) (tea.Cmd, bool) {
 			m.fail("TRACE  " + radio.Explain(msg.err))
 			return nil, true
 		}
-		c.traces[msg.tag] = &traceRun{key: msg.key, path: msg.path, started: m.now}
+		c.traces[msg.tag] = &traceRun{key: msg.key, path: msg.path, size: msg.size, started: m.now}
 		c.lastTrace[msg.key] = msg.tag
-		m.addLog(m.now, "TRACE  "+m.contactName(msg.key)+" via "+hashes(msg.path), radio.ToneInfo)
+		m.addLog(m.now, "TRACE  "+m.contactName(msg.key)+" via "+hashes(msg.path, msg.size), radio.ToneInfo)
 		tag := msg.tag
 		return tea.Tick(traceTimeout, func(time.Time) tea.Msg { return traceTimeoutMsg{tag} }), true
 	case traceTimeoutMsg:
@@ -532,9 +562,9 @@ func (m *Model) contactAction(s string, ct radio.Contact) (tea.Cmd, bool) {
 		}
 		return m.contactOp(what, func(ctx context.Context, r radio.Radio) error { return r.SaveContact(ctx, updated) }), true
 	case "p":
-		c.overlay, c.editPath, c.editSel = editorOverlay, nil, 0
+		c.overlay, c.editPath, c.editSize, c.editSel = editorOverlay, nil, m.pathHash(), 0
 		if ct.PathLen > 0 {
-			c.editPath = append([]byte(nil), ct.Path...)
+			c.editPath, c.editSize = m.rehop(ct.Path, max(ct.HashSize, 1), c.editSize)
 		}
 	case "e":
 		c.overlay, c.link = shareOverlay, ""
@@ -736,18 +766,19 @@ func (m *Model) overlayKey(s string) tea.Cmd {
 		case "down", "j":
 			c.editSel = min(c.editSel+1, max(len(reps)-1, 0))
 		case "enter":
-			if c.editSel < len(reps) && len(c.editPath) < 64 {
-				c.editPath = append(c.editPath, reps[c.editSel].Key[0])
+			// A path is at most 64 bytes, and its length byte counts at most 63 hops.
+			if c.editSel < len(reps) && len(c.editPath)+c.editSize <= 64 && len(c.editPath)/c.editSize < 63 {
+				c.editPath = append(c.editPath, reps[c.editSel].Key[:c.editSize]...)
 			}
 		case "backspace":
 			if len(c.editPath) > 0 {
-				c.editPath = c.editPath[:len(c.editPath)-1]
+				c.editPath = c.editPath[:len(c.editPath)-c.editSize]
 			}
 		case "s":
 			c.overlay = noOverlay
 			updated := ct
-			updated.PathLen, updated.Path = len(c.editPath), append([]byte(nil), c.editPath...)
-			what := fmt.Sprintf("ROUTE SET  %s via %s", ct.Name, orFlood(updated.Path))
+			updated.PathLen, updated.Path, updated.HashSize = len(c.editPath)/c.editSize, append([]byte(nil), c.editPath...), c.editSize
+			what := fmt.Sprintf("ROUTE SET  %s via %s", ct.Name, orFlood(updated.Path, updated.HashSize))
 			return m.contactOp(what, func(ctx context.Context, r radio.Radio) error { return r.SaveContact(ctx, updated) })
 		}
 	case autoOverlay:
@@ -794,6 +825,29 @@ func (m *Model) overlayKey(s string) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// rehop recuts a stored route's hops to another size. A hop is lengthened only when one repeater's key starts
+// with it; if any can't be, the route keeps the size it has.
+func (m *Model) rehop(path []byte, from, to int) ([]byte, int) {
+	var out []byte
+	for h := range slices.Chunk(path, from) {
+		if to <= len(h) {
+			out = append(out, h[:to]...)
+			continue
+		}
+		var match []radio.Contact
+		for _, r := range m.repeaters() {
+			if bytes.HasPrefix(r.Key[:], h) {
+				match = append(match, r)
+			}
+		}
+		if len(match) != 1 {
+			return append([]byte(nil), path...), from
+		}
+		out = append(out, match[0].Key[:to]...)
+	}
+	return out, to
 }
 
 func (m *Model) repeaters() []radio.Contact {

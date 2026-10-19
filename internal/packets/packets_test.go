@@ -8,6 +8,7 @@ import (
 
 	meshcore "github.com/OwlShack/meshcore-go"
 
+	"github.com/verdantran/meshcore-tui/internal/mapview"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/signing"
 )
@@ -37,9 +38,9 @@ func checkSpans(t *testing.T, d Decoded) {
 	}
 }
 
-var dundry = radio.Contact{Key: [32]byte{0xA3, 1}, Name: "Dundry"}
-var kelston = radio.Contact{Key: [32]byte{0x5F, 1}, Name: "Kelston"}
-var lansdown = radio.Contact{Key: [32]byte{0x5F, 2}, Name: "Lansdown"}
+var dundry = radio.Contact{Key: [32]byte{0xA3, 1}, Name: "Dundry", Type: radio.TypeRepeater}
+var kelston = radio.Contact{Key: [32]byte{0x5F, 1}, Name: "Kelston", Type: radio.TypeRepeater}
+var lansdown = radio.Contact{Key: [32]byte{0x5F, 2}, Name: "Lansdown", Type: radio.TypeRepeater}
 
 func TestAdvertSignedAndDecoded(t *testing.T) {
 	seed := sha256.Sum256([]byte("node"))
@@ -58,7 +59,7 @@ func TestAdvertSignedAndDecoded(t *testing.T) {
 	if !strings.Contains(d.Summary, "Dundry · repeater · 51.3990, -2.6390") {
 		t.Errorf("summary = %q", d.Summary)
 	}
-	if path := d.Fields[2].Value; path != "Dundry → 5F (Kelston or Lansdown?)" {
+	if path := d.Fields[2].Value; path != "Dundry → 5F (Kelston or Lansdown)" {
 		t.Errorf("path = %q", path)
 	}
 	// Tamper with the timestamp: the signature no longer holds.
@@ -211,7 +212,7 @@ func TestChannelEdgeCases(t *testing.T) {
 		PathLength: meshcore.MakePathLen(2, 1), Path: []byte{0xA3, 0x01}, Payload: []byte{1, 2, 3, 4}}
 	raw, _ := p.ToBytes()
 	d := Decode(raw, Book{})
-	if !d.HasTransport || d.Fields[1].Name != "transport codes" || d.HashSize != 2 || d.Fields[3].Value != "A3 01" {
+	if !d.HasTransport || d.Fields[1].Name != "transport codes" || d.HashSize != 2 || d.Fields[3].Value != "A301" {
 		t.Errorf("transport packet = %+v", d.Fields)
 	}
 	checkSpans(t, d)
@@ -309,5 +310,46 @@ func TestChannelDatagrams(t *testing.T) {
 	}
 	if far := Decode(channelData(t, meshcore.DeriveHashtagPSK("#elsewhere"), signing.DataType, sig.Bytes()), book); far.Decrypted || far.Signature != nil {
 		t.Error("a channel we don't hold")
+	}
+}
+
+// Two repeaters share a first key byte: a 2-byte path tells them apart, and a 1-byte one is a guess by where
+// they are, or both names when nothing places them.
+func TestPathHopsSharingAFirstByte(t *testing.T) {
+	path := func(size uint8, hops ...byte) []byte {
+		p := &meshcore.Packet{Header: meshcore.MakeHeader(meshcore.RouteTypeFlood, meshcore.PayloadTypeAck, 0),
+			PathLength: meshcore.MakePathLen(size, uint8(len(hops))/size), Path: hops, Payload: []byte{1, 2, 3, 4}}
+		raw, _ := p.ToBytes()
+		return raw
+	}
+	book := Book{Contacts: []radio.Contact{dundry, kelston, lansdown}}
+	d := Decode(path(2, 0xA3, 0x01, 0x5F, 0x02), book)
+	if got := d.Fields[2].Value; got != "Dundry → Lansdown" {
+		t.Errorf("2-byte path = %q", got)
+	}
+	if len(d.Hops) != 2 || d.Hops[1].Key != lansdown.Key || d.Hops[1].Guess {
+		t.Errorf("2-byte hops = %+v", d.Hops)
+	}
+	if got := Decode(path(1, 0xA3, 0x5F), book).Fields[2].Value; got != "Dundry → 5F (Kelston or Lansdown)" {
+		t.Errorf("1-byte path, nothing placed = %q", got)
+	}
+
+	placed := book
+	placed.Contacts = []radio.Contact{dundry, kelston, lansdown}
+	placed.Contacts[0].Lat, placed.Contacts[0].Lon = 51.399, -2.639
+	placed.Contacts[1].Lat, placed.Contacts[1].Lon = 51.399, -2.431
+	placed.Contacts[2].Lat, placed.Contacts[2].Lon = 52.9, -1.2 // far off the route
+	placed.Nodes = append([]mapview.Node{{Name: "me", Kind: mapview.KindSelf, Pos: mapview.LatLon{Lat: 51.44, Lon: -2.5}}}, placed.nodes()[1:]...)
+	d = Decode(path(1, 0xA3, 0x5F), placed)
+	if got := d.Fields[2].Value; got != "Dundry → Kelston?" {
+		t.Errorf("1-byte path, placed = %q", got)
+	}
+	if !d.Hops[1].Guess || d.Hops[1].Key != kelston.Key {
+		t.Errorf("1-byte hops = %+v", d.Hops)
+	}
+
+	tr, _ := (&meshcore.Trace{Tag: 7, Flags: 1, PathHashes: []byte{0x5F, 0x01, 0xA3, 0x01}}).ToBytes()
+	if d := Decode(build(t, meshcore.RouteTypeDirect, meshcore.PayloadTypeTrace, nil, tr), book); d.Summary != "trace via Kelston → Dundry" {
+		t.Errorf("2-byte trace = %q", d.Summary)
 	}
 }

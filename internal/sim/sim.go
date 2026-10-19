@@ -2,6 +2,7 @@
 package sim
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -237,7 +238,11 @@ func (s *Sim) run(ctx context.Context) {
 		}
 		s.emit(radio.BootStep{Key: st.key, Label: st.label, Detail: st.detail, State: radio.StepOK})
 	}
-	s.emit(radio.Ready{Self: device.self, Device: device.info, Contacts: len(cs), Channels: len(s.channelList()), Battery: batt,
+	info := device.info
+	s.mu.Lock()
+	info.PathHash = s.dev.s.PathHashMode + 1
+	s.mu.Unlock()
+	s.emit(radio.Ready{Self: device.self, Device: info, Contacts: len(cs), Channels: len(s.channelList()), Battery: batt,
 		ContactList: cs, ChannelList: s.channelList()})
 	for _, m := range waiting {
 		s.emit(m)
@@ -311,8 +316,8 @@ func (s *Sim) reroute(raw []byte) []byte {
 	if err != nil {
 		return nil
 	}
-	p.Path = s.hops(1 + s.intn(4))
-	p.PathLength = meshcore.MakePathLen(1, uint8(len(p.Path)))
+	hops := s.hops(1 + s.intn(4))
+	p.Path, p.PathLength = slices.Concat(hops...), meshcore.MakePathLen(uint8(len(hops[0])), uint8(len(hops)))
 	out, err := p.ToBytes()
 	if err != nil {
 		return nil
@@ -320,14 +325,22 @@ func (s *Sim) reroute(raw []byte) []byte {
 	return out
 }
 
-func (s *Sim) hops(n int) []byte {
+// hops is a made-up path through n repeaters, each hop as long as the device's path hash size.
+func (s *Sim) hops(n int) [][]byte {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	path := make([]byte, n)
+	path := make([][]byte, n)
 	for i := range path {
-		path[i] = repeaters[s.rng.Intn(len(repeaters))].hash
+		r := repeaters[s.rng.Intn(len(repeaters))]
+		path[i] = s.hopOf(r)
 	}
 	return path
+}
+
+// hopOf is a repeater's hash in the paths this radio starts; call with s.mu held.
+func (s *Sim) hopOf(r node) []byte {
+	k := key(r.hash, r.name)
+	return k[:s.dev.s.PathHashMode+1]
 }
 
 func (s *Sim) bytes(n int) []byte {
@@ -338,9 +351,13 @@ func (s *Sim) bytes(n int) []byte {
 	return b
 }
 
-func build(route, payloadType byte, path, payload []byte) []byte {
-	p := &meshcore.Packet{Header: meshcore.MakeHeader(route, payloadType, 0), PathLength: meshcore.MakePathLen(1, uint8(len(path))),
-		Path: path, Payload: payload}
+func build(route, payloadType byte, hops [][]byte, payload []byte) []byte {
+	size := 1
+	if len(hops) > 0 {
+		size = len(hops[0])
+	}
+	p := &meshcore.Packet{Header: meshcore.MakeHeader(route, payloadType, 0), PathLength: meshcore.MakePathLen(uint8(size), uint8(len(hops))),
+		Path: slices.Concat(hops...), Payload: payload}
 	raw, err := p.ToBytes()
 	if err != nil {
 		panic(err) // the simulator only builds valid packets
@@ -392,14 +409,21 @@ func (s *Sim) packet(now time.Time) ([]byte, string, bool) {
 	case x < 96:
 		return build(meshcore.RouteTypeDirect, meshcore.PayloadTypeResponse, hops, encrypted()), "", false
 	default:
-		tr := meshcore.Trace{Tag: binary.LittleEndian.Uint32(s.bytes(4)), PathHashes: s.hops(1 + s.intn(3))}
+		tr := meshcore.Trace{Tag: binary.LittleEndian.Uint32(s.bytes(4))}
+		for _, h := range s.hops(1 + s.intn(3)) {
+			if len(h) == 3 {
+				h = h[:2] // a trace's hops are a power of two long
+			}
+			tr.Flags = byte(len(h) / 2)
+			tr.PathHashes = append(tr.PathHashes, h...)
+		}
 		payload, _ := tr.ToBytes()
 		return build(meshcore.RouteTypeDirect, meshcore.PayloadTypeTrace, hops, payload), "", false
 	}
 }
 
 // groupText encrypts a channel message the way the sender's radio would.
-func (s *Sim) groupText(now time.Time, hops []byte, ch radio.Channel, sender, text string) []byte {
+func (s *Sim) groupText(now time.Time, hops [][]byte, ch radio.Channel, sender, text string) []byte {
 	if text == "" {
 		lines := chatter[ch.Name]
 		text = lines[s.intn(len(lines))]
@@ -657,32 +681,37 @@ func linkSNR(a, b byte) float32 {
 }
 
 // Trace answers after a delay that grows with the path. A hop through an unknown hash is lost, so no answer comes.
-func (s *Sim) Trace(ctx context.Context, path []byte) (uint32, error) {
+func (s *Sim) Trace(ctx context.Context, path []byte, hashSize int) (uint32, error) {
+	if hashSize != 1 && hashSize != 2 && hashSize != 4 || len(path)%hashSize != 0 {
+		return 0, fmt.Errorf("a trace can't carry %d-byte hops", hashSize)
+	}
 	s.mu.Lock()
 	s.tag++
 	tag := s.tag
 	s.mu.Unlock()
 	s.frame(36, 6, path...)
 	s.emit(radio.Transmit{At: time.Now(), What: "SEND_TRACE_PATH"})
-	for _, h := range path {
+	hops := slices.Collect(slices.Chunk(path, hashSize))
+	for _, h := range hops {
 		ok := false
 		for _, r := range append(append([]node(nil), repeaters...), strangers...) {
-			ok = ok || r.hash == h && r.typ == radio.TypeRepeater
+			k := key(r.hash, r.name)
+			ok = ok || bytes.HasPrefix(k[:], h) && r.typ == radio.TypeRepeater
 		}
 		if !ok {
 			return tag, nil
 		}
 	}
 	go func() {
-		time.Sleep(s.delay(400 + 300*len(path)))
-		snrs := make([]float32, len(path))
+		time.Sleep(s.delay(400 + 300*len(hops)))
+		snrs := make([]float32, len(hops))
 		prev := device.self.PubKey[0]
-		for i, h := range path {
-			snrs[i] = linkSNR(prev, h)
-			prev = h
+		for i, h := range hops {
+			snrs[i] = linkSNR(prev, h[0])
+			prev = h[0]
 		}
 		s.emit(radio.Frame{At: time.Now(), Dir: radio.FromRadio, Code: 0x89, Name: radio.ResponseName(0x89)})
-		s.emit(radio.TraceResult{Tag: tag, Hashes: append([]byte(nil), path...), SNRs: snrs, LastSNR: linkSNR(prev, device.self.PubKey[0])})
+		s.emit(radio.TraceResult{Tag: tag, Hashes: append([]byte(nil), path...), HashSize: hashSize, SNRs: snrs, LastSNR: linkSNR(prev, device.self.PubKey[0])})
 	}()
 	return tag, nil
 }
@@ -695,20 +724,22 @@ func (s *Sim) DiscoverPath(ctx context.Context, k [32]byte) error {
 		s.mu.Unlock()
 		return errors.New("not a contact")
 	}
-	routes := [][]byte{{0xA3}, {0xA3, 0x1E}, {0x77, 0x5F}, {0x1E, 0x4D}, {0xA3, 0xB2, 0xE1}}
-	out := routes[s.rng.Intn(len(routes))]
-	s.book[i].PathLen, s.book[i].Path = len(out), append([]byte(nil), out...)
+	routes := [][]int{{0}, {0, 1}, {2, 3}, {1, 6}, {0, 5, 8}} // repeaters, by place in the list
+	route := routes[s.rng.Intn(len(routes))]
+	size := s.dev.s.PathHashMode + 1
+	var out, in []byte
+	for j := range route {
+		out = append(out, s.hopOf(repeaters[route[j]])...)
+		in = append(in, s.hopOf(repeaters[route[len(route)-1-j]])...)
+	}
+	s.book[i].PathLen, s.book[i].Path, s.book[i].HashSize = len(route), append([]byte(nil), out...), size
 	s.mu.Unlock()
 	s.frame(52, 6)
 	s.emit(radio.Transmit{At: time.Now(), What: "SEND_PATH_DISCOVERY_REQ"})
 	go func() {
 		time.Sleep(s.delay(1500))
-		in := make([]byte, len(out))
-		for j, h := range out {
-			in[len(out)-1-j] = h
-		}
 		s.emit(radio.Frame{At: time.Now(), Dir: radio.FromRadio, Code: 0x8D, Name: radio.ResponseName(0x8D)})
-		s.emit(radio.PathFound{Prefix: prefix(k), Out: out, In: in})
+		s.emit(radio.PathFound{Prefix: prefix(k), Out: out, In: in, OutSize: size, InSize: size})
 	}()
 	return nil
 }
