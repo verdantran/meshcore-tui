@@ -63,7 +63,7 @@ curl -fsSL https://github.com/verdantran/meshcore-tui/releases/latest/download/m
 sudo install meshcore-tui/meshcore-tui /usr/local/bin/
 ```
 
-That always fetches the newest release; for a particular one, put its tag in place of `latest`, as in `releases/download/v0.1.0/…`. Or put it in `~/.local/bin` instead of `/usr/local/bin` to skip `sudo`. On Windows, unzip it and run `meshcore-tui.exe` from Windows Terminal.
+That always fetches the newest release; for a particular one, use `releases/download/v0.1.0/…` in place of `releases/latest/download/…`. Or put it in `~/.local/bin` instead of `/usr/local/bin` to skip `sudo`. On Windows, unzip it and run `meshcore-tui.exe` from Windows Terminal.
 
 To check a download before unpacking it, fetch the archive and `SHA256SUMS` from the release into one folder and run `shasum -a 256 -c SHA256SUMS --ignore-missing`.
 
