@@ -21,7 +21,7 @@
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
-┃                          │ ▌11:03 Zed                                          1 hop · SNR +6.00 ┃
+┃                          │ ▌10:03 Zed                                          1 hop · SNR +6.00 ┃
 ┃                          │ ▌      5*9▟78 $0 00+ ▒#1% 2*FB4▟2E                                    ┃
 ┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply         ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
@@ -29,7 +29,7 @@
  [10:03:03] ▸ █
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles b41d777aac810af2
+styles f884374da16a267d
 == 160ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -53,7 +53,7 @@ styles b41d777aac810af2
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
-┃                          │ ▌11:03 Zed                                          1 hop · SNR +6.00 ┃
+┃                          │ ▌10:03 Zed                                          1 hop · SNR +6.00 ┃
 ┃                          │ ▌      anyone on the hill toniE▚█\                                    ┃
 ┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply         ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
@@ -61,7 +61,7 @@ styles b41d777aac810af2
  [10:03:03] ▸ MSG  Public · Zed: any█
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 1a0d06bc5f3a4564
+styles f349b0d6fee171c1
 == 320ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -85,7 +85,7 @@ styles 1a0d06bc5f3a4564
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
-┃                          │ ▌11:03 Zed                                          1 hop · SNR +6.00 ┃
+┃                          │ ▌10:03 Zed                                          1 hop · SNR +6.00 ┃
 ┃                          │ ▌      anyone on the hill tonight?                                    ┃
 ┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply         ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
@@ -93,7 +93,7 @@ styles 1a0d06bc5f3a4564
  [10:03:03] ▸ MSG  Public · Zed: anyone on the hill tonigh█
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles c959f022c831777d
+styles 5f6c6cb313a0a828
 == 700ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -117,7 +117,7 @@ styles c959f022c831777d
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
-┃                          │  11:03 Zed                                          1 hop · SNR +6.00 ┃
+┃                          │  10:03 Zed                                          1 hop · SNR +6.00 ┃
 ┃                          │        anyone on the hill tonight?                                    ┃
 ┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply         ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
@@ -125,4 +125,4 @@ styles c959f022c831777d
  [10:03:03] ▸ MSG  Public · Zed: anyone on the hill tonight?
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles a8d91d05f810ed97
+styles af4eb2336bc6f4d0
