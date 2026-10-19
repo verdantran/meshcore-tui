@@ -37,6 +37,7 @@ func (m *Model) View() tea.View {
 	}
 	if m.phase == phaseMain {
 		m.overlayToasts(lines)
+		m.overlayFinder(lines)
 		for i, l := range lines {
 			if strings.Contains(l, "\n") {
 				lines[i] = fit(oneLine(l), m.w)

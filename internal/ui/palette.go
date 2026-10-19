@@ -117,10 +117,12 @@ type palette struct {
 	input   lineEdit
 	history []string
 	hist    int // index into history while browsing; len(history) when not
+	find    finder
 }
 
 func (m *Model) openPalette() {
 	m.pal.open, m.pal.input, m.pal.hist = true, lineEdit{}, len(m.pal.history)
+	m.openFinder()
 }
 
 func (m *Model) paletteKey(s string) {
@@ -129,6 +131,9 @@ func (m *Model) paletteKey(s string) {
 	case "esc":
 		p.open = false
 	case "enter":
+		if m.finderEnter() {
+			return
+		}
 		line := strings.TrimSpace(p.input.text)
 		p.open = false
 		if line == "" {
@@ -138,20 +143,38 @@ func (m *Model) paletteKey(s string) {
 		m.runCommand(line)
 	case "tab":
 		p.input.set(m.completeInput(p.input.text))
-	case "up":
+		m.refind()
+	case "up", "ctrl+p", "down", "ctrl+n":
+		m.paletteMove(s == "up" || s == "ctrl+p")
+	default:
+		before := p.input.text
+		if p.input.key(s) && p.input.text != before {
+			p.hist = len(p.history)
+			m.refind()
+		}
+	}
+}
+
+// paletteMove moves through the drop-down while it shows, and through history when it doesn't.
+func (m *Model) paletteMove(up bool) {
+	p := &m.pal
+	switch {
+	case m.finding() && up:
+		m.finderMove(-1)
+	case m.finding():
+		m.finderMove(1)
+	case up:
 		if p.hist > 0 {
 			p.hist--
 			p.input.set(p.history[p.hist])
 		}
-	case "down":
+	default:
 		if p.hist < len(p.history)-1 {
 			p.hist++
 			p.input.set(p.history[p.hist])
 		} else {
 			p.hist, p.input = len(p.history), lineEdit{}
 		}
-	default:
-		p.input.key(s)
 	}
 }
 
@@ -253,6 +276,9 @@ func (m *Model) paletteLine() string {
 	th := m.th
 	prompt := th.Fg(th.Magenta, true).Render(" mc▸ ") + m.pal.input.render(th, m.w-6, false)
 	hint := strings.Join(m.suggestions(), "  ")
+	if m.finding() {
+		hint = "↑↓ choose · enter go · tab complete · esc close"
+	}
 	return prompt + "  " + th.Fg(th.Dim, false).Render(truncate(hint, max(m.w-visibleWidth(prompt)-3, 0)))
 }
 
@@ -313,7 +339,7 @@ func (m *Model) helpLines() []string {
 		lines = append(lines, key("1-7", "switch screen"), key("tab shift+tab", "next screen · previous screen"),
 			key("M", "open the map; on a packet, message or contact, its path"))
 	}
-	lines = append(lines, key(":", "command palette"), key("?", "this help: j k scroll, esc closes"))
+	lines = append(lines, key(": ctrl+k", "command palette; type any name to go there"), key("?", "this help: j k scroll, esc closes"))
 	if !m.repeaterMode() {
 		lines = append(lines, key("ctrl+f", "search every conversation"))
 	}

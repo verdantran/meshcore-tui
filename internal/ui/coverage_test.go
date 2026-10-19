@@ -462,7 +462,7 @@ func TestEveryPaletteCommand(t *testing.T) {
 
 	// Typing in the palette: completion hints, history, editing.
 	h.keys(":t")
-	has(t, h.screen(), "theme  ticker  trace")
+	has(t, h.screen(), "theme", "ticker", "trace", "tab complete")
 	h.keys("race ")
 	has(t, h.screen(), "<contact>")
 	h.key(tea.KeyBackspace)

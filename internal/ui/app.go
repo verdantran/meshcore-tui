@@ -618,6 +618,10 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 		m.openSearch()
 		return nil, false
 	}
+	if s == "ctrl+k" && m.phase == phaseMain && !m.typing() {
+		m.openPalette()
+		return nil, false
+	}
 	if m.phase == phaseMain && m.tab == 0 && m.chat != nil {
 		if cmd, handled := m.chatsKey(s); handled {
 			return cmd, false
