@@ -130,7 +130,7 @@ func version() string {
 
 // setup turns the command line, config file and environment into the app's options.
 // Flags win over the config file only when they're given.
-func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options, error) {
+func setup(args []string, env func(string) string, sess session, stderr io.Writer) (ui.Options, error) {
 	fs := flag.NewFlagSet("meshcore-tui", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	serialPort := fs.String("serial", "", "connect to a USB serial port, e.g. /dev/cu.usbmodem1101, /dev/ttyACM0 or COM3")
@@ -172,7 +172,7 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 	}
 
 	level := motion.Full
-	if env("SSH_CONNECTION") != "" {
+	if sess.remote {
 		level = motion.Reduced
 	}
 	motionName := cfg.UI.Motion
@@ -224,7 +224,8 @@ func openStore(path string, stderr io.Writer) (*store.Store, error) {
 }
 
 func run(args []string, env func(string) string, stderr io.Writer) int {
-	opt, err := setup(args, env, stderr)
+	sess := detectSession(env, runTmux, parentOf)
+	opt, err := setup(args, env, sess, stderr)
 	if errors.Is(err, errUsage) {
 		return 2
 	}
@@ -244,7 +245,7 @@ func run(args []string, env func(string) string, stderr io.Writer) int {
 	defer db.Close()
 	opt.Store = db
 	out := &timedOutput{File: os.Stdout}
-	p := tea.NewProgram(ui.New(opt), tea.WithOutput(out), tea.WithFPS(motion.FrameRate)) // the app never animates faster
+	p := tea.NewProgram(ui.New(opt), tea.WithOutput(out), tea.WithFPS(motion.FrameRate), tea.WithEnvironment(teaEnv(os.Environ(), sess))) // the app never animates faster
 	out.slow = func() { p.Send(ui.SlowTerminalMsg{}) }
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(stderr, err)

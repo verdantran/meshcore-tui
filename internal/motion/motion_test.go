@@ -66,14 +66,6 @@ func TestHelpers(t *testing.T) {
 	if _, ok := ParseLevel("lots"); ok {
 		t.Error("unknown level parsed")
 	}
-	t.Setenv("SSH_CONNECTION", "")
-	if DefaultLevel() != Full {
-		t.Error("local default is full")
-	}
-	t.Setenv("SSH_CONNECTION", "1 2 3 4")
-	if DefaultLevel() != Reduced {
-		t.Error("over SSH the default is reduced")
-	}
 	if Progress(t0, 0, t0) != 1 || Progress(time.Time{}, time.Second, t0) != 1 {
 		t.Error("no duration, or no start, means finished")
 	}

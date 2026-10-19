@@ -5,7 +5,6 @@ package motion
 import (
 	"math"
 	"math/rand"
-	"os"
 	"time"
 )
 
@@ -22,14 +21,6 @@ func (l Level) String() string { return [...]string{"full", "reduced", "off"}[l]
 func ParseLevel(s string) (Level, bool) {
 	l, ok := map[string]Level{"full": Full, "reduced": Reduced, "off": Off}[s]
 	return l, ok
-}
-
-// DefaultLevel is full locally and reduced over SSH, where constant redraws make the UI lag.
-func DefaultLevel() Level {
-	if os.Getenv("SSH_CONNECTION") != "" {
-		return Reduced
-	}
-	return Full
 }
 
 type Effect int

@@ -34,7 +34,7 @@ func writeConfig(t *testing.T, body string) string {
 func TestSetupDefaultsAndFlags(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 	var errs bytes.Buffer
-	opt, err := setup([]string{"--config", cfgPath}, noEnv, &errs)
+	opt, err := setup([]string{"--config", cfgPath}, noEnv, session{}, &errs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestSetupDefaultsAndFlags(t *testing.T) {
 		{[]string{"--demo"}, "SIM", "demo"},
 		{[]string{"--demo", "--repeater"}, "SIM", "demo"},
 	} {
-		opt, err := setup(append(c.args, "--config", cfgPath), noEnv, &errs)
+		opt, err := setup(append(c.args, "--config", cfgPath), noEnv, session{}, &errs)
 		repeater := strings.Contains(strings.Join(c.args, " "), "--repeater")
 		if err != nil || opt.Start == nil || opt.Start.Kind != c.kind || opt.Start.Addr != c.addr || (opt.Start.Mode == ui.ModeRepeater) != repeater {
 			t.Errorf("%v → %+v, %v", c.args, opt.Start, err)
@@ -75,7 +75,7 @@ kind = "TCP"
 addr = "10.0.0.4:5000"
 `)
 	var errs bytes.Buffer
-	opt, err := setup([]string{"--config", path}, noEnv, &errs)
+	opt, err := setup([]string{"--config", path}, noEnv, session{}, &errs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ addr = "10.0.0.4:5000"
 	if opt.Start == nil || opt.Start.Addr != "10.0.0.4:5000" || opt.Start.Saved != "Shed" {
 		t.Errorf("auto_connect = %+v", opt.Start)
 	}
-	opt, _ = setup([]string{"--config", path, "--theme", "amber", "--motion", "reduced", "--demo"}, noEnv, &errs)
+	opt, _ = setup([]string{"--config", path, "--theme", "amber", "--motion", "reduced", "--demo"}, noEnv, session{}, &errs)
 	if opt.Theme.Name != "amber" || opt.Motion != motion.Reduced || opt.Start.Kind != "SIM" {
 		t.Errorf("flags should win: %s %s %+v", opt.Theme.Name, opt.Motion, opt.Start)
 	}
@@ -94,7 +94,8 @@ addr = "10.0.0.4:5000"
 func TestSetupEnvironment(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 	var errs bytes.Buffer
-	opt, _ := setup([]string{"--config", cfgPath}, env(map[string]string{"SSH_CONNECTION": "1 2 3 4", "NO_COLOR": "1"}), &errs)
+	e := env(map[string]string{"SSH_CONNECTION": "1 2 3 4", "NO_COLOR": "1"})
+	opt, _ := setup([]string{"--config", cfgPath}, e, detectSession(e, noTmux, noProc), &errs)
 	if opt.Motion != motion.Reduced || opt.Theme.Name != "mono" {
 		t.Errorf("over SSH with NO_COLOR: motion %s, theme %s", opt.Motion, opt.Theme.Name)
 	}
@@ -109,7 +110,7 @@ func TestOldWindowsConsole(t *testing.T) {
 	t.Cleanup(func() { goos = saved })
 	goos = "windows"
 	var errs bytes.Buffer
-	opt, _ := setup([]string{"--config", filepath.Join(t.TempDir(), "config.toml")}, none, &errs)
+	opt, _ := setup([]string{"--config", filepath.Join(t.TempDir(), "config.toml")}, none, session{}, &errs)
 	if len(opt.Notes) != 1 || !strings.Contains(opt.Notes[0], "Windows Terminal") {
 		t.Errorf("notes = %q", opt.Notes)
 	}
@@ -126,12 +127,12 @@ func TestSetupErrors(t *testing.T) {
 		{[]string{"--motion", "lots"}, "unknown motion level"},
 		{[]string{"--config", writeConfig(t, "not = [valid")}, "can't read"},
 	} {
-		_, err := setup(append([]string{"--config", cfgPath}, c.args...), noEnv, &errs)
+		_, err := setup(append([]string{"--config", cfgPath}, c.args...), noEnv, session{}, &errs)
 		if err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%v → %v, want %q", c.args, err, c.want)
 		}
 	}
-	if _, err := setup([]string{"--no-such-flag"}, noEnv, &errs); err != errUsage {
+	if _, err := setup([]string{"--no-such-flag"}, noEnv, session{}, &errs); err != errUsage {
 		t.Errorf("unknown flag → %v", err)
 	}
 	if code := run([]string{"--no-such-flag"}, noEnv, &errs); code != 2 {
@@ -220,12 +221,12 @@ func TestSetupKeys(t *testing.T) {
 	cfgPath := filepath.Join(dir, "config.toml")
 	os.WriteFile(filepath.Join(dir, "keys.toml"), []byte("[map]\nw = \"up\"\n"), 0o644)
 	var errs bytes.Buffer
-	opt, err := setup([]string{"--config", cfgPath}, env(nil), &errs)
+	opt, err := setup([]string{"--config", cfgPath}, env(nil), session{}, &errs)
 	if err != nil || opt.Keys["map"]["w"] != "up" {
 		t.Errorf("keys.toml beside the config: %v %v", opt.Keys, err)
 	}
 	os.WriteFile(filepath.Join(dir, "keys.toml"), []byte("[nowhere]\n"), 0o644)
-	if _, err := setup([]string{"--config", cfgPath}, env(nil), &errs); err == nil || !strings.Contains(err.Error(), "keys.toml") {
+	if _, err := setup([]string{"--config", cfgPath}, env(nil), session{}, &errs); err == nil || !strings.Contains(err.Error(), "keys.toml") {
 		t.Errorf("a bad keys.toml stops startup and says which file: %v", err)
 	}
 }
