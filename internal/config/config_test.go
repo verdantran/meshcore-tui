@@ -138,6 +138,9 @@ func TestLoadKeys(t *testing.T) {
 }
 
 func TestConfigIsPrivate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no owner or mode bits to check")
+	}
 	path := filepath.Join(t.TempDir(), "cfg", "config.toml")
 	c, _ := Load(path)
 	if err := c.Save(); err != nil {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -83,7 +84,7 @@ func TestExportsStayInTheirFolder(t *testing.T) {
 	if filepath.Dir(path) != h.m.opt.ExportDir {
 		t.Errorf("exported to %s", path)
 	}
-	if st, _ := os.Stat(path); st.Mode().Perm() != 0o600 {
+	if st, _ := os.Stat(path); runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
 		t.Errorf("an export is %v; only you should read it", st.Mode().Perm())
 	}
 }

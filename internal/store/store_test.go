@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -453,6 +454,9 @@ func TestReplaysAndPinClashes(t *testing.T) {
 }
 
 func TestHistoryIsPrivate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no owner or mode bits to check")
+	}
 	dir := filepath.Join(t.TempDir(), "meshcore-tui")
 	os.MkdirAll(dir, 0o755)
 	path := filepath.Join(dir, "meshcore-tui.db")
