@@ -2,6 +2,8 @@ package chat
 
 import (
 	"errors"
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -454,5 +456,127 @@ func TestFindMentions(t *testing.T) {
 	want := []Mention{{0, 12, "Bob Smith"}, {17, 23, "alice"}}
 	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
 		t.Errorf("mentions = %+v", got)
+	}
+}
+
+// TestListKeptInStep: the conversation list held in memory reads the same as one read afresh from the
+// store, through every kind of change to the messages and contacts.
+func TestListKeptInStep(t *testing.T) {
+	s := newService(t, 2, true)
+	check := func(step string) {
+		t.Helper()
+		for _, open := range []store.Convo{"", store.ContactConvo(rep.Key), store.ContactConvo(room.Key)} {
+			held, err := s.Conversations(open)
+			if err != nil {
+				t.Fatal(err)
+			}
+			kept := s.sums
+			s.sums = nil
+			fresh, _ := s.Conversations(open)
+			s.sums = kept
+			if !reflect.DeepEqual(held, fresh) {
+				t.Fatalf("%s: held list\n%s\nwant\n%s", step, dump(held), dump(fresh))
+			}
+		}
+	}
+	check("start")
+	in := func(in radio.Incoming) store.Message {
+		in.At, in.SentAt = t0, t0
+		m, err := s.Incoming(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	ch1 := in(radio.Incoming{Channel: true, ChannelIdx: 1, Text: "Carol: hi @[MeshCore-k4]\x1b[2J", Hops: 2, SNR: 6.25, HasSNR: true})
+	in(radio.Incoming{Channel: true, ChannelIdx: 0, Text: "Bob: morning"})
+	in(radio.Incoming{From: alice.Prefix(), Text: "hi"})
+	in(radio.Incoming{From: [6]byte{0xEE, 1}, Text: "who's this"})
+	in(radio.Incoming{From: room.Prefix(), Author: [4]byte{0x3A, 0xAA}, Text: "a post"})
+	check("incoming")
+	if infos, _ := s.Conversations(""); !infos[1].Mention || infos[1].Unread != 1 || infos[0].Mention {
+		t.Fatalf("mention and unread:\n%s", dump(infos))
+	}
+
+	_, send, _ := s.Compose(store.ContactConvo(alice.Key), "hello", t0)
+	s.Result(send, radio.Sent{Ack: 9, Timeout: time.Second}, nil)
+	check("sent")
+	s.Acked(radio.Acked{Ack: 9, RTT: 1234567 * time.Microsecond})
+	check("acked")
+	_, send, _ = s.Compose(store.ChannelConvo(0), "repeat me", t0)
+	s.Result(send, radio.Sent{}, nil)
+	s.Echo(0, "MeshCore-k4", "repeat me", t0)
+	check("echo")
+
+	_, send, _ = s.Compose(store.ContactConvo(alice.Key), "lost", t0)
+	_, wait, _ := s.Result(send, radio.Sent{Ack: 10, Timeout: time.Second}, nil)
+	s.Timeout(*wait)
+	s.Result(Send{ID: wait.ID, Attempt: 1, To: alice.Key}, radio.Sent{Ack: 11, Timeout: time.Second}, nil)
+	failed, _, _ := s.Timeout(Wait{ID: wait.ID, Attempt: 1})
+	check("timed out")
+	if failed.State != store.Failed {
+		t.Fatalf("not failed: %+v", failed)
+	}
+	_, send, _ = s.Retry(failed, t0)
+	s.Result(send, radio.Sent{}, errors.New("no radio"))
+	check("retried")
+
+	s.SetSig(ch1.ID, store.SigValid, []byte{1, 2, 3})
+	if _, ok, _ := s.AttachPath(store.ChannelConvo(1), "Carol", ch1.Text, t0.Add(-time.Minute), []byte{0xA3, 0x1E}, 1); !ok {
+		t.Fatal("path not attached")
+	}
+	check("signed and routed")
+	s.MarkRead(store.ChannelConvo(1))
+	check("read")
+
+	s.ContactUpdated(radio.Contact{Key: alice.Key, Name: "Alice B", Type: radio.TypeChat})
+	s.ContactUpdated(radio.Contact{Key: [32]byte{0xEE, 1}, Name: "Eve", Type: radio.TypeRoom})
+	in(radio.Incoming{From: [6]byte{0xEE, 1}, Text: "now a contact"})
+	check("contacts")
+	s.ForgetChannel(1)
+	check("channel left")
+
+	s.Ready(radio.Ready{Self: radio.SelfInfo{Name: "MeshCore-k4", PubKey: [32]byte{0xC0}}, ContactList: []radio.Contact{alice, room, rep},
+		ChannelList: []radio.Channel{{Idx: 0, Name: "Public"}, {Idx: 1, Name: "#bristol"}}})
+	check("reconnected")
+	in(radio.Incoming{Channel: true, ChannelIdx: 1, Text: "Carol: back"})
+	check("after reconnecting")
+}
+
+func dump(infos []Info) string {
+	var b strings.Builder
+	for _, i := range infos {
+		fmt.Fprintf(&b, "  %s %q kind %d unread %d mention %v", i.Convo, i.Title, i.Kind, i.Unread, i.Mention)
+		if i.Last != nil {
+			fmt.Fprintf(&b, " last %+v", *i.Last)
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// TestContactLookups: contacts are found by conversation and by prefix as a scan in order would find
+// them, as they come and go.
+func TestContactLookups(t *testing.T) {
+	s := newService(t, 3, true)
+	twin := radio.Contact{Key: alice.Key, Name: "Alice again", Type: radio.TypeChat}
+	twin.Key[31] = 1 // same prefix, another key
+	s.ContactUpdated(twin)
+	if c, _ := s.ContactByPrefix(alice.Prefix()); c.Name != "Alice" {
+		t.Errorf("the first contact with a prefix wins, got %s", c.Name)
+	}
+	if c, ok := s.Contact(store.ContactConvo(twin.Key)); !ok || c.Name != "Alice again" {
+		t.Error("a contact added later is found")
+	}
+	s.RemoveContact(alice.Key)
+	if c, _ := s.ContactByPrefix(alice.Prefix()); c.Name != "Alice again" {
+		t.Errorf("with the first gone, the next holds the prefix, got %s", c.Name)
+	}
+	if _, ok := s.Contact(store.ContactConvo(alice.Key)); ok {
+		t.Error("a removed contact isn't found")
+	}
+	s.ReplaceContacts([]radio.Contact{room})
+	if _, ok := s.Contact(store.ContactConvo(twin.Key)); ok || s.Title(store.ContactConvo(room.Key)) != "Clifton Room" {
+		t.Error("a replaced table is looked up afresh")
 	}
 }

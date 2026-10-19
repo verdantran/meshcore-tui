@@ -211,7 +211,13 @@ func (s *Service) ReplaceChannels(cs []radio.Channel) error {
 
 // ForgetChannel deletes a removed channel's history, so a channel added to the same slot later starts empty.
 func (s *Service) ForgetChannel(idx int) error {
-	return s.store.DeleteConvo(s.device, store.ChannelConvo(idx))
+	c := store.ChannelConvo(idx)
+	if err := s.store.DeleteConvo(s.device, c); err != nil {
+		s.sums = nil
+		return err
+	}
+	delete(s.sums, c)
+	return nil
 }
 
 // ChannelFor finds the channel a conversation belongs to.

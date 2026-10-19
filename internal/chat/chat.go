@@ -4,12 +4,14 @@
 package chat
 
 import (
+	"cmp"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -72,11 +74,22 @@ type Service struct {
 	waiting  map[int64]*outgoing
 	byAck    map[uint32]int64
 	echoes   []echoWatch
-	rev      int // counts changes to contacts, for whatever is worked out from them
+	rev      int                 // counts changes to contacts, for whatever is worked out from them
+	byConvo  map[store.Convo]int // contacts' indexes by conversation and by key prefix; nil until wanted
+	byPrefix map[[6]byte]int
+
+	sums map[store.Convo]*summary // every conversation with messages, kept in step with each write; nil until read
 
 	lastRun time.Time // when the app was last connected to this radio, before this connection
 	live    bool      // connected, so the time is worth keeping
 	seenAt  time.Time
+}
+
+// summary is a conversation's row in the list: its latest message, and what's unread.
+type summary struct {
+	last    store.Message
+	unread  int
+	mention bool
 }
 
 // echoWatch is a channel message we sent, listened for as repeaters pass it on.
@@ -108,6 +121,7 @@ func (s *Service) Ready(r radio.Ready) error {
 	s.self = r.Self.Name
 	s.contacts, s.channels = r.ContactList, r.ChannelList
 	s.rev++
+	s.byConvo, s.sums = nil, nil
 	last, err := s.store.LastSeen(s.device)
 	if err != nil {
 		return err
@@ -125,7 +139,7 @@ func (s *Service) Ready(r radio.Ready) error {
 	}
 	for _, m := range left {
 		m.State = store.Failed
-		if err := s.store.UpdateDelivery(m); err != nil {
+		if err := s.deliver(m); err != nil {
 			return err
 		}
 	}
@@ -150,11 +164,36 @@ func (s *Service) Lost() { s.live = false }
 // Rev changes whenever the contacts do.
 func (s *Service) Rev() int { return s.rev }
 
+// index maps contacts by conversation and prefix; the first contact holding either wins, as a scan would find.
+func (s *Service) index() {
+	if s.byConvo != nil {
+		return
+	}
+	s.byConvo, s.byPrefix = make(map[store.Convo]int, len(s.contacts)), make(map[[6]byte]int, len(s.contacts))
+	for i := range s.contacts {
+		s.indexOne(i)
+	}
+}
+
+func (s *Service) indexOne(i int) {
+	c := s.contacts[i]
+	if cv := store.ContactConvo(c.Key); !hasKey(s.byConvo, cv) {
+		s.byConvo[cv] = i
+	}
+	if p := c.Prefix(); !hasKey(s.byPrefix, p) {
+		s.byPrefix[p] = i
+	}
+}
+
+func hasKey[K comparable](m map[K]int, k K) bool {
+	_, ok := m[k]
+	return ok
+}
+
 func (s *Service) contactByPrefix(p [6]byte) (radio.Contact, bool) {
-	for _, c := range s.contacts {
-		if c.Prefix() == p {
-			return c, true
-		}
+	s.index()
+	if i, ok := s.byPrefix[p]; ok {
+		return s.contacts[i], true
 	}
 	return radio.Contact{}, false
 }
@@ -173,10 +212,9 @@ func (s *Service) author(p [4]byte) string {
 }
 
 func (s *Service) contactByConvo(c store.Convo) (radio.Contact, bool) {
-	for _, ct := range s.contacts {
-		if store.ContactConvo(ct.Key) == c {
-			return ct, true
-		}
+	s.index()
+	if i, ok := s.byConvo[c]; ok {
+		return s.contacts[i], true
 	}
 	return radio.Contact{}, false
 }
@@ -201,7 +239,9 @@ func (s *Service) AttachPath(c store.Convo, sender, text string, since time.Time
 	if err != nil || !ok {
 		return 0, false, err
 	}
-	return m.ID, true, s.store.SetPath(m.ID, path, hashSize)
+	err = s.store.SetPath(m.ID, path, hashSize)
+	s.touch(m.ID, err, func(l *store.Message) { l.Path, l.PathHash = path, hashSize })
+	return m.ID, true, err
 }
 
 // AwaitingSig lists a channel's received messages sent at a time that have no signature yet.
@@ -215,7 +255,9 @@ func (s *Service) SignedBefore(m store.Message, key []byte) (bool, error) {
 }
 
 func (s *Service) SetSig(id int64, sig store.Sig, key []byte) error {
-	return s.store.SetSig(id, sig, key)
+	err := s.store.SetSig(id, sig, key)
+	s.touch(id, err, func(l *store.Message) { l.Sig, l.SigKey = sig, key })
+	return err
 }
 
 func (s *Service) Pins() (map[string]store.Pin, error) { return s.store.Pins() }
@@ -243,7 +285,9 @@ func (s *Service) Incoming(in radio.Incoming) (store.Message, error) {
 	} else {
 		m.Convo, m.Sender = store.UnknownConvo(in.From), radio.KeyHex(in.From[:])
 	}
-	return m, s.store.AddMessage(s.device, &m)
+	err := s.store.AddMessage(s.device, &m)
+	s.added(m, err)
+	return m, err
 }
 
 func (s *Service) ContactUpdated(c radio.Contact) error {
@@ -256,6 +300,9 @@ func (s *Service) ContactUpdated(c radio.Contact) error {
 	}
 	s.contacts = append(s.contacts, c)
 	s.rev++
+	if s.byConvo != nil {
+		s.indexOne(len(s.contacts) - 1)
+	}
 	return s.store.UpsertContact(s.device, c)
 }
 
@@ -296,8 +343,10 @@ func (s *Service) Compose(c store.Convo, text string, now time.Time) (store.Mess
 		m.Flood = ct.PathLen < 0
 	}
 	if err := s.store.AddMessage(s.device, &m); err != nil {
+		s.added(m, err)
 		return store.Message{}, Send{}, err
 	}
+	s.added(m, nil)
 	send.ID = m.ID
 	if send.Channel {
 		s.echoes = append(s.echoes, echoWatch{m.ID, send.Idx, text, now})
@@ -316,7 +365,9 @@ func (s *Service) Retry(m store.Message, now time.Time) (store.Message, Send, er
 	if err != nil {
 		return store.Message{}, Send{}, err
 	}
-	return nm, send, s.store.DeleteMessage(m.ID)
+	err = s.store.DeleteMessage(m.ID)
+	s.touch(m.ID, err, func(*store.Message) { s.sums = nil })
+	return nm, send, err
 }
 
 // Result records the radio's answer to a Send. For a direct message it returns how long to wait for the ack.
@@ -326,7 +377,7 @@ func (s *Service) Result(sd Send, sent radio.Sent, err error) (store.Message, *W
 		if err != nil {
 			m.State = store.Failed
 		}
-		return m, nil, s.store.UpdateDelivery(m)
+		return m, nil, s.deliver(m)
 	}
 	o, ok := s.waiting[sd.ID]
 	if !ok || o.attempt != sd.Attempt {
@@ -336,7 +387,7 @@ func (s *Service) Result(sd Send, sent radio.Sent, err error) (store.Message, *W
 	if err != nil {
 		o.msg.State = store.Failed
 		delete(s.waiting, sd.ID)
-		return o.msg, nil, s.store.UpdateDelivery(o.msg)
+		return o.msg, nil, s.deliver(o.msg)
 	}
 	o.msg.State, o.msg.Ack, o.msg.Flood = store.Sent, sent.Ack, sent.Flood
 	s.byAck[sent.Ack] = sd.ID
@@ -344,7 +395,7 @@ func (s *Service) Result(sd Send, sent radio.Sent, err error) (store.Message, *W
 	if wait <= 0 {
 		wait = defaultAckWait
 	}
-	return o.msg, &Wait{ID: sd.ID, Attempt: sd.Attempt, Delay: time.Duration(float64(wait) * ackGrace)}, s.store.UpdateDelivery(o.msg)
+	return o.msg, &Wait{ID: sd.ID, Attempt: sd.Attempt, Delay: time.Duration(float64(wait) * ackGrace)}, s.deliver(o.msg)
 }
 
 // Acked settles whichever message this ack belongs to, including acks for an earlier attempt.
@@ -360,7 +411,7 @@ func (s *Service) Acked(a radio.Acked) (store.Message, bool, error) {
 	}
 	delete(s.waiting, id)
 	o.msg.State, o.msg.RTT = store.Delivered, a.RTT
-	return o.msg, true, s.store.UpdateDelivery(o.msg)
+	return o.msg, true, s.deliver(o.msg)
 }
 
 // Timeout runs when an ack didn't arrive in time: retry, flooding on the last attempt if allowed, or give up.
@@ -373,7 +424,7 @@ func (s *Service) Timeout(w Wait) (store.Message, *Send, error) {
 	if next >= s.retries {
 		o.msg.State = store.Failed
 		delete(s.waiting, w.ID)
-		return o.msg, nil, s.store.UpdateDelivery(o.msg)
+		return o.msg, nil, s.deliver(o.msg)
 	}
 	o.attempt = next
 	send := &Send{ID: w.ID, Attempt: next, To: o.to, Text: o.msg.Text}
@@ -381,14 +432,97 @@ func (s *Service) Timeout(w Wait) (store.Message, *Send, error) {
 		send.ResetPath = true
 	}
 	o.msg.State = store.Pending
-	return o.msg, send, s.store.UpdateDelivery(o.msg)
+	return o.msg, send, s.deliver(o.msg)
 }
 
 func (s *Service) Messages(c store.Convo, limit int) ([]store.Message, error) {
 	return s.store.Messages(s.device, c, limit)
 }
 
-func (s *Service) MarkRead(c store.Convo) error { return s.store.MarkRead(s.device, c) }
+func (s *Service) MarkRead(c store.Convo) error {
+	if err := s.store.MarkRead(s.device, c); err != nil {
+		s.sums = nil
+		return err
+	}
+	if x := s.sums[c]; x != nil {
+		x.unread, x.mention = 0, false
+	}
+	return nil
+}
+
+// deliver records progress on an outgoing message.
+func (s *Service) deliver(m store.Message) error {
+	err := s.store.UpdateDelivery(m)
+	s.touch(m.ID, err, func(l *store.Message) {
+		l.State, l.Ack, l.Attempts, l.RTT, l.Flood = m.State, m.Ack, m.Attempts, m.RTT.Truncate(time.Millisecond), m.Flood
+	})
+	return err
+}
+
+// added counts a message just written into its conversation's summary.
+func (s *Service) added(m store.Message, err error) {
+	if err != nil {
+		s.sums = nil
+	}
+	if s.sums == nil {
+		return
+	}
+	x := s.sums[m.Convo]
+	if x == nil {
+		x = &summary{}
+		s.sums[m.Convo] = x
+	}
+	x.last = stored(m)
+	if !m.Out {
+		x.unread++
+		x.mention = x.mention || m.Convo.IsChannel() && s.Mentions(x.last.Text)
+	}
+}
+
+// touch applies a change to a message to its conversation's summary, if it's the latest there.
+func (s *Service) touch(id int64, err error, f func(*store.Message)) {
+	if err != nil {
+		s.sums = nil
+	}
+	for _, x := range s.sums {
+		if x.last.ID == id {
+			f(&x.last)
+			return
+		}
+	}
+}
+
+// stored is a message as reading it back from the store would give it.
+func stored(m store.Message) store.Message {
+	m.Sender, m.Text = untrusted.Line(m.Sender), untrusted.Text(m.Text)
+	m.SentAt, m.RecvAt, m.RTT = time.UnixMilli(m.SentAt.UnixMilli()), time.UnixMilli(m.RecvAt.UnixMilli()), m.RTT.Truncate(time.Millisecond)
+	return m
+}
+
+// loadSums reads the conversation list from the store, when it isn't already held.
+func (s *Service) loadSums() error {
+	if s.sums != nil {
+		return nil
+	}
+	list, err := s.store.Conversations(s.device)
+	if err != nil {
+		return err
+	}
+	sums := make(map[store.Convo]*summary, len(list))
+	for _, sm := range list {
+		x := &summary{last: sm.Last, unread: sm.Unread}
+		if sm.Unread > 0 && sm.Convo.IsChannel() {
+			texts, err := s.store.UnreadMentioning(s.device, sm.Convo)
+			if err != nil {
+				return err
+			}
+			x.mention = slices.ContainsFunc(texts, s.Mentions)
+		}
+		sums[sm.Convo] = x
+	}
+	s.sums = sums
+	return nil
+}
 
 func (s *Service) Title(c store.Convo) string {
 	if strings.HasPrefix(string(c), "ch:") {
@@ -405,60 +539,42 @@ func (s *Service) Title(c store.Convo) string {
 	return strings.TrimPrefix(string(c), "dm?:")
 }
 
-// Conversations lists every channel, then direct conversations: those with messages, most recent
-// first, then the remaining chat and room contacts by name, so anyone can be messaged.
-// Conversations lists channels, then the direct and room conversations that have messages.
+// Conversations lists channels, then the direct and room conversations that have messages, most recent first.
 // open adds a contact's or room's conversation with no messages yet, for one being started from Contacts.
 func (s *Service) Conversations(open store.Convo) ([]Info, error) {
-	sums, err := s.store.Conversations(s.device)
-	if err != nil {
+	if err := s.loadSums(); err != nil {
 		return nil, err
 	}
-	byConvo := map[store.Convo]store.Summary{}
-	for _, sm := range sums {
-		byConvo[sm.Convo] = sm
-	}
-	var out []Info
+	out := make([]Info, 0, len(s.channels)+len(s.sums))
 	for _, ch := range s.channels {
 		info := Info{Convo: store.ChannelConvo(ch.Idx), Title: ch.Name, Kind: KindChannel}
-		if sm, ok := byConvo[info.Convo]; ok {
-			info.Unread, info.Last = sm.Unread, &sm.Last
-			if sm.Unread > 0 {
-				unread, _ := s.store.Unread(s.device, info.Convo)
-				for _, m := range unread {
-					info.Mention = info.Mention || s.Mentions(m.Text)
-				}
-			}
+		if x := s.sums[info.Convo]; x != nil {
+			last := x.last
+			info.Unread, info.Mention, info.Last = x.unread, x.mention, &last
 		}
 		out = append(out, info)
 	}
-	seen := map[store.Convo]bool{}
-	var direct []Info
-	for _, sm := range sums {
-		if strings.HasPrefix(string(sm.Convo), "ch:") {
+	direct := len(out)
+	for c, x := range s.sums {
+		if c.IsChannel() {
 			continue
 		}
-		sm := sm
-		info := Info{Convo: sm.Convo, Title: s.Title(sm.Convo), Kind: KindDirect, Unread: sm.Unread, Last: &sm.Last}
-		if ct, ok := s.contactByConvo(sm.Convo); ok && ct.Type == radio.TypeRoom {
+		last := x.last
+		info := Info{Convo: c, Title: s.Title(c), Kind: KindDirect, Unread: x.unread, Last: &last}
+		if ct, ok := s.contactByConvo(c); ok && ct.Type == radio.TypeRoom {
 			info.Kind = KindRoom
 		}
-		direct = append(direct, info)
-		seen[sm.Convo] = true
+		out = append(out, info)
 	}
-	var rest []Info
-	for _, ct := range s.contacts {
-		c := store.ContactConvo(ct.Key)
-		if seen[c] || c != open || ct.Type != radio.TypeChat && ct.Type != radio.TypeRoom {
-			continue
-		}
+	slices.SortFunc(out[direct:], func(a, b Info) int { return cmp.Compare(b.Last.ID, a.Last.ID) })
+	if ct, ok := s.contactByConvo(open); ok && s.sums[open] == nil && (ct.Type == radio.TypeChat || ct.Type == radio.TypeRoom) {
 		kind := KindDirect
 		if ct.Type == radio.TypeRoom {
 			kind = KindRoom
 		}
-		rest = append(rest, Info{Convo: c, Title: ct.Name, Kind: kind})
+		out = append(out, Info{Convo: open, Title: ct.Name, Kind: kind})
 	}
-	return append(append(out, direct...), rest...), nil
+	return out, nil
 }
 
 // Mentions reports whether text @-mentions this radio's name, ignoring case.
@@ -604,6 +720,7 @@ func (s *Service) Contacts() []radio.Contact { return append([]radio.Contact(nil
 func (s *Service) ReplaceContacts(cs []radio.Contact) error {
 	s.contacts = cs
 	s.rev++
+	s.byConvo = nil
 	return s.store.SaveContacts(s.device, cs)
 }
 
@@ -613,6 +730,7 @@ func (s *Service) RemoveContact(key [32]byte) error {
 		if c.Key == key {
 			s.contacts = append(s.contacts[:i], s.contacts[i+1:]...)
 			s.rev++
+			s.byConvo = nil
 			break
 		}
 	}
@@ -641,6 +759,7 @@ func (s *Service) Echo(idx int, sender, text string, now time.Time) (id int64, r
 	for i := len(s.echoes) - 1; i >= 0; i-- {
 		if w := s.echoes[i]; w.idx == idx && w.text == text {
 			n, err := s.store.AddRepeat(w.id)
+			s.touch(w.id, err, func(l *store.Message) { l.Repeats = n })
 			return w.id, n, err == nil, err
 		}
 	}

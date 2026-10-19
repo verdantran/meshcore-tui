@@ -487,9 +487,10 @@ func (s *Store) Unfinished(device string) ([]Message, error) {
 // Conversations summarises every conversation with messages: the latest one and the unread count.
 func (s *Store) Conversations(device string) ([]Summary, error) {
 	rows, err := s.db.Query(`
+		WITH latest AS (SELECT MAX(id) AS id FROM messages WHERE device = ? GROUP BY convo)
 		SELECT m.`+strings.ReplaceAll(messageCols, ", ", ", m.")+`, (SELECT COUNT(*) FROM messages u WHERE u.device = m.device AND u.convo = m.convo AND u.out = 0
 			AND u.id > COALESCE((SELECT last_read FROM reads r WHERE r.device = m.device AND r.convo = m.convo), 0))
-		FROM messages m WHERE m.device = ? AND m.id = (SELECT MAX(id) FROM messages x WHERE x.device = m.device AND x.convo = m.convo)
+		FROM latest JOIN messages m ON m.id = latest.id
 		ORDER BY m.id DESC`, device)
 	if err != nil {
 		return nil, err
@@ -504,6 +505,26 @@ func (s *Store) Conversations(device string) ([]Summary, error) {
 		}
 		sum.Convo, sum.Last = m.Convo, m
 		out = append(out, sum)
+	}
+	return out, rows.Err()
+}
+
+// UnreadMentioning returns the text of a conversation's unread incoming messages that have an @ in them.
+func (s *Store) UnreadMentioning(device string, c Convo) ([]string, error) {
+	rows, err := s.db.Query(`SELECT text FROM messages WHERE device = ? AND convo = ? AND out = 0
+		AND id > COALESCE((SELECT last_read FROM reads WHERE device = ? AND convo = ?), 0) AND instr(text, '@') > 0`,
+		device, string(c), device, string(c))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			return nil, err
+		}
+		out = append(out, untrusted.Text(t))
 	}
 	return out, rows.Err()
 }

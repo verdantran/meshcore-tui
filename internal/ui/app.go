@@ -357,6 +357,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 	}
+	m.flushChats()
 	if m.linked == linkUp && m.chat != nil {
 		if err := m.chat.Seen(m.now); err != nil {
 			m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)

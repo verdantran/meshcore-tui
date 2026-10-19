@@ -75,7 +75,6 @@ func (m *Model) messagePacket(dec packets.Decoded, raw []byte, snr float32) {
 	if len(m.chats.heard) > heardKeep {
 		m.chats.heard = m.chats.heard[len(m.chats.heard)-heardKeep:]
 	}
-	attached := false
 	for _, c := range m.convosFor(h) {
 		window := channelWindow
 		if h.from >= 0 {
@@ -86,12 +85,9 @@ func (m *Model) messagePacket(dec packets.Decoded, raw []byte, snr float32) {
 			m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 		}
 		if ok {
-			attached = true
-			break
+			m.chatsChanged(c)
+			return
 		}
-	}
-	if attached {
-		m.refreshChats()
 	}
 }
 

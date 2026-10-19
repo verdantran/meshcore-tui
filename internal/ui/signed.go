@@ -172,7 +172,7 @@ func (m *Model) signedSent(r signedSentMsg) tea.Cmd {
 	if err := m.chat.SetSig(r.send.ID, store.SigValid, m.ready.Self.PubKey[:]); err != nil {
 		m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 	}
-	m.refreshChats()
+	m.chatsChanged(sendConvo(r.send))
 	return cmd
 }
 
@@ -356,7 +356,7 @@ func (m *Model) applySig(p *pendingSig) {
 	case sig == store.SigValid && m.pinnedOther(best.Sender, key):
 		m.addLog(m.now, fmt.Sprintf("SIGNATURE  a message as %s in %s was signed by a different key from theirs", best.Sender, name), radio.ToneFail)
 	}
-	m.refreshChats()
+	m.chatsChanged(best.Convo)
 }
 
 func (m *Model) setSig(msg store.Message, idx int, ts uint32, sig store.Sig, key []byte) {

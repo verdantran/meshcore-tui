@@ -2,7 +2,10 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"github.com/charmbracelet/x/ansi"
+	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -10,6 +13,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/verdantran/meshcore-tui/internal/chat"
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/packets"
 	"github.com/verdantran/meshcore-tui/internal/radio"
@@ -452,4 +456,143 @@ func TestMsgRefusesAnAmbiguousName(t *testing.T) {
 	h.keys(":")
 	h.typeLine("msg dan hello")
 	h.until("dan", func() bool { cur, _ := h.m.selectedConvo(); return cur.Title == "Dan" })
+}
+
+// TestChatListKeptInStep: the conversation list, built from what's held rather than read again for every
+// event, keeps its unread counts, mentions, order and filter right, and matches the store on reconnecting.
+func TestChatListKeptInStep(t *testing.T) {
+	h := newHarness(t)
+	h.openConvo("Public")
+	info := func(title string) chat.Info {
+		t.Helper()
+		for _, i := range h.m.chats.infos {
+			if i.Title == title {
+				return i
+			}
+		}
+		t.Fatalf("no conversation %s", title)
+		return chat.Info{}
+	}
+
+	base, total := info("#bristol").Unread, h.m.chats.unread
+	h.say(1, "Carol", "morning @[MeshCore-k4]")
+	h.say(1, "Dan", "hello")
+	if b := info("#bristol"); b.Unread != base+2 || !b.Mention || h.m.chats.unread != total+2 {
+		t.Fatalf("#bristol = %+v, %d unread in all", b, h.m.chats.unread)
+	}
+	h.say(0, "Bob", "in the open one")
+	if p := info("Public"); p.Unread != 0 || h.lastMessage().Text != "in the open one" {
+		t.Fatalf("the open conversation is read as it arrives: %+v", p)
+	}
+
+	alice := h.contact("Alice")
+	h.incoming(radio.Incoming{From: alice.Prefix(), Hops: -1, Text: "first"})
+	h.incoming(radio.Incoming{From: [6]byte{0xEE, 1, 2, 3, 4, 5}, Hops: -1, Text: "stranger"})
+	if n := len(h.m.chats.infos); h.m.chats.infos[n-2].Title != "EE0102030405" || h.m.chats.infos[n-1].Title != "Alice" {
+		t.Fatalf("direct conversations, newest first: %+v", h.m.chats.infos)
+	}
+	before := info("Alice").Unread
+	h.incoming(radio.Incoming{From: alice.Prefix(), Hops: -1, Text: "again"})
+	if n := len(h.m.chats.infos); h.m.chats.infos[n-2].Title != "Alice" || h.m.chats.infos[n-2].Unread != before+1 {
+		t.Fatalf("Alice moves up: %+v", h.m.chats.infos)
+	}
+
+	// An advert that changes nothing listed leaves the list alone; a new name is shown.
+	listed := &h.m.chats.infos[0]
+	for _, ct := range h.m.chat.Contacts() {
+		if ct.Type == radio.TypeRepeater {
+			ct.LastAdvert = h.clk.t
+			h.m.Update(eventMsg{radio.ContactUpdated{Contact: ct}})
+			break
+		}
+	}
+	if &h.m.chats.infos[0] != listed {
+		t.Error("an advert from someone not listed rebuilt the list")
+	}
+	alice.Name = "Alice B"
+	h.m.Update(eventMsg{radio.ContactUpdated{Contact: alice}})
+	info("Alice B")
+
+	// A filter in the open conversation follows what arrives.
+	h.keys("/zz")
+	h.key(tea.KeyEnter)
+	h.say(0, "Bob", "zz top")
+	h.say(0, "Bob", "nothing")
+	if msgs := h.m.chats.msgs; len(msgs) != 1 || msgs[0].Text != "zz top" {
+		t.Fatalf("filtered: %+v", msgs)
+	}
+	h.key(tea.KeyEscape)
+
+	// A signature lands on its message, in the open conversation and in another.
+	zed := newSigner("zed")
+	h.m.contacts.heard = append(h.m.contacts.heard, heardNode{radio.Contact{Key: zed.pub, Name: "Zed"}, h.clk.t})
+	ts := h.say(0, "Zed", "signed here")
+	h.datagram(0, zed.datagram("Public", ts, "signed here"))
+	if m := h.m.chats.msgs[len(h.m.chats.msgs)-1]; m.Sig == store.Unsigned {
+		t.Errorf("the open conversation shows the signature: %+v", m)
+	}
+	ts = h.say(1, "Zed", "signed there")
+	h.datagram(1, zed.datagram("#bristol", ts, "signed there"))
+	if b := info("#bristol"); b.Unread != base+3 || !b.Mention {
+		t.Fatalf("#bristol after a signature = %+v", b)
+	}
+
+	// Reconnecting reads the list afresh, and it's the same.
+	reconnect := func() {
+		r := h.m.ready
+		r.ContactList, r.ChannelList = h.m.chat.Contacts(), h.m.chat.Channels()
+		h.m.Update(eventMsg{r})
+		h.settle()
+	}
+	held := slices.Clone(h.m.chats.infos)
+	reconnect()
+	if !reflect.DeepEqual(held, h.m.chats.infos) {
+		t.Fatalf("after reconnecting\n%+v\nwant\n%+v", h.m.chats.infos, held)
+	}
+	for i := range 50 {
+		h.m.Update(eventMsg{radio.Incoming{At: h.clk.t, SentAt: h.clk.t, Channel: true, ChannelIdx: 1, Queued: true, Text: fmt.Sprintf("Q: %d", i)}})
+	}
+	if b := info("#bristol"); b.Unread != base+53 {
+		t.Fatalf("a burst of queued messages counts: %+v", b)
+	}
+
+	// Reading clears the count and the mention; leaving a channel takes it off the list.
+	h.openConvo("#bristol")
+	if b := info("#bristol"); b.Unread != 0 || b.Mention || h.m.chats.unread != total-base+3 {
+		t.Fatalf("read: %+v, %d unread in all", b, h.m.chats.unread)
+	}
+	h.keys("xy")
+	h.until("left", func() bool { _, ok := h.channel("#bristol"); return !ok })
+	for _, i := range h.m.chats.infos {
+		if i.Convo == store.ChannelConvo(1) {
+			t.Fatal("a channel left is still listed")
+		}
+	}
+	held = slices.Clone(h.m.chats.infos)
+	reconnect()
+	if !reflect.DeepEqual(held, h.m.chats.infos) {
+		t.Fatalf("after leaving and reconnecting\n%+v\nwant\n%+v", h.m.chats.infos, held)
+	}
+}
+
+// BenchmarkIncomingWithHistory is the cost of one channel message arriving with history behind it,
+// which shouldn't grow with the history.
+func BenchmarkIncomingWithHistory(b *testing.B) {
+	h := newHarness(b)
+	st, dev := h.m.opt.Store, h.m.chat.Device()
+	for i := range 20000 {
+		at := h.clk.t.Add(time.Duration(i-20000) * time.Second)
+		m := store.Message{Convo: store.ChannelConvo(i % 3), Sender: "Bob", Text: fmt.Sprint("history ", i), SentAt: at, RecvAt: at}
+		if i%5 == 0 {
+			m.Convo = store.UnknownConvo([6]byte{byte(i % 200), 1})
+		}
+		st.AddMessage(dev, &m)
+	}
+	h.m.Update(eventMsg{h.m.ready})
+	h.settle()
+	h.openConvo("Public")
+	b.ResetTimer()
+	for i := range b.N {
+		h.m.Update(eventMsg{radio.Incoming{At: h.clk.t, SentAt: h.clk.t, Channel: true, ChannelIdx: 1, Text: fmt.Sprint("Bob: ", i)}})
+	}
 }

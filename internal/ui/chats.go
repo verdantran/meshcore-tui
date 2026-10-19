@@ -65,6 +65,9 @@ type chatsModel struct {
 
 	draft store.Convo // a conversation started from Contacts, listed until it's left without a message
 
+	stale     bool // the list needs rebuilding once the message being handled is done with
+	staleOpen bool // and the open conversation reloading
+
 	mention  *mentionCycle // tab completing an @name in the compose box
 	emoji    *emojiPick    // the emoji offered for a :shortcode being typed
 	emojiOff int           // 1 + where a shortcode's list was closed with esc, so it stays closed
@@ -96,12 +99,30 @@ func (m *Model) selectedConvo() (chat.Info, bool) {
 	return c.infos[c.sel], true
 }
 
-// refreshChats reloads the conversation list and the open conversation, marking it read if it's on screen.
-func (m *Model) refreshChats() {
+// refreshChats rebuilds the conversation list and reloads the open conversation, marking it read if it's on screen.
+func (m *Model) refreshChats() { m.rebuildChats(true) }
+
+// chatsChanged notes a change in a conversation, for Update to apply once: the list is rebuilt, and the
+// open conversation reloaded only if it's the one that changed.
+func (m *Model) chatsChanged(cv store.Convo) {
+	m.chats.stale = true
+	if cur, ok := m.selectedConvo(); ok && cur.Convo == cv {
+		m.chats.staleOpen = true
+	}
+}
+
+func (m *Model) flushChats() {
+	if m.chats.stale {
+		m.rebuildChats(m.chats.staleOpen)
+	}
+}
+
+func (m *Model) rebuildChats(reload bool) {
 	if m.chat == nil || m.chat.Device() == "" {
 		return
 	}
 	c := &m.chats
+	c.stale, c.staleOpen = false, false
 	var keep store.Convo
 	if cur, ok := m.selectedConvo(); ok {
 		keep = cur.Convo
@@ -135,15 +156,17 @@ func (m *Model) refreshChats() {
 	}
 	if m.phase == phaseMain && m.visible(0) && cur.Unread > 0 {
 		m.chat.MarkRead(cur.Convo)
-		c.infos[c.sel].Unread = 0
+		c.infos[c.sel].Unread, c.infos[c.sel].Mention = 0, false
 	}
-	if c.filter.text != "" {
+	switch {
+	case !reload && cur.Convo == keep:
+	case c.filter.text != "":
 		found, _ := m.chat.Search(c.filter.text, cur.Convo, historyLen)
 		c.msgs = make([]store.Message, len(found))
 		for i, f := range found {
 			c.msgs[len(found)-1-i] = f // search returns newest first; the pane wants oldest first
 		}
-	} else {
+	default:
 		c.msgs, _ = m.chat.Messages(cur.Convo, historyLen)
 	}
 	c.unread = 0
@@ -208,7 +231,7 @@ func (m *Model) chatEvent(e radio.Event) tea.Cmd {
 			tone = radio.ToneWarn
 		}
 		m.addLog(m.now, fmt.Sprintf("MSG  %s · %s: %s", title, msg.Sender, truncate(msg.Text, 60)), tone)
-		m.refreshChats()
+		m.chatsChanged(msg.Convo)
 		return m.considerNote(msg, title)
 	case radio.ChannelData:
 		m.onChannelData(e)
@@ -219,16 +242,38 @@ func (m *Model) chatEvent(e radio.Event) tea.Cmd {
 		}
 		m.contacts.arrived[e.Contact.Key] = entrance{at: m.now, slide: !known}
 		m.chat.ContactUpdated(e.Contact)
-		m.refreshChats()
+		m.chats.stale = m.chats.stale || m.relists(e.Contact)
 	case radio.Acked:
 		msg, ok, _ := m.chat.Acked(e)
 		if ok {
 			flash(m.chats.acked, msg.ID, m.now, popDur)
 			m.addLog(m.now, fmt.Sprintf("DELIVERED  ✓ %s  %s", m.chat.Title(msg.Convo), seconds(msg.RTT)), radio.ToneOK)
-			m.refreshChats()
+			m.chatsChanged(msg.Convo)
 		}
 	}
 	return nil
+}
+
+// relists reports whether an advert changes how a contact's conversation is listed.
+func (m *Model) relists(ct radio.Contact) bool {
+	cv := store.ContactConvo(ct.Key)
+	if cv == m.chats.draft {
+		return true
+	}
+	for _, info := range m.chats.infos {
+		if info.Convo == cv {
+			return info.Title != ct.Name || (info.Kind == chat.KindRoom) != (ct.Type == radio.TypeRoom)
+		}
+	}
+	return false
+}
+
+// sendConvo is the conversation a send is in.
+func sendConvo(s chat.Send) store.Convo {
+	if s.Channel {
+		return store.ChannelConvo(s.Idx)
+	}
+	return store.ContactConvo(s.To)
 }
 
 func (m *Model) chatResult(r sendResultMsg) tea.Cmd {
@@ -240,7 +285,7 @@ func (m *Model) chatResult(r sendResultMsg) tea.Cmd {
 		flash(m.chats.failed, msg.ID, m.now, glitchDur*3)
 		m.fail(fmt.Sprintf("SEND FAILED  %s: %s", m.chat.Title(msg.Convo), radio.Explain(r.err)))
 	}
-	m.refreshChats()
+	m.chatsChanged(sendConvo(r.send))
 	if wait != nil {
 		return waitCmd(*wait)
 	}
@@ -252,7 +297,9 @@ func (m *Model) chatTimeout(t ackTimeoutMsg) tea.Cmd {
 	if err != nil {
 		m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 	}
-	m.refreshChats()
+	if msg.ID != 0 {
+		m.chatsChanged(msg.Convo)
+	}
 	switch {
 	case next != nil:
 		how := "retrying"
@@ -970,7 +1017,7 @@ func (m *Model) heardEcho(dec packets.Decoded) {
 	}
 	if ok {
 		flash(m.chats.echoed, id, m.now, popDur)
-		m.refreshChats()
+		m.chatsChanged(store.ChannelConvo(ch.Idx))
 	}
 }
 
