@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+env:
+  GH_REPO: ${{ github.repository }}
+  TAG: ${{ github.ref_name }}
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$TAG" --draft --verify-tag --title "$TAG" --generate-notes
+
+  build:
+    needs: draft
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { runs-on: ubuntu-latest, goos: linux, goarch: amd64, cgo: "0", name: linux_amd64 }
+          - { runs-on: ubuntu-latest, goos: linux, goarch: arm64, cgo: "0", name: linux_arm64 }
+          - { runs-on: ubuntu-latest, goos: linux, goarch: arm, goarm: "7", cgo: "0", name: linux_armv7 }
+          - { runs-on: ubuntu-latest, goos: windows, goarch: amd64, cgo: "0", name: windows_amd64 }
+          - { runs-on: ubuntu-latest, goos: windows, goarch: arm64, cgo: "0", name: windows_arm64 }
+          # Listing serial ports on macOS goes through IOKit, so its builds need cgo and a Mac.
+          - { runs-on: macos-latest, goos: darwin, goarch: arm64, cgo: "1", name: macos_arm64 }
+          - { runs-on: macos-latest, goos: darwin, goarch: amd64, cgo: "1", name: macos_amd64 }
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      # The whole history, so Go stamps the binary with the tag it was built from.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: ${{ matrix.cgo }}
+        run: |
+          bin=meshcore-tui
+          [ "$GOOS" = windows ] && bin=meshcore-tui.exe
+          mkdir -p "pkg/meshcore-tui"
+          go build -trimpath -ldflags="-s -w" -o "pkg/meshcore-tui/$bin" ./cmd/meshcore-tui
+          cp LICENSE README.md THIRD_PARTY_NOTICES "pkg/meshcore-tui/"
+      - name: Package and upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd pkg
+          if [ "${{ matrix.goos }}" = windows ]; then
+            out="meshcore-tui_${{ matrix.name }}.zip"
+            zip -qr "$out" meshcore-tui
+          else
+            out="meshcore-tui_${{ matrix.name }}.tar.gz"
+            tar -czf "$out" meshcore-tui
+          fi
+          gh release upload "$TAG" "$out" --clobber
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Add checksums and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir dist && cd dist
+          gh release download "$TAG"
+          sha256sum meshcore-tui_* > SHA256SUMS
+          gh release upload "$TAG" SHA256SUMS --clobber
+          gh release edit "$TAG" --draft=false --latest

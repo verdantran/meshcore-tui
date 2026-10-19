@@ -40,6 +40,37 @@ Any screens can share the view, split side by side or stacked as in tmux: `ctrl+
 
 ## Install
 
+### From a release
+
+Each [release](https://github.com/verdantran/meshcore-tui/releases/latest) has a single binary for each platform, with nothing else to install:
+
+| Platform | File |
+|---|---|
+| macOS, Apple silicon | `meshcore-tui_macos_arm64.tar.gz` |
+| macOS, Intel | `meshcore-tui_macos_amd64.tar.gz` |
+| Linux, x86-64 | `meshcore-tui_linux_amd64.tar.gz` |
+| Linux, 64-bit ARM (Raspberry Pi 3 and later on a 64-bit OS) | `meshcore-tui_linux_arm64.tar.gz` |
+| Linux, 32-bit ARM (Raspberry Pi OS 32-bit) | `meshcore-tui_linux_armv7.tar.gz` |
+| Windows, x86-64 | `meshcore-tui_windows_amd64.zip` |
+| Windows, ARM | `meshcore-tui_windows_arm64.zip` |
+
+On macOS or Linux, download and install one in a single go, picking your file from the table:
+
+```sh
+curl -fsSL https://github.com/verdantran/meshcore-tui/releases/latest/download/meshcore-tui_linux_amd64.tar.gz | tar -xz
+sudo install meshcore-tui/meshcore-tui /usr/local/bin/
+```
+
+Or put it in `~/.local/bin` instead of `/usr/local/bin` to skip `sudo`. On Windows, unzip it and run `meshcore-tui.exe` from Windows Terminal.
+
+To check a download before unpacking it, fetch the archive and `SHA256SUMS` from the release into one folder and run `shasum -a 256 -c SHA256SUMS --ignore-missing`.
+
+The binaries aren't signed. macOS only objects to one downloaded through a browser; if it says the app can't be opened, run `xattr -d com.apple.quarantine meshcore-tui` once. Windows SmartScreen may warn the first time too: **More info**, then **Run anyway**.
+
+On Linux, serial ports belong to a group, usually `dialout` (`uucp` on Arch). If a radio on USB says permission denied, add yourself with `sudo usermod -aG dialout $USER` and log in again.
+
+### From source
+
 You need Go 1.26.9 or later. On a Mac, the build needs cgo for listing serial ports and for Bluetooth, which works out of the box once the Xcode command line tools are installed.
 
 ```sh
@@ -54,7 +85,9 @@ cd meshcore-tui
 go build -trimpath -o meshcore-tui ./cmd/meshcore-tui
 ```
 
-`-trimpath` keeps your own folder names out of the binary. Linux and Windows builds are fully static and can be cross-compiled from anywhere with `CGO_ENABLED=0 GOOS=linux go build -trimpath ./cmd/meshcore-tui`. `meshcore-tui --version` says which version or commit a binary was built from; in the app it shows under the logo, in the help title and on `:version`.
+`-trimpath` keeps your own folder names out of the binary. Linux and Windows builds are fully static and can be cross-compiled from anywhere with `CGO_ENABLED=0 GOOS=linux go build -trimpath ./cmd/meshcore-tui`.
+
+`meshcore-tui --version` says which release or commit a binary was built from; in the app it shows under the logo, in the help title and on `:version`.
 
 ## Connecting
 
