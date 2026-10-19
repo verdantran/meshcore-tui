@@ -25,12 +25,14 @@ auto_connect = ""          # the name of a saved device to connect to at startup
 dm_retries = 3             # attempts at a direct message before it's marked failed
 flood_fallback = true      # make the last attempt by flood, forgetting the stored route
 sign_channels = []         # channels whose messages you send are signed, e.g. ["#announcements"]
+keep_days = 0              # delete messages received more than this many days ago; 0 keeps every message
 
 [notifications]
 events = ["dm", "mention"] # what notifies: direct messages, and mentions of you in channels
 bell = true                # ring the terminal bell
 desktop = "auto"           # auto | terminal | os | bell | off
 show = "message"           # how much reaches the desktop and lock screen: message | sender | nothing
+max_per_minute = 6         # the most notifications in any minute; more are gathered into one summary; 0 is no limit
 
 [admin]
 status_poll_s = 60         # how often a node's status refreshes once auto-refresh is on
@@ -57,7 +59,13 @@ layout = ""                # split panes, e.g. "right 50 (*chats, packets)"; * m
 ascii = false              # plain ASCII for terminals without braille or box drawing
 ```
 
+Over SSH or mosh, motion starts at `reduced`; inside tmux the app asks tmux how you're attached, so a tmux started on the server and attached over SSH counts too. If frames tear inside tmux and your terminal supports synchronized output (iTerm2, kitty, WezTerm, Ghostty, foot, Windows Terminal), tell tmux so with `set -as terminal-features ',xterm*:sync'` (matching your `TERM`), then reattach.
+
 Saved devices are kept as `[[devices]]` entries. They're easiest to manage from the connect screen.
+
+### Message history
+
+`keep_days` is how many days of messages to keep, on every radio. Older ones are deleted when the app connects and once a day while it runs; messages you sent that are still waiting to be delivered never are. `0`, the default, keeps everything. `:history keep 365` or `:history keep all` changes it from inside the app, and asks first if it would delete anything, saying how many.
 
 ### Desktop notifications
 
@@ -67,6 +75,19 @@ Saved devices are kept as `[[devices]]` entries. They're easiest to manage from 
 - **os**: `osascript` on macOS, `notify-send` on Linux, a toast through PowerShell on Windows.
 - **bell**: the terminal bell only.
 - **off**: nothing beyond the in-app toast, which always shows.
+
+`max_per_minute` keeps a busy mesh from ringing all night: past the limit, the toast still shows in the app, and the rest arrive as one "N more messages" once the minute has room.
+
+A muted conversation still keeps its messages and unread count, but never notifies, mentions included. `m` on Chats mutes or unmutes the open one; `:mute 8h` mutes it for a while, and `:mute #bristol` or `:unmute Bob` names one. Mutes are saved in the config:
+
+```toml
+[[notifications.muted]]
+channel = "#bristol"
+until = 2026-10-20T08:00:00Z   # leave out to mute until unmuted
+
+[[notifications.muted]]
+contact = "3AAA01…"            # the contact's public key
+```
 
 `show` decides how much of a message leaves the app, since notifications can appear on a locked screen: `message` shows who it's from and the text, `sender` only who it's from, `nothing` only that there's a new message. The in-app toast always shows the whole message. `:notify show sender` changes it as you go.
 

@@ -6,7 +6,7 @@ meshcore-tui keeps what it needs on your own computer and sends nothing anywhere
 
 | What | Where | For how long |
 |---|---|---|
-| Message history, for channels and direct messages | the data folder's `meshcore-tui.db` | Kept; leaving a channel deletes its history, and removing a contact keeps theirs |
+| Message history, for channels and direct messages | the data folder's `meshcore-tui.db` | For good unless you set `keep_days` (`:history keep <days>`); leaving a channel deletes its history, and removing a contact keeps theirs |
 | Contacts and channels as your radio last reported them | the same database | Replaced each time you connect |
 | Names you've pinned to signing keys | the same database | Until you unpin them |
 | Status history for nodes you watch | the same database | 90 days |

@@ -2,13 +2,15 @@
 
 A terminal client for [MeshCore](https://meshcore.io) radios: chats, contacts, a map of the mesh drawn in braille, a live packet inspector, and remote administration of repeaters and room servers. It connects over USB serial, Bluetooth or WiFi, runs happily over SSH and in tmux, and ships as a single binary.
 
-![Chats](docs/screenshots/chats.png)
+![Moving from Chats to the map and packets, then finding #hilltop with ctrl+k](docs/screenshots/demo.gif)
 
-All the screenshots here come from `--demo`, a simulated mesh with made-up nodes, so you can try the app without a radio. They use the `ice` theme.
+The recording and screenshots here all come from `--demo`, a simulated mesh with made-up nodes, so you can try the app without a radio. They use the `ice` theme.
 
 ## Screens
 
-**1 Chats.** Channels and direct messages, with unread counts, delivery state (sent, heard repeating, delivered), hops and signal on every message, and replies. Incoming DMs and mentions show as toasts, and can ring the bell or raise a desktop notification.
+**1 Chats.** Channels and direct messages, with unread counts, delivery state (sent, heard repeating, delivered), hops and signal on every message, and replies. Incoming DMs and mentions show as toasts, and can ring the bell or raise a desktop notification; `m` mutes a busy conversation.
+
+![Chats](docs/screenshots/chats.png)
 
 **2 Contacts.** Everyone your radio knows, sortable and filterable, with each contact's key, location, route and advert path. From here you can message, trace, discover or set a route, pin a signing key, share a contact as a QR code or link, and import one.
 
@@ -80,7 +82,7 @@ Over Bluetooth, the first connection may ask for the radio's PIN (`123456` on a 
 | `j` `k`, arrows, `g` `G` | Move in lists, and jump to the top or bottom |
 | `enter`, `esc` | Act on the selected row, and back out one level |
 | `/` | Filter |
-| `:` | Command palette: `:msg Bob hello`, `:trace Dundry`, `:channel share #bristol`, `:map update` |
+| `:` or `ctrl+k` | Go anywhere: type part of any screen, chat, contact, repeater, command or theme and press `enter`. Commands run as typed: `:msg Bob hello`, `:trace Dundry`, `:mute 8h` |
 | `ctrl+f` | Search messages |
 | `ctrl+w` then `v` or `s` | Split the screen side by side or stacked, as in tmux |
 | `T` | Cycle themes |
@@ -116,7 +118,7 @@ Each theme is the same thirteen colours, so every screen works in all of them:
 
 `go run ./scripts/swatches` redraws these from the themes themselves.
 
-The app animates every event the radio reports. Motion drops to `reduced` over SSH, and `--motion off` stills it entirely. For terminals without braille or box drawing, `--ascii` redraws everything in plain ASCII and keeps the colours.
+The app animates every event the radio reports. Motion drops to `reduced` over SSH or mosh, tmux attached over SSH included, and `--motion off` stills it entirely. For terminals without braille or box drawing, `--ascii` redraws everything in plain ASCII and keeps the colours.
 
 A truecolor terminal looks best. Ghostty, iTerm2, kitty, WezTerm, Alacritty and Windows Terminal all work. On Windows, the old console host can't draw braille or some symbols, so use Windows Terminal.
 
@@ -125,6 +127,16 @@ A truecolor terminal looks best. Ghostty, iTerm2, kitty, WezTerm, Alacritty and 
 Settings live in `~/.config/meshcore-tui/config.toml`, and data (message history, contacts, watched nodes' status, map detail and exports) in `~/.local/share/meshcore-tui/`, readable only by you. On Windows they're in `%APPDATA%\meshcore-tui\` and `%LOCALAPPDATA%\meshcore-tui\`. Repeater passwords go in the OS keychain, or in `passwords.json` beside the config where there isn't one, and are only ever sent to a radio that has proved it's yours. [docs/privacy.md](docs/privacy.md) says what's kept and for how long.
 
 The file is optional; everything has a default. [docs/configuration.md](docs/configuration.md) covers every setting.
+
+## Built with AI
+
+Most of meshcore-tui was written with Claude, Anthropic's AI model. It's had security and performance reviews, but not an independent audit, so do your own due diligence before relying on it; [AI_DISCLOSURE.md](AI_DISCLOSURE.md) says what was checked and what wasn't.
+
+## Thanks
+
+meshcore-tui stands on [meshcore-go](https://github.com/OwlShack/meshcore-go), OwlShack's Go port of MeshCore. It does the hard part, from the companion protocol and packet decoding to the cryptography, and without all that careful work this app wouldn't exist. Thank you.
+
+Thanks also to the [MeshCore](https://github.com/meshcore-dev/MeshCore) project and everyone running nodes on the mesh.
 
 ## Licence
 
