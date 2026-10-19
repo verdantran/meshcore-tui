@@ -131,6 +131,9 @@ func TestRetriesThenFloodsThenFails(t *testing.T) {
 	if resets[0] || resets[1] || !resets[2] {
 		t.Fatalf("only the last attempt should flood: %v", resets)
 	}
+	if len(s.byAck) != 0 || len(s.waiting) != 0 {
+		t.Fatalf("a failed message's acks are still listened for: %v", s.byAck)
+	}
 }
 
 func TestRetryResendsAFailedMessage(t *testing.T) {
@@ -164,6 +167,9 @@ func TestLateAckForEarlierAttemptStillDelivers(t *testing.T) {
 	}
 	if _, ok, _ := s.Acked(radio.Acked{Ack: 2}); ok {
 		t.Fatal("the second ack should find nothing left to settle")
+	}
+	if len(s.byAck) != 0 {
+		t.Fatalf("acks kept after delivery: %v", s.byAck)
 	}
 }
 

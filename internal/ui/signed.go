@@ -364,8 +364,7 @@ func (m *Model) setSig(msg store.Message, idx int, ts uint32, sig store.Sig, key
 		m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 	}
 	msg.Sig, msg.SigKey = sig, key
-	m.chats.signedMsgs[sigKey(idx, ts)] = msg
-	m.trimSigned()
+	m.keepSigned(sigKey(idx, ts), msg)
 }
 
 // sigArrived tries the signatures held for a channel message's timestamp on it.
@@ -381,8 +380,30 @@ func (m *Model) sigArrived(msg store.Message) {
 	}
 }
 
-func (m *Model) pinOf(name string) (store.Pin, bool) {
-	p, ok := m.pins()[m.names().canonical(name)]
+// judge is what a signature is judged against: who's pinned, and the look-alike index.
+type judge struct {
+	th   theme.Theme
+	now  time.Time
+	pins map[string]store.Pin
+	ix   *nameIndex
+}
+
+func (m *Model) judge() judge { return judge{th: m.th, now: m.now, pins: m.pins(), ix: m.names()} }
+
+// frozenJudge judges as things stand now, from another goroutine: the pins and index it holds are only
+// ever replaced, never changed, and it keeps its own memo of names.
+func (m *Model) frozenJudge() judge {
+	j := m.judge()
+	ix := *j.ix
+	ix.skel, ix.canon = map[string]string{}, map[string]string{}
+	j.ix = &ix
+	return j
+}
+
+func (m *Model) pinOf(name string) (store.Pin, bool) { return m.judge().pinOf(name) }
+
+func (j judge) pinOf(name string) (store.Pin, bool) {
+	p, ok := j.pins[j.ix.canonical(name)]
 	return p, ok
 }
 
@@ -391,13 +412,15 @@ func (m *Model) pinnedOther(name string, key []byte) bool {
 	return ok && !bytes.Equal(p.Key[:], key)
 }
 
+func (m *Model) lookalike(name string) (string, store.Pin, bool) { return m.judge().lookalike(name) }
+
 // lookalike is the pinned name a name could be taken for on screen, other than its own.
-func (m *Model) lookalike(name string) (string, store.Pin, bool) {
-	pins := m.pins()
+func (j judge) lookalike(name string) (string, store.Pin, bool) {
+	pins := j.pins
 	if len(pins) == 0 {
 		return "", store.Pin{}, false
 	}
-	ix := m.names()
+	ix := j.ix
 	canon, like := ix.canonical(name), ""
 	for _, n := range ix.pinned[ix.skeleton(name)] {
 		if n != canon && (like == "" || n < like) {
@@ -407,9 +430,11 @@ func (m *Model) lookalike(name string) (string, store.Pin, bool) {
 	return like, pins[like], like != ""
 }
 
+func (m *Model) namesake(name string, key []byte) string { return m.judge().namesake(name, key) }
+
 // namesake is the name of a contact or heard node that reads like name but has another key, contacts first.
-func (m *Model) namesake(name string, key []byte) string {
-	ix := m.names()
+func (j judge) namesake(name string, key []byte) string {
+	ix := j.ix
 	for _, c := range ix.named[ix.skeleton(name)] {
 		if !bytes.Equal(c.Key[:], key) {
 			return c.Name
@@ -506,17 +531,21 @@ func (m *Model) sigBadge(msg store.Message) string {
 	return m.th.Paint(col, bold, text)
 }
 
-// sigVerdict is what a message's signature shows, and how loudly.
 func (m *Model) sigVerdict(msg store.Message) (string, theme.RGB, bool) {
-	th := m.th
+	return m.judge().verdict(msg)
+}
+
+// verdict is what a message's signature shows, and how loudly.
+func (j judge) verdict(msg store.Message) (string, theme.RGB, bool) {
+	th := j.th
 	if msg.Out {
 		if msg.Sig == store.SigValid {
 			return "✍ signed", th.Green, false
 		}
 		return "", th.Text, false
 	}
-	p, pinned := m.pinOf(msg.Sender)
-	if like, lp, ok := m.lookalike(msg.Sender); !pinned && ok && !(msg.Sig == store.SigValid && bytes.Equal(lp.Key[:], msg.SigKey)) {
+	p, pinned := j.pinOf(msg.Sender)
+	if like, lp, ok := j.lookalike(msg.Sender); !pinned && ok && !(msg.Sig == store.SigValid && bytes.Equal(lp.Key[:], msg.SigKey)) {
 		return "⚠ looks like " + like, th.Red, true
 	}
 	if len(msg.Author) == 4 && pinned && !bytes.HasPrefix(p.Key[:], msg.Author) {
@@ -526,10 +555,10 @@ func (m *Model) sigVerdict(msg store.Message) (string, theme.RGB, bool) {
 	case store.SigValid:
 		switch {
 		case !pinned:
-			if owner := m.keyOwner(msg.SigKey); owner != "" && m.names().canonical(owner) != m.names().canonical(msg.Sender) {
+			if owner := j.keyOwner(msg.SigKey); owner != "" && j.ix.canonical(owner) != j.ix.canonical(msg.Sender) {
 				return "⚠ signed with " + owner + "'s key", th.Red, true
 			}
-			if other := m.namesake(msg.Sender, msg.SigKey); other != "" {
+			if other := j.namesake(msg.Sender, msg.SigKey); other != "" {
 				return "⚠ another " + other + " has a different key", th.Red, true
 			}
 			return "signed · not pinned", th.Yellow, false
@@ -547,7 +576,7 @@ func (m *Model) sigVerdict(msg store.Message) (string, theme.RGB, bool) {
 	case store.SigStale:
 		return "⚠ old signature", th.Red, true
 	}
-	if pinned && msg.Convo.IsChannel() && msg.RecvAt.After(p.At) && m.now.Sub(msg.RecvAt) > sigWait {
+	if pinned && msg.Convo.IsChannel() && msg.RecvAt.After(p.At) && j.now.Sub(msg.RecvAt) > sigWait {
 		return "⚠ unsigned · " + msg.Sender + " usually signs", th.Red, true
 	}
 	return "", th.Text, false
@@ -584,12 +613,14 @@ func (m *Model) roomAuthor(msg store.Message) string {
 	return out
 }
 
+func (m *Model) keyOwner(key []byte) string { return m.judge().keyOwner(key) }
+
 // keyOwner is the name of the contact or heard node with a key, if any.
-func (m *Model) keyOwner(key []byte) string {
+func (j judge) keyOwner(key []byte) string {
 	if len(key) != 32 {
 		return ""
 	}
-	return m.names().owner[[32]byte(key)]
+	return j.ix.owner[[32]byte(key)]
 }
 
 // pinPicked pins the key a picked message was signed with to its sender's name. Replacing a pin is a

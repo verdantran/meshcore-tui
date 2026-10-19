@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -54,6 +55,7 @@ type chatsModel struct {
 	names    nameIndex
 
 	signedMsgs map[string]store.Message // the message each signature heard was for, by channel and timestamp
+	signedAge  []string                 // signedMsgs' keys, oldest first; some may have gone
 	queued     map[int64]time.Time      // channel messages the radio held while the app was away, while their signature may come
 	usedSigs   map[[64]byte]usedSig     // valid signatures lately, against replays
 
@@ -583,15 +585,19 @@ func flash(marks map[int64]time.Time, id int64, now time.Time, d time.Duration) 
 
 const maxSignedMsgs = 2000
 
-// trimSigned forgets which message old signatures were for, once there are many.
-func (m *Model) trimSigned() {
-	if len(m.chats.signedMsgs) <= maxSignedMsgs {
-		return
+// keepSigned notes which message a signature was for, forgetting the oldest once there are many.
+func (m *Model) keepSigned(k string, msg store.Message) {
+	c := &m.chats
+	if _, ok := c.signedMsgs[k]; !ok {
+		c.signedAge = append(c.signedAge, k)
 	}
-	for k, msg := range m.chats.signedMsgs {
-		if m.now.Sub(msg.RecvAt) > time.Hour {
-			delete(m.chats.signedMsgs, k)
-		}
+	c.signedMsgs[k] = msg
+	for len(c.signedMsgs) > maxSignedMsgs {
+		delete(c.signedMsgs, c.signedAge[0])
+		c.signedAge = c.signedAge[1:]
+	}
+	if len(c.signedAge) > 2*maxSignedMsgs {
+		c.signedAge = slices.DeleteFunc(c.signedAge, func(k string) bool { _, ok := c.signedMsgs[k]; return !ok })
 	}
 }
 

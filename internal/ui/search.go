@@ -1,12 +1,16 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/verdantran/meshcore-tui/internal/chat"
 	"github.com/verdantran/meshcore-tui/internal/config"
@@ -22,40 +26,109 @@ type searchModel struct {
 	query   lineEdit
 	results []store.Message
 	sel     int
+
+	gen     int  // counts edits to the query, so results for an older one are dropped
+	shown   int  // the gen the results are for
+	jump    bool // enter was pressed before the results came, so open the first when they do
+	stopOld context.CancelFunc
+}
+
+// searchDelay is how long typing pauses before the search runs.
+var searchDelay = 150 * time.Millisecond
+
+type searchDueMsg struct{ gen int }
+
+type searchDoneMsg struct {
+	gen     int
+	results []store.Message
 }
 
 func (m *Model) openSearch() {
+	m.closeSearch()
 	m.search = searchModel{open: true}
 }
 
-func (m *Model) runSearch() {
-	s := &m.search
-	s.results, s.sel = nil, 0
-	if m.chat != nil && strings.TrimSpace(s.query.text) != "" {
-		s.results, _ = m.chat.Search(s.query.text, "", 200)
+func (m *Model) closeSearch() {
+	if m.search.stopOld != nil {
+		m.search.stopOld()
 	}
+	m.search.open, m.search.stopOld = false, nil
 }
 
-func (m *Model) searchKey(k string) {
+// searchEdited waits for typing to pause before searching for the new query.
+func (m *Model) searchEdited() tea.Cmd {
+	s := &m.search
+	s.gen++
+	if m.chat == nil || strings.TrimSpace(s.query.text) == "" {
+		if s.stopOld != nil {
+			s.stopOld()
+		}
+		s.results, s.sel, s.shown, s.stopOld = nil, 0, s.gen, nil
+		return nil
+	}
+	gen := s.gen
+	return tea.Tick(searchDelay, func(time.Time) tea.Msg { return searchDueMsg{gen} })
+}
+
+// searchMsg runs the search off the UI goroutine once typing has paused, and takes its results.
+func (m *Model) searchMsg(msg tea.Msg) tea.Cmd {
+	s := &m.search
+	switch msg := msg.(type) {
+	case searchDueMsg:
+		if !s.open || msg.gen != s.gen || m.chat == nil {
+			return nil
+		}
+		if s.stopOld != nil {
+			s.stopOld()
+		}
+		ctx, stop := context.WithCancel(context.Background())
+		s.stopOld = stop
+		find, gen := m.chat.SearchLater(s.query.text, "", 200), msg.gen
+		return func() tea.Msg {
+			found, _ := find(ctx)
+			return searchDoneMsg{gen, found}
+		}
+	case searchDoneMsg:
+		if !s.open || msg.gen != s.gen {
+			return nil
+		}
+		s.results, s.sel, s.shown = msg.results, 0, msg.gen
+		if s.jump {
+			s.jump = false
+			if len(s.results) > 0 {
+				m.jumpTo(s.results[0])
+			}
+			m.closeSearch()
+		}
+	}
+	return nil
+}
+
+func (m *Model) searchKey(k string) tea.Cmd {
 	s := &m.search
 	switch k {
 	case "esc":
-		s.open = false
+		m.closeSearch()
 	case "up":
 		s.sel = max(s.sel-1, 0)
 	case "down":
 		s.sel = min(s.sel+1, max(len(s.results)-1, 0))
 	case "enter":
+		if s.shown != s.gen {
+			s.jump = true
+			return nil
+		}
 		if s.sel < len(s.results) {
 			m.jumpTo(s.results[s.sel])
 		}
-		s.open = false
+		m.closeSearch()
 	default:
 		before := s.query.text
 		if s.query.key(k) && s.query.text != before {
-			m.runSearch()
+			return m.searchEdited()
 		}
 	}
+	return nil
 }
 
 // jumpTo opens a message's conversation and scrolls it into view.
@@ -179,12 +252,20 @@ func fileName(name string) string {
 }
 
 // exportVerdict is a message's signature badge for an export, which has no colour to say a tick is a pin.
-func (m *Model) exportVerdict(msg store.Message) string {
-	v, _, _ := m.sigVerdict(msg)
-	if v == "✓ signed" {
-		return "✓ signed by the pinned key"
+func exportVerdict(j judge) func(store.Message) string {
+	return func(msg store.Message) string {
+		v, _, _ := j.verdict(msg)
+		if v == "✓ signed" {
+			return "✓ signed by the pinned key"
+		}
+		return v
 	}
-	return v
+}
+
+type exportDoneMsg struct {
+	n    int
+	path string
+	err  error
 }
 
 // createExport makes a file in the exports folder that only you can read.
@@ -239,17 +320,25 @@ func exportCommand() command {
 			if err != nil {
 				return err
 			}
-			n, err := m.chat.Export(f, c, asJSON, m.exportVerdict)
-			if cerr := f.Close(); err == nil {
-				err = cerr
+			export := m.chat.ExportLater(c, asJSON, exportVerdict(m.frozenJudge()))
+			m.queued = func() tea.Msg {
+				n, err := export(f)
+				if cerr := f.Close(); err == nil {
+					err = cerr
+				}
+				return exportDoneMsg{n, path, err}
 			}
-			if err != nil {
-				return err
-			}
-			m.addLog(m.now, fmt.Sprintf("EXPORTED  %d messages → %s", n, path), radio.ToneOK)
 			return nil
 		},
 		complete: func(*Model) []string { return []string{"json", "all", "packets"} }}
+}
+
+func (m *Model) exportDone(msg exportDoneMsg) {
+	if msg.err != nil {
+		m.fail("EXPORT  " + msg.err.Error())
+		return
+	}
+	m.addLog(m.now, fmt.Sprintf("EXPORTED  %d messages → %s", msg.n, msg.path), radio.ToneOK)
 }
 
 // mentionLabel shows @[name] as @name; the brackets are only there so names can hold spaces.

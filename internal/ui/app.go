@@ -333,6 +333,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.channelsMsg(msg))
 	case mapLoadedMsg, detailFetchedMsg:
 		cmds = append(cmds, m.mapMsg(msg))
+	case searchDueMsg, searchDoneMsg:
+		cmds = append(cmds, m.searchMsg(msg))
+	case exportDoneMsg:
+		m.exportDone(msg)
 	case sendResultMsg:
 		cmds = append(cmds, m.chatResult(msg))
 	case signedSentMsg:
@@ -578,8 +582,7 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 		return nil, false
 	}
 	if m.search.open {
-		m.searchKey(s)
-		return nil, false
+		return m.searchKey(s), false
 	}
 	if m.paneKey {
 		m.paneKey = false

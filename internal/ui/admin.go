@@ -95,6 +95,7 @@ type adminModel struct {
 	visited  map[[32]byte]map[adminPane]bool
 
 	kept       map[[32]byte][]admin.StatusPoint // watched nodes' status, from the store
+	measured   map[healthKey]healthMemo         // kept status measured for the charts, while it stays the same
 	week       bool                             // the health charts show seven days instead of one
 	picking    bool                             // a cursor is on the health charts, at bucket pick
 	pick       int                              // -1 until placed, on the newest poll
@@ -107,7 +108,7 @@ type adminModel struct {
 
 func newAdmin() adminModel {
 	return adminModel{auto: map[[32]byte]bool{}, resultAt: map[[32]byte]time.Time{}, visited: map[[32]byte]map[adminPane]bool{},
-		saving: map[[32]byte]string{}, kept: map[[32]byte][]admin.StatusPoint{}, lastTry: map[[32]byte]time.Time{},
+		saving: map[[32]byte]string{}, kept: map[[32]byte][]admin.StatusPoint{}, measured: map[healthKey]healthMemo{}, lastTry: map[[32]byte]time.Time{},
 		noPassword: map[[32]byte]string{}, background: map[int]bool{}}
 }
 

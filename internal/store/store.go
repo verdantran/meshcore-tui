@@ -2,6 +2,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -101,6 +102,8 @@ CREATE TABLE IF NOT EXISTS messages (
 	sig INTEGER NOT NULL DEFAULT 0, sig_key BLOB, author BLOB);
 CREATE INDEX IF NOT EXISTS messages_convo ON messages (device, convo, id);
 CREATE INDEX IF NOT EXISTS messages_sent ON messages (device, convo, sent_at);
+CREATE INDEX IF NOT EXISTS messages_recv ON messages (device, recv_at);
+CREATE INDEX IF NOT EXISTS messages_unfinished ON messages (device) WHERE out = 1 AND state IN (1, 2);
 CREATE TABLE IF NOT EXISTS seen (
 	device TEXT PRIMARY KEY, at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS reads (
@@ -109,7 +112,7 @@ CREATE TABLE IF NOT EXISTS reads (
 CREATE TABLE IF NOT EXISTS pins (
 	name TEXT PRIMARY KEY, key BLOB NOT NULL, at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS node_status (
-	node TEXT NOT NULL, at INTEGER NOT NULL, room INTEGER NOT NULL, data BLOB NOT NULL);
+	node BLOB NOT NULL, at INTEGER NOT NULL, room INTEGER NOT NULL, data BLOB NOT NULL);
 CREATE INDEX IF NOT EXISTS node_status_at ON node_status (node, at);
 `
 
@@ -144,7 +147,7 @@ func Open(path string) (*Store, error) {
 			return nil, err
 		}
 	}
-	db, err := sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(3000)")
+	db, err := sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(3000)&_pragma=synchronous(NORMAL)")
 	if err != nil {
 		return nil, err
 	}
@@ -157,12 +160,18 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{db: db}, nil
+	s := &Store{db: db}
+	if err := s.PruneStatus(time.Now()); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return s, nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
 
-// migrate adds columns that databases made by earlier versions don't have.
+// migrate brings a database made by an earlier version up to the schema: columns it doesn't have, and
+// status history keyed by the node's key rather than its hex.
 func migrate(db *sql.DB) error {
 	for _, col := range []struct{ name, def string }{
 		{"repeats", "INTEGER NOT NULL DEFAULT 0"},
@@ -182,7 +191,30 @@ func migrate(db *sql.DB) error {
 			}
 		}
 	}
-	return nil
+	var hexKeys int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('node_status') WHERE name = 'node' AND type = 'TEXT'`).Scan(&hexKeys); err != nil {
+		return err
+	}
+	if hexKeys == 0 {
+		return nil
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, q := range []string{
+		`CREATE TABLE node_status_bytes (node BLOB NOT NULL, at INTEGER NOT NULL, room INTEGER NOT NULL, data BLOB NOT NULL)`,
+		`INSERT INTO node_status_bytes SELECT unhex(node), at, room, data FROM node_status WHERE length(node) = 64 AND unhex(node) IS NOT NULL ORDER BY rowid`,
+		`DROP TABLE node_status`,
+		`ALTER TABLE node_status_bytes RENAME TO node_status`,
+		`CREATE INDEX node_status_at ON node_status (node, at)`,
+	} {
+		if _, err := tx.Exec(q); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func b2i(b bool) int {
@@ -344,7 +376,7 @@ func (s *Store) Seen(device string, at time.Time) error {
 // last said so and the last message it kept. Zero if never.
 func (s *Store) LastSeen(device string) (time.Time, error) {
 	var at sql.NullInt64
-	err := s.db.QueryRow(`SELECT MAX(at) FROM (SELECT at FROM seen WHERE device = ? UNION ALL SELECT MAX(recv_at) FROM messages WHERE device = ?)`, device, device).Scan(&at)
+	err := s.db.QueryRow(`SELECT MAX(at) FROM (SELECT at FROM seen WHERE device = ? UNION ALL SELECT MAX(recv_at) FROM messages INDEXED BY messages_recv WHERE device = ?)`, device, device).Scan(&at)
 	if err != nil || !at.Valid {
 		return time.Time{}, err
 	}
@@ -436,7 +468,7 @@ func (s *Store) SetPath(id int64, path []byte, hashSize int) error {
 // Unrouted finds the newest received message in a conversation since a time whose path isn't known yet,
 // from a sender and with a text when those are given.
 func (s *Store) Unrouted(device string, c Convo, sender, text string, since time.Time) (Message, bool, error) {
-	q := `SELECT ` + messageCols + ` FROM messages WHERE device = ? AND convo = ? AND out = 0 AND path_hash = 0 AND recv_at >= ?`
+	q := `SELECT ` + messageCols + ` FROM messages INDEXED BY messages_recv WHERE device = ? AND convo = ? AND out = 0 AND path_hash = 0 AND recv_at >= ?`
 	args := []any{device, string(c), since.UnixMilli()}
 	if sender != "" {
 		q, args = q+` AND sender = ?`, append(args, sender)
@@ -481,7 +513,8 @@ func (s *Store) Messages(device string, c Convo, limit int) ([]Message, error) {
 
 // Unfinished lists outgoing messages still waiting on the radio or an ack, e.g. after a restart.
 func (s *Store) Unfinished(device string) ([]Message, error) {
-	return s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? AND out = 1 AND state IN (?, ?) ORDER BY id`, device, int(Pending), int(Sent))
+	// The states are written out, as Pending and Sent, so the query can use messages_unfinished.
+	return s.queryMessages(`SELECT `+messageCols+` FROM messages INDEXED BY messages_unfinished WHERE device = ? AND out = 1 AND state IN (1, 2) ORDER BY id`, device)
 }
 
 // Conversations summarises every conversation with messages: the latest one and the unread count.
@@ -551,7 +584,11 @@ func (s *Store) MarkRead(device string, c Convo) error {
 }
 
 func (s *Store) queryMessages(query string, args ...any) ([]Message, error) {
-	rows, err := s.db.Query(query, args...)
+	return s.queryMessagesContext(context.Background(), query, args...)
+}
+
+func (s *Store) queryMessagesContext(ctx context.Context, query string, args ...any) ([]Message, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -574,23 +611,67 @@ func likePattern(q string) string {
 
 // Search finds messages whose text or sender contains q, newest first. An empty convo searches everything.
 func (s *Store) Search(device, q string, c Convo, limit int) ([]Message, error) {
+	return s.SearchContext(context.Background(), device, q, c, limit)
+}
+
+// SearchContext is Search, given up when ctx is done. Both queries walk ids from the newest down, so they
+// stop once they have limit matches rather than sorting every match first.
+func (s *Store) SearchContext(ctx context.Context, device, q string, c Convo, limit int) ([]Message, error) {
 	if strings.TrimSpace(q) == "" {
 		return nil, nil
 	}
 	if c == "" {
-		return s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? AND (text LIKE ? ESCAPE '\' OR sender LIKE ? ESCAPE '\') ORDER BY id DESC LIMIT ?`,
+		return s.queryMessagesContext(ctx, `SELECT `+messageCols+` FROM messages NOT INDEXED WHERE device = ? AND (text LIKE ? ESCAPE '\' OR sender LIKE ? ESCAPE '\') ORDER BY id DESC LIMIT ?`,
 			device, likePattern(q), likePattern(q), limit)
 	}
-	return s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? AND convo = ? AND (text LIKE ? ESCAPE '\' OR sender LIKE ? ESCAPE '\') ORDER BY id DESC LIMIT ?`,
+	return s.queryMessagesContext(ctx, `SELECT `+messageCols+` FROM messages INDEXED BY messages_convo WHERE device = ? AND convo = ? AND (text LIKE ? ESCAPE '\' OR sender LIKE ? ESCAPE '\') ORDER BY id DESC LIMIT ?`,
 		device, string(c), likePattern(q), likePattern(q), limit)
 }
 
 // All returns every message in a conversation, or in all of them when convo is empty, oldest first.
 func (s *Store) All(device string, c Convo) ([]Message, error) {
-	if c == "" {
-		return s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? ORDER BY convo, id`, device)
+	var out []Message
+	err := s.Each(context.Background(), device, c, func(m Message) error {
+		out = append(out, m)
+		return nil
+	})
+	return out, err
+}
+
+// eachBatch is how many messages Each reads at a time; between batches the connection is free for others.
+const eachBatch = 1000
+
+// Each calls fn for every message in a conversation, or in all of them by conversation when convo is
+// empty, oldest first, reading them a batch at a time.
+func (s *Store) Each(ctx context.Context, device string, c Convo, fn func(Message) error) error {
+	var after Message
+	for {
+		var batch []Message
+		var err error
+		switch {
+		case c != "":
+			batch, err = s.queryMessagesContext(ctx, `SELECT `+messageCols+` FROM messages WHERE device = ? AND convo = ? AND id > ? ORDER BY id LIMIT ?`,
+				device, string(c), after.ID, eachBatch)
+		case after.ID == 0:
+			batch, err = s.queryMessagesContext(ctx, `SELECT `+messageCols+` FROM messages INDEXED BY messages_convo WHERE device = ? ORDER BY convo, id LIMIT ?`,
+				device, eachBatch)
+		default:
+			batch, err = s.queryMessagesContext(ctx, `SELECT `+messageCols+` FROM messages INDEXED BY messages_convo WHERE device = ? AND (convo, id) > (?, ?) ORDER BY convo, id LIMIT ?`,
+				device, string(after.Convo), after.ID, eachBatch)
+		}
+		if err != nil {
+			return err
+		}
+		for _, m := range batch {
+			if err := fn(m); err != nil {
+				return err
+			}
+		}
+		if len(batch) < eachBatch {
+			return nil
+		}
+		after = batch[len(batch)-1]
 	}
-	return s.queryMessages(`SELECT `+messageCols+` FROM messages WHERE device = ? AND convo = ? ORDER BY id`, device, string(c))
 }
 
 // Unread returns the incoming messages in a conversation that haven't been read yet.
@@ -612,16 +693,26 @@ const statusKeep = 90 * 24 * time.Hour
 
 // AddStatus keeps a status reply. Status history belongs to the node, not to the radio that asked.
 func (s *Store) AddStatus(node [32]byte, r StatusRow) error {
-	if _, err := s.db.Exec(`INSERT INTO node_status VALUES (?,?,?,?)`, radio.KeyHex(node[:]), r.At.UnixMilli(), b2i(r.Room), r.Data); err != nil {
+	if _, err := s.db.Exec(`INSERT INTO node_status VALUES (?,?,?,?)`, node[:], r.At.UnixMilli(), b2i(r.Room), r.Data); err != nil {
 		return err
 	}
-	_, err := s.db.Exec(`DELETE FROM node_status WHERE at < ?`, r.At.Add(-statusKeep).UnixMilli())
+	_, err := s.db.Exec(`DELETE FROM node_status WHERE node = ? AND at < ?`, node[:], r.At.Add(-statusKeep).UnixMilli())
+	return err
+}
+
+// PruneStatus drops every node's status history older than statusKeep, including nodes no longer polled.
+// It visits the nodes through the index, so it costs little however much history there is.
+func (s *Store) PruneStatus(now time.Time) error {
+	_, err := s.db.Exec(`WITH RECURSIVE nodes(n) AS (
+			SELECT MIN(node) FROM node_status
+			UNION ALL SELECT (SELECT MIN(node) FROM node_status WHERE node > n) FROM nodes WHERE n IS NOT NULL)
+		DELETE FROM node_status WHERE node IN (SELECT n FROM nodes WHERE n IS NOT NULL) AND at < ?`, now.Add(-statusKeep).UnixMilli())
 	return err
 }
 
 // Status returns a node's status history since a time, oldest first.
 func (s *Store) Status(node [32]byte, since time.Time) ([]StatusRow, error) {
-	rows, err := s.db.Query(`SELECT at, room, data FROM node_status WHERE node = ? AND at >= ? ORDER BY at`, radio.KeyHex(node[:]), since.UnixMilli())
+	rows, err := s.db.Query(`SELECT at, room, data FROM node_status WHERE node = ? AND at >= ? ORDER BY at`, node[:], since.UnixMilli())
 	if err != nil {
 		return nil, err
 	}
@@ -642,6 +733,6 @@ func (s *Store) Status(node [32]byte, since time.Time) ([]StatusRow, error) {
 
 // ClearStatus deletes a node's status history.
 func (s *Store) ClearStatus(node [32]byte) error {
-	_, err := s.db.Exec(`DELETE FROM node_status WHERE node = ?`, radio.KeyHex(node[:]))
+	_, err := s.db.Exec(`DELETE FROM node_status WHERE node = ?`, node[:])
 	return err
 }

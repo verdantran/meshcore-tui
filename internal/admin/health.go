@@ -186,3 +186,25 @@ func HealthOf(points []StatusPoint, from, to time.Time, n int) Health {
 	}
 	return h
 }
+
+// Steady is how far from and to can both move on before HealthOf over them gives anything different: until
+// a poll in the window crosses into another bucket, or leaves it, or a later one comes into it.
+func Steady(points []StatusPoint, from, to time.Time, n int) time.Duration {
+	n = max(n, 1)
+	width := to.Sub(from) / time.Duration(n)
+	if width <= 0 {
+		return 0
+	}
+	steady := time.Duration(math.MaxInt64)
+	for _, p := range points {
+		switch {
+		case p.At.After(to):
+			steady = min(steady, p.At.Sub(to)-1)
+		case !p.At.Before(from):
+			o := p.At.Sub(from)
+			k := min(o/width, time.Duration(n-1))
+			steady = min(steady, o-k*width)
+		}
+	}
+	return steady
+}

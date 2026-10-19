@@ -345,13 +345,16 @@ func TestSmallTablesAreTrimmed(t *testing.T) {
 	}
 
 	h := newHarness(t)
-	old := h.m.now.Add(-2 * time.Hour)
-	for i := range maxSignedMsgs + 10 {
-		h.m.chats.signedMsgs[fmt.Sprint(i)] = store.Message{RecvAt: old}
+	for i := range 4 * maxSignedMsgs {
+		h.m.keepSigned(sigKey(0, uint32(i)), store.Message{RecvAt: h.m.now})
+		if i == maxSignedMsgs/2 {
+			h.m.forgetSigs(0)
+		}
 	}
-	h.m.trimSigned()
-	if len(h.m.chats.signedMsgs) != 0 {
-		t.Errorf("old signatures kept: %d", len(h.m.chats.signedMsgs))
+	_, newest := h.m.chats.signedMsgs[sigKey(0, 4*maxSignedMsgs-1)]
+	_, oldest := h.m.chats.signedMsgs[sigKey(0, 3*maxSignedMsgs-1)]
+	if len(h.m.chats.signedMsgs) != maxSignedMsgs || !newest || oldest || len(h.m.chats.signedAge) > 2*maxSignedMsgs {
+		t.Errorf("signatures kept: %d, their ages %d", len(h.m.chats.signedMsgs), len(h.m.chats.signedAge))
 	}
 }
 

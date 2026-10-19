@@ -4,7 +4,9 @@
 package chat
 
 import (
+	"bufio"
 	"cmp"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -60,6 +62,7 @@ type outgoing struct {
 	msg     store.Message
 	to      [32]byte
 	attempt int
+	acks    []uint32 // every attempt's, since an earlier attempt's ack may still come
 }
 
 type Service struct {
@@ -386,11 +389,12 @@ func (s *Service) Result(sd Send, sent radio.Sent, err error) (store.Message, *W
 	o.msg.Attempts = sd.Attempt + 1
 	if err != nil {
 		o.msg.State = store.Failed
-		delete(s.waiting, sd.ID)
+		s.settle(sd.ID)
 		return o.msg, nil, s.deliver(o.msg)
 	}
 	o.msg.State, o.msg.Ack, o.msg.Flood = store.Sent, sent.Ack, sent.Flood
 	s.byAck[sent.Ack] = sd.ID
+	o.acks = append(o.acks, sent.Ack)
 	wait := sent.Timeout
 	if wait <= 0 {
 		wait = defaultAckWait
@@ -404,14 +408,26 @@ func (s *Service) Acked(a radio.Acked) (store.Message, bool, error) {
 	if !ok {
 		return store.Message{}, false, nil
 	}
-	delete(s.byAck, a.Ack)
 	o, ok := s.waiting[id]
 	if !ok {
+		delete(s.byAck, a.Ack)
 		return store.Message{}, false, nil
 	}
-	delete(s.waiting, id)
+	s.settle(id)
 	o.msg.State, o.msg.RTT = store.Delivered, a.RTT
 	return o.msg, true, s.deliver(o.msg)
+}
+
+// settle stops waiting on a message, and on the acks of all its attempts.
+func (s *Service) settle(id int64) {
+	if o, ok := s.waiting[id]; ok {
+		for _, a := range o.acks {
+			if s.byAck[a] == id {
+				delete(s.byAck, a)
+			}
+		}
+	}
+	delete(s.waiting, id)
 }
 
 // Timeout runs when an ack didn't arrive in time: retry, flooding on the last attempt if allowed, or give up.
@@ -423,7 +439,7 @@ func (s *Service) Timeout(w Wait) (store.Message, *Send, error) {
 	next := w.Attempt + 1
 	if next >= s.retries {
 		o.msg.State = store.Failed
-		delete(s.waiting, w.ID)
+		s.settle(w.ID)
 		return o.msg, nil, s.deliver(o.msg)
 	}
 	o.attempt = next
@@ -619,6 +635,12 @@ func (s *Service) Search(q string, c store.Convo, limit int) ([]store.Message, e
 	return s.store.Search(s.device, q, c, limit)
 }
 
+// SearchLater is Search to run off the UI goroutine, given up when its context is done.
+func (s *Service) SearchLater(q string, c store.Convo, limit int) func(context.Context) ([]store.Message, error) {
+	st, device := s.store, s.device
+	return func(ctx context.Context) ([]store.Message, error) { return st.SearchContext(ctx, device, q, c, limit) }
+}
+
 type exported struct {
 	Conversation string    `json:"conversation"`
 	From         string    `json:"from"`
@@ -658,39 +680,31 @@ var stateNames = map[store.State]string{store.Received: "", store.Pending: "pend
 // Export writes a conversation, or every conversation when c is empty, as text or JSON. It returns the count.
 // verdict, if given, says what a channel message's signature means; text is one line per message.
 func (s *Service) Export(w io.Writer, c store.Convo, asJSON bool, verdict func(store.Message) string) (int, error) {
-	ms, err := s.store.All(s.device, c)
-	if err != nil {
-		return 0, err
-	}
-	if asJSON {
-		out := make([]exported, 0, len(ms))
-		for _, m := range ms {
-			e := exported{Conversation: s.Title(m.Convo), From: m.Sender, Outgoing: m.Out, Text: m.Text,
-				Sent: m.SentAt, Received: m.RecvAt, Status: stateNames[m.State], RoundTripMS: m.RTT.Milliseconds()}
-			if m.Convo.IsChannel() {
-				e.Signature, e.SignerKey, e.Verdict = sigNames[m.Sig], hex.EncodeToString(m.SigKey), sigText(m, verdict)
-			}
-			if !m.Out {
-				hops := m.Hops
-				e.Hops = &hops
-				if m.HasSNR {
-					snr := m.SNR
-					e.SNR = &snr
-				}
-			}
-			out = append(out, e)
+	bw := bufio.NewWriter(w)
+	titles := map[store.Convo]string{}
+	title := func(c store.Convo) string {
+		t, ok := titles[c]
+		if !ok {
+			t = s.Title(c)
+			titles[c] = t
 		}
-		enc := json.NewEncoder(w)
-		enc.SetIndent("", "  ")
-		return len(ms), enc.Encode(out)
+		return t
 	}
+	n := 0
 	var last store.Convo
-	for _, m := range ms {
+	if asJSON {
+		bw.WriteString("[")
+	}
+	err := s.store.Each(context.Background(), s.device, c, func(m store.Message) error {
+		n++
+		if asJSON {
+			return exportJSON(bw, m, title(m.Convo), verdict, n == 1)
+		}
 		if m.Convo != last {
 			if last != "" {
-				fmt.Fprintln(w)
+				fmt.Fprintln(bw)
 			}
-			fmt.Fprintf(w, "# %s\n\n", untrusted.Line(s.Title(m.Convo)))
+			fmt.Fprintf(bw, "# %s\n\n", untrusted.Line(title(m.Convo)))
 			last = m.Convo
 		}
 		detail := ""
@@ -708,9 +722,53 @@ func (s *Service) Export(w io.Writer, c store.Convo, asJSON bool, verdict func(s
 			detail += "  [" + v + "]"
 		}
 		text := untrusted.Line(strings.ReplaceAll(untrusted.Text(m.Text), "\n", " ⏎ "))
-		fmt.Fprintf(w, "[%s] %s: %s%s\n", m.RecvAt.Local().Format("2006-01-02 15:04:05"), untrusted.Line(m.Sender), text, detail)
+		_, err := fmt.Fprintf(bw, "[%s] %s: %s%s\n", m.RecvAt.Local().Format("2006-01-02 15:04:05"), untrusted.Line(m.Sender), text, detail)
+		return err
+	})
+	if err != nil {
+		return n, err
 	}
-	return len(ms), nil
+	switch {
+	case asJSON && n == 0:
+		bw.WriteString("]\n")
+	case asJSON:
+		bw.WriteString("\n]\n")
+	}
+	return n, bw.Flush()
+}
+
+// exportJSON writes one message of a JSON export, laid out as encoding/json indents an array.
+func exportJSON(w *bufio.Writer, m store.Message, title string, verdict func(store.Message) string, first bool) error {
+	e := exported{Conversation: title, From: m.Sender, Outgoing: m.Out, Text: m.Text,
+		Sent: m.SentAt, Received: m.RecvAt, Status: stateNames[m.State], RoundTripMS: m.RTT.Milliseconds()}
+	if m.Convo.IsChannel() {
+		e.Signature, e.SignerKey, e.Verdict = sigNames[m.Sig], hex.EncodeToString(m.SigKey), sigText(m, verdict)
+	}
+	if !m.Out {
+		hops := m.Hops
+		e.Hops = &hops
+		if m.HasSNR {
+			snr := m.SNR
+			e.SNR = &snr
+		}
+	}
+	b, err := json.MarshalIndent(e, "  ", "  ")
+	if err != nil {
+		return err
+	}
+	if !first {
+		w.WriteString(",")
+	}
+	w.WriteString("\n  ")
+	_, err = w.Write(b)
+	return err
+}
+
+// ExportLater is Export to run off the UI goroutine: it works from a copy of the names conversations are
+// titled by, so the radio can change them meanwhile.
+func (s *Service) ExportLater(c store.Convo, asJSON bool, verdict func(store.Message) string) func(io.Writer) (int, error) {
+	snap := &Service{store: s.store, device: s.device, self: s.self, contacts: slices.Clone(s.contacts), channels: slices.Clone(s.channels)}
+	return func(w io.Writer) (int, error) { return snap.Export(w, c, asJSON, verdict) }
 }
 
 // Contacts is every contact on the radio, as last synced.

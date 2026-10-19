@@ -109,7 +109,9 @@ func TestFilterSearchAndExport(t *testing.T) {
 	if !m.search.open {
 		t.Fatal("ctrl+f should open search")
 	}
-	typeKeys(m, "purdown")
+	typeKeys(m, "purdow")
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'n', Text: "n"})
+	finish(m, cmd)
 	if len(m.search.results) != 2 {
 		t.Fatalf("search found %d", len(m.search.results))
 	}
@@ -123,9 +125,11 @@ func TestFilterSearchAndExport(t *testing.T) {
 	}
 
 	typeKeys(m, ":export")
-	key(m, tea.KeyEnter)
+	_, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	finish(m, cmd)
 	typeKeys(m, ":export json all")
-	key(m, tea.KeyEnter)
+	_, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	finish(m, cmd)
 	files, _ := filepath.Glob(filepath.Join(m.opt.ExportDir, "*"))
 	if len(files) != 2 {
 		t.Fatalf("exports = %v (log: %+v)", files, m.log[len(m.log)-1])
@@ -140,6 +144,22 @@ func TestFilterSearchAndExport(t *testing.T) {
 		} else if !strings.Contains(string(data), "# #bristol") || !strings.Contains(string(data), "Carol: purdown is back") {
 			t.Errorf("text export:\n%s", data)
 		}
+	}
+}
+
+// finish runs what a key started in the background, for the searches and exports that do.
+func finish(m *Model, cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	switch msg := cmd().(type) {
+	case tea.BatchMsg:
+		for _, c := range msg {
+			finish(m, c)
+		}
+	case searchDueMsg, searchDoneMsg, exportDoneMsg:
+		_, next := m.Update(msg)
+		finish(m, next)
 	}
 }
 

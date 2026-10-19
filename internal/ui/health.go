@@ -24,6 +24,10 @@ const (
 // watchCheck is how often the watch looks for a node that's due a poll; tests shorten it.
 var watchCheck = 20 * time.Second
 
+// watchPace is how soon the watch looks again while other nodes are due: one poll at most every few
+// seconds keeps up with 100 nodes polled every 10 minutes and leaves the radio free between them.
+var watchPace = 4 * time.Second
+
 func (m *Model) repeaterMode() bool { return m.adm.local }
 
 // closeNode goes back to the node list, which a repeater on USB doesn't have.
@@ -116,6 +120,7 @@ func (m *Model) keepStatus(sess *admin.Session, data []byte) {
 		h = h[1:]
 	}
 	m.adm.kept[sess.Key] = h
+	m.forgetMeasured(sess.Key)
 	if m.opt.Store == nil {
 		return
 	}
@@ -133,6 +138,7 @@ func (m *Model) clearHistory(ct radio.Contact) {
 		}
 	}
 	m.adm.kept[ct.Key] = nil
+	m.forgetMeasured(ct.Key)
 	m.addLog(m.now, "HISTORY CLEARED  "+ct.Name, radio.ToneInfo)
 }
 
@@ -145,7 +151,33 @@ func (m *Model) startWatch() tea.Cmd {
 
 func (m *Model) watchTick() tea.Cmd {
 	gen := m.adm.watchGen
-	return tea.Tick(watchCheck, func(time.Time) tea.Msg { return watchTickMsg{gen} })
+	return tea.Tick(m.watchWait(), func(time.Time) tea.Msg { return watchTickMsg{gen} })
+}
+
+func (m *Model) watchWait() time.Duration {
+	if _, n := m.overdue(); n > 0 {
+		return watchPace
+	}
+	return watchCheck
+}
+
+// overdue is the watched node most overdue a poll, and how many are.
+func (m *Model) overdue() (radio.Contact, int) {
+	var due radio.Contact
+	most, n := time.Duration(-1), 0
+	for _, c := range m.watchedNodes() {
+		last := m.adm.lastTry[c.Key]
+		if h := m.historyOf(c.Key); len(h) > 0 && h[len(h)-1].At.After(last) {
+			last = h[len(h)-1].At
+		}
+		if over := m.now.Sub(last) - m.watchEvery(); over >= 0 {
+			n++
+			if over > most {
+				due, most = c, over
+			}
+		}
+	}
+	return due, n
 }
 
 // pollWatched polls the watched node most overdue, if any is and the radio isn't busy with other requests.
@@ -156,18 +188,8 @@ func (m *Model) pollWatched() tea.Cmd {
 	if _, busy := m.admin.Running(); busy {
 		return nil
 	}
-	var due radio.Contact
-	most := time.Duration(-1)
-	for _, c := range m.watchedNodes() {
-		last := m.adm.lastTry[c.Key]
-		if h := m.historyOf(c.Key); len(h) > 0 && h[len(h)-1].At.After(last) {
-			last = h[len(h)-1].At
-		}
-		if over := m.now.Sub(last) - m.watchEvery(); over >= 0 && over > most {
-			due, most = c, over
-		}
-	}
-	if most < 0 {
+	due, n := m.overdue()
+	if n == 0 {
 		return nil
 	}
 	m.adm.lastTry[due.Key] = m.now
@@ -277,13 +299,50 @@ func (m *Model) healthPicked(h admin.Health, buckets int) int {
 	return a.pick
 }
 
+type healthKey struct {
+	node [32]byte
+	span time.Duration
+	n    int
+}
+
+type healthMemo struct {
+	at, until time.Time
+	h         admin.Health
+}
+
+// measure is admin.HealthOf over a node's kept status for the span to now, worked out again only once the
+// window has moved far enough to change it, or new status has come.
+func (m *Model) measure(key [32]byte, span time.Duration, n int) admin.Health {
+	k, from := healthKey{key, span, n}, m.now.Add(-span)
+	if c, ok := m.adm.measured[k]; ok && !m.now.Before(c.at) && !m.now.After(c.until) {
+		h := c.h
+		h.From, h.To = from, m.now
+		return h
+	}
+	pts := m.historyOf(key)
+	h := admin.HealthOf(pts, from, m.now, n)
+	if len(m.adm.measured) >= 256 {
+		clear(m.adm.measured)
+	}
+	m.adm.measured[k] = healthMemo{at: m.now, until: m.now.Add(admin.Steady(pts, from, m.now, n)), h: h}
+	return h
+}
+
+func (m *Model) forgetMeasured(key [32]byte) {
+	for k := range m.adm.measured {
+		if k.node == key {
+			delete(m.adm.measured, k)
+		}
+	}
+}
+
 // healthSeries measures a node over the chosen window; over USB there's no duplicate count to show.
 func (m *Model) healthSeries(key [32]byte, buckets int) admin.Health {
 	span := 24 * time.Hour
 	if m.adm.week {
 		span = 7 * span
 	}
-	h := admin.HealthOf(m.historyOf(key), m.now.Add(-span), m.now, buckets)
+	h := m.measure(key, span, buckets)
 	if m.adm.local {
 		var keep []admin.Series
 		for _, s := range h.Series {
@@ -602,7 +661,7 @@ func (m *Model) trend(key [32]byte, w int) string {
 	if len(m.historyOf(key)) == 0 {
 		return strings.Repeat(" ", w)
 	}
-	h := admin.HealthOf(m.historyOf(key), m.now.Add(-24*time.Hour), m.now, w)
+	h := m.measure(key, 24*time.Hour, w)
 	for _, s := range h.Series {
 		if s.Name == "Received" {
 			lo, hi := seriesRange(s)
