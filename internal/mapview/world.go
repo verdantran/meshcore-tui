@@ -29,6 +29,7 @@ type World struct {
 
 	landBox, borderBox []Box
 	landLL, borderLL   [][]LatLon
+	coastLL            [][][]LatLon // each land ring's coastline runs, as drawn without street detail
 }
 
 var (
@@ -49,6 +50,7 @@ func LoadWorld() *World {
 		}
 		for _, r := range w.Land {
 			w.landBox, w.landLL = append(w.landBox, ringBox(r)), append(w.landLL, toLL(r))
+			w.coastLL = append(w.coastLL, coastRuns(r, nil))
 		}
 		for _, l := range w.Borders {
 			w.borderBox, w.borderLL = append(w.borderBox, ringBox(l)), append(w.borderLL, toLL(l))

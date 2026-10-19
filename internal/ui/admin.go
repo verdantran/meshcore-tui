@@ -12,6 +12,7 @@ import (
 	meshcore "github.com/OwlShack/meshcore-go"
 
 	"github.com/verdantran/meshcore-tui/internal/admin"
+	"github.com/verdantran/meshcore-tui/internal/chat"
 	"github.com/verdantran/meshcore-tui/internal/config"
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/radio"
@@ -83,6 +84,8 @@ type adminModel struct {
 	local       bool      // connected to a repeater's own console over USB
 	keysChecked bool
 	favOnly     bool
+	nodes       []radio.Contact // adminNodes as of nodesFor; shared, so never changed in place
+	nodesFor    nodesKey
 	remember    bool   // save the password being typed once it works
 	loginNote   string // why a saved password wasn't sent, shown at the login
 	saving      map[[32]byte]string
@@ -184,19 +187,42 @@ func (m *Model) adminNames(p []byte) string {
 // adminNodes are the repeaters and room servers in the contact table: favourites first, then by name,
 // and only favourites while that filter is on.
 func (m *Model) adminNodes() []radio.Contact {
-	var out []radio.Contact
+	if m.chat == nil {
+		return nil
+	}
+	k := nodesKey{m.chat, m.chat.Rev(), m.adm.favOnly}
+	if k == m.adm.nodesFor {
+		return m.adm.nodes
+	}
+	type node struct {
+		c     radio.Contact
+		fav   bool
+		lower string
+	}
+	var list []node
 	for _, c := range m.allNodes() {
 		if !m.adm.favOnly || favourite(c) {
-			out = append(out, c)
+			list = append(list, node{c, favourite(c), strings.ToLower(c.Name)})
 		}
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if fi, fj := favourite(out[i]), favourite(out[j]); fi != fj {
-			return fi
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].fav != list[j].fav {
+			return list[i].fav
 		}
-		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
+		return list[i].lower < list[j].lower
 	})
+	var out []radio.Contact
+	for _, n := range list {
+		out = append(out, n.c)
+	}
+	m.adm.nodes, m.adm.nodesFor = out, k
 	return out
+}
+
+type nodesKey struct {
+	chat    *chat.Service
+	rev     int
+	favOnly bool
 }
 
 // allNodes are every repeater and room server in the contact table.

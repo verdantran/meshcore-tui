@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"image/color"
 	"os"
+	"strconv"
+	"strings"
 
 	"charm.land/lipgloss/v2"
 )
@@ -319,6 +321,40 @@ func (t Theme) Fg(c RGB, bold bool) lipgloss.Style {
 		return s
 	}
 	return s.Foreground(c.Color())
+}
+
+// Paint is Fg(c, bold).Render(s) without building a style, for drawing loops; the output is the same bytes.
+func (t Theme) Paint(c RGB, bold bool, s string) string {
+	if strings.ContainsAny(s, "\t\r\n") {
+		return t.Fg(c, bold).Render(s)
+	}
+	if t.Mono && !bold {
+		return s
+	}
+	b := make([]byte, 0, len(s)+24)
+	b = t.sgr(b, c, bold)
+	b = append(b, s...)
+	b = append(b, "\x1b[m"...)
+	return string(b)
+}
+
+// sgr appends the escape that opens Fg(c, bold), which must be one that sets something.
+func (t Theme) sgr(b []byte, c RGB, bold bool) []byte {
+	b = append(b, "\x1b["...)
+	if bold {
+		b = append(b, '1')
+		if t.Mono {
+			return append(b, 'm')
+		}
+		b = append(b, ';')
+	}
+	b = append(b, "38;2;"...)
+	b = strconv.AppendUint(b, uint64(c.R), 10)
+	b = append(b, ';')
+	b = strconv.AppendUint(b, uint64(c.G), 10)
+	b = append(b, ';')
+	b = strconv.AppendUint(b, uint64(c.B), 10)
+	return append(b, 'm')
 }
 
 // Block is solid colour behind text, used for the header's device tag and badges.

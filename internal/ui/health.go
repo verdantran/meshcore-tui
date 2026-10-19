@@ -537,33 +537,44 @@ func (m *Model) lineChart(vals []float64, lo, hi float64, w, rows int, colour fu
 		var b strings.Builder
 		for i := range w {
 			v := val(i)
-			at := func(st lipgloss.Style) lipgloss.Style {
-				if i != cursor {
-					return st
-				}
-				if th.Mono {
-					return st.Reverse(true)
-				}
-				return st.Background(th.Line.Color())
+			if i == cursor && i < shown {
+				b.WriteString(m.chartCursor(cells[r][i], v, r == rows-1))
+				continue
 			}
 			switch {
 			case i >= shown:
-				b.WriteString(" ")
+				b.WriteByte(' ')
 			case cells[r][i] != 0:
-				style := th.Fg(colour(v), false)
-				if i == last || i == cursor {
-					style = th.Fg(th.Text, true)
+				c, bold := colour(v), false
+				if i == last {
+					c, bold = th.Text, true
 				}
-				b.WriteString(at(style).Render(string(0x2800 + cells[r][i])))
+				b.WriteString(th.Paint(c, bold, string(0x2800+cells[r][i])))
 			case math.IsNaN(v) && r == rows-1:
-				b.WriteString(at(th.Fg(th.Line, false)).Render("·"))
+				b.WriteString(th.Paint(th.Line, false, "·"))
 			default:
-				b.WriteString(at(lipgloss.NewStyle()).Render(" "))
+				b.WriteByte(' ')
 			}
 		}
 		out[r] = b.String()
 	}
 	return out
+}
+
+// chartCursor is one cell of a chart under the cursor.
+func (m *Model) chartCursor(dots rune, v float64, bottom bool) string {
+	th := m.th
+	st, s := lipgloss.NewStyle(), " "
+	switch {
+	case dots != 0:
+		st, s = th.Fg(th.Text, true), string(0x2800+dots)
+	case math.IsNaN(v) && bottom:
+		st, s = th.Fg(th.Line, false), "·"
+	}
+	if th.Mono {
+		return st.Reverse(true).Render(s)
+	}
+	return st.Background(th.Line.Color()).Render(s)
 }
 
 func abs(n int) int { return max(n, -n) }

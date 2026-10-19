@@ -180,6 +180,9 @@ type mapModel struct {
 	rows     []string // the cached map as terminal rows; a frame re-renders only the rows animations touch
 
 	stops map[string][]mapview.Stop // routes' stops as last ranked, by hops, ends and candidates
+
+	drawing   bool           // inside View, where nothing mapNodes reads can change
+	nodesSeen []mapview.Node // mapNodes, worked out once a frame while drawing
 }
 
 func newMapModel() mapModel {
@@ -314,6 +317,17 @@ func kindOf(t radio.ContactType) mapview.Kind {
 // mapNodes are us and every contact, then nodes heard but not added; the map draws those with a location.
 // Each is where you put it, if you did, or else where it says it is.
 func (m *Model) mapNodes() []mapview.Node {
+	mv := &m.mapv
+	if !mv.drawing {
+		return m.placeNodes()
+	}
+	if mv.nodesSeen == nil {
+		mv.nodesSeen = m.placeNodes()
+	}
+	return slices.Clip(mv.nodesSeen) // a resolver appends; it mustn't write into what the next caller gets
+}
+
+func (m *Model) placeNodes() []mapview.Node {
 	self := m.ready.Self
 	nodes := []mapview.Node{{Name: "me", Kind: mapview.KindSelf, Pos: mapview.LatLon{Lat: self.Lat, Lon: self.Lon}, Key: self.PubKey}}
 	seen := map[[32]byte]bool{self.PubKey: true}

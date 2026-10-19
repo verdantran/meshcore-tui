@@ -215,6 +215,36 @@ func maxRank(zoom float64) int {
 	return 10
 }
 
+// coastRuns are a land ring's stretches of coastline, leaving out Natural Earth's cuts along 180° and
+// any edge whose middle cut says another layer draws.
+func coastRuns(r [][2]float64, cut func(LatLon) bool) [][]LatLon {
+	var out [][]LatLon
+	var run []LatLon
+	flush := func() {
+		if len(run) > 1 {
+			out = append(out, run)
+			run = nil
+		}
+		run = run[:0]
+	}
+	for k := range r {
+		a, b := r[k], r[(k+1)%len(r)]
+		if math.Abs(a[0]) == 180 && a[0] == b[0] || cut != nil && cut(LatLon{(a[1] + b[1]) / 2, (a[0] + b[0]) / 2}) {
+			flush()
+			continue
+		}
+		if len(run) == 0 {
+			if run == nil {
+				run = make([]LatLon, 0, len(r)-k+1)
+			}
+			run = append(run, LatLon{a[1], a[0]})
+		}
+		run = append(run, LatLon{b[1], b[0]})
+	}
+	flush()
+	return out
+}
+
 func buildScene(in Input, v View, pal Palette) scene {
 	var s scene
 	l := in.Layers
@@ -247,26 +277,13 @@ func buildScene(in Input, v View, pal Palette) scene {
 			continue
 		}
 		s.land = append(s.land, w.landLL[i])
-		var run []LatLon
-		flush := func() {
-			if len(run) > 1 {
-				s.lines = append(s.lines, sLine{pts: run, col: fade(pal.Coast), prio: prioCoast})
-			}
-			run = nil
+		runs := w.coastLL[i]
+		if s.detailOn {
+			runs = coastRuns(r, in.Detail.Covers)
 		}
-		for k := range r {
-			a, b := r[k], r[(k+1)%len(r)]
-			mid := LatLon{(a[1] + b[1]) / 2, (a[0] + b[0]) / 2}
-			if math.Abs(a[0]) == 180 && a[0] == b[0] || s.detailOn && in.Detail.Covers(mid) {
-				flush()
-				continue
-			}
-			if len(run) == 0 {
-				run = append(run, LatLon{a[1], a[0]})
-			}
-			run = append(run, LatLon{b[1], b[0]})
+		for _, run := range runs {
+			s.lines = append(s.lines, sLine{pts: run, col: fade(pal.Coast), prio: prioCoast})
 		}
-		flush()
 	}
 	for i := range w.Borders {
 		if w.borderBox[i].Overlaps(view) {

@@ -427,7 +427,7 @@ func (m *Model) packetTable(list []*packetRow, w, rows int) []string {
 	if compact {
 		head = fmt.Sprintf("  %-5s %-8s %6s %2s  %s", "TIME", "TYPE", "SNR", "×", "SUMMARY")
 	}
-	out := []string{th.Fg(th.Muted, true).Render(truncate(head, w))}
+	out := []string{th.Paint(th.Muted, true, truncate(head, w))}
 	start := min(max(in.sel-(rows-1)/2, 0), max(len(list)-(rows-1), 0))
 	for i := start; i < len(list) && len(out) < rows; i++ {
 		r := list[i]
@@ -453,30 +453,30 @@ func (m *Model) packetTable(list []*packetRow, w, rows int) []string {
 		if compact {
 			at, typ, snr, n := r.first.Local().Format("15:04")+" ", fmt.Sprintf("%-8s ", truncate(r.dec.Type, 8)), fmt.Sprintf("%+6.2f ", c.snr), fmt.Sprintf("%-4s", fmt.Sprintf("%2s", times))
 			if i == in.sel {
-				out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(" "+at+typ+snr+n+summary, w-1)))
+				out = append(out, th.Paint(th.Magenta, true, "▌")+m.raised(fit(" "+at+typ+snr+n+summary, w-1)))
 			} else {
-				out = append(out, m.typedRow("  "+th.Fg(th.Dim, false).Render(at)+th.Fg(m.typeColour(r), true).Render(typ)+
-					th.Fg(th.SNR(float64(c.snr)), false).Render(snr)+th.Fg(th.Magenta, true).Render(n)+
-					th.Fg(th.Text, false).Render(truncate(summary, max(w-28, 4))), r.first))
+				out = append(out, m.typedRow("  "+th.Paint(th.Dim, false, at)+th.Paint(m.typeColour(r), true, typ)+
+					th.Paint(th.SNR(float64(c.snr)), false, snr)+th.Paint(th.Magenta, true, n)+
+					th.Paint(th.Text, false, truncate(summary, max(w-28, 4))), r.first))
 			}
 			continue
 		}
 		if i == in.sel {
 			line := fmt.Sprintf("%-8s %-6s %-8s %4d  %-14s %+6.2f %5d %4d %3s  %s", r.first.Local().Format("15:04:05"), route, truncate(r.dec.Type, 8),
 				len(r.dec.Path), truncate(path, 14), c.snr, c.rssi, len(r.dec.Raw), times, summary)
-			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(" "+line, w-1)))
+			out = append(out, th.Paint(th.Magenta, true, "▌")+m.raised(fit(" "+line, w-1)))
 			continue
 		}
 		bar := " "
 		if m.level.Allows(motion.Flash) && motion.Running(r.first, rowArrival, now) {
-			bar = th.Fg(th.Cyan.Lerp(th.Bg, motion.Progress(r.first, rowArrival, now)), true).Render("▌")
+			bar = th.Paint(th.Cyan.Lerp(th.Bg, motion.Progress(r.first, rowArrival, now)), true, "▌")
 		}
 		typeCol := m.typeColour(r)
-		out = append(out, bar+m.typedRow(" "+th.Fg(th.Dim, false).Render(r.first.Local().Format("15:04:05")+" ")+
-			th.Fg(th.Muted, false).Render(fmt.Sprintf("%-6s ", route))+th.Fg(typeCol, true).Render(fmt.Sprintf("%-8s ", truncate(r.dec.Type, 8)))+
-			th.Fg(th.Muted, false).Render(fmt.Sprintf("%4d  ", len(r.dec.Path)))+th.Fg(th.Cyan, false).Render(fmt.Sprintf("%-14s ", truncate(path, 14)))+
-			th.Fg(th.SNR(float64(c.snr)), false).Render(fmt.Sprintf("%+6.2f ", c.snr))+th.Fg(th.Dim, false).Render(fmt.Sprintf("%5d %4d ", c.rssi, len(r.dec.Raw)))+
-			th.Fg(th.Magenta, true).Render(fmt.Sprintf("%3s  ", times))+th.Fg(th.Text, false).Render(truncate(summary, max(w-70, 10))), r.first))
+		out = append(out, bar+m.typedRow(" "+th.Paint(th.Dim, false, r.first.Local().Format("15:04:05")+" ")+
+			th.Paint(th.Muted, false, fmt.Sprintf("%-6s ", route))+th.Paint(typeCol, true, fmt.Sprintf("%-8s ", truncate(r.dec.Type, 8)))+
+			th.Paint(th.Muted, false, fmt.Sprintf("%4d  ", len(r.dec.Path)))+th.Paint(th.Cyan, false, fmt.Sprintf("%-14s ", truncate(path, 14)))+
+			th.Paint(th.SNR(float64(c.snr)), false, fmt.Sprintf("%+6.2f ", c.snr))+th.Paint(th.Dim, false, fmt.Sprintf("%5d %4d ", c.rssi, len(r.dec.Raw)))+
+			th.Paint(th.Magenta, true, fmt.Sprintf("%3s  ", times))+th.Paint(th.Text, false, truncate(summary, max(w-70, 10))), r.first))
 	}
 	return out
 }

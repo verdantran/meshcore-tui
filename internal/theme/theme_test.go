@@ -121,3 +121,34 @@ func TestLookupsAndStyles(t *testing.T) {
 		t.Error("mono switches at the midpoint")
 	}
 }
+
+// TestPaintMatchesFg: the fast path writes the same bytes as the style it stands in for.
+func TestPaintMatchesFg(t *testing.T) {
+	themes := append([]Theme(nil), All...)
+	themes = append(themes, Blend(Neon, Light, 0.37), Blend(Amber, Mono, 0.2), Blend(Amber, Mono, 0.8))
+	texts := []string{"", " ", "x", "▌", "⣿⡀", "héllo wörld 🙂", "a\tb", "two\nlines", "cr\r\nlf", "\x1b[1mpre\x1b[m"}
+	for _, th := range themes {
+		for _, c := range []RGB{th.Text, th.Dim, th.Magenta, {}, {255, 255, 255}, {1, 20, 255}} {
+			for _, bold := range []bool{false, true} {
+				for _, s := range texts {
+					if got, want := th.Paint(c, bold, s), th.Fg(c, bold).Render(s); got != want {
+						t.Errorf("%s %v bold=%v %q: %q, want %q", th.Name, c, bold, s, got, want)
+					}
+				}
+			}
+		}
+	}
+}
+
+func BenchmarkPaint(b *testing.B) {
+	b.Run("Fg", func(b *testing.B) {
+		for b.Loop() {
+			_ = Neon.Fg(Neon.Cyan, true).Render("hello")
+		}
+	})
+	b.Run("Paint", func(b *testing.B) {
+		for b.Loop() {
+			_ = Neon.Paint(Neon.Cyan, true, "hello")
+		}
+	})
+}

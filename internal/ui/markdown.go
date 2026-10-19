@@ -108,7 +108,7 @@ func emphStyle(th theme.Theme, base theme.RGB, e emph) lipgloss.Style {
 // emphRender draws a run of text with its emphasis, a style change at a time.
 func emphRender(th theme.Theme, base theme.RGB, s string, marks []emph) string {
 	if len(marks) == 0 {
-		return th.Fg(base, false).Render(s)
+		return th.Paint(base, false, s)
 	}
 	var b strings.Builder
 	for i := 0; i < len(s); {
@@ -116,7 +116,11 @@ func emphRender(th theme.Theme, base theme.RGB, s string, marks []emph) string {
 		for j < len(s) && marks[j] == marks[i] {
 			j++
 		}
-		b.WriteString(emphStyle(th, base, marks[i]).Render(s[i:j]))
+		if e := marks[i]; e&^emBold == 0 {
+			b.WriteString(th.Paint(base, e != 0, s[i:j]))
+		} else {
+			b.WriteString(emphStyle(th, base, e).Render(s[i:j]))
+		}
 		i = j
 	}
 	return b.String()

@@ -244,7 +244,7 @@ func run(args []string, env func(string) string, stderr io.Writer) int {
 	defer db.Close()
 	opt.Store = db
 	out := &timedOutput{File: os.Stdout}
-	p := tea.NewProgram(ui.New(opt), tea.WithOutput(out))
+	p := tea.NewProgram(ui.New(opt), tea.WithOutput(out), tea.WithFPS(motion.FrameRate)) // the app never animates faster
 	out.slow = func() { p.Send(ui.SlowTerminalMsg{}) }
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(stderr, err)

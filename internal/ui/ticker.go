@@ -116,7 +116,7 @@ func (t *ticker) render(th theme.Theme, level motion.Level, now time.Time, width
 	start := 0
 	for i := 1; i <= width; i++ {
 		if i == width || cols[i] != cols[start] {
-			sb.WriteString(th.Fg(cols[start], false).Render(string(cells[start:i])))
+			sb.WriteString(th.Paint(cols[start], false, string(cells[start:i])))
 			start = i
 		}
 	}

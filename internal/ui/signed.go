@@ -503,7 +503,7 @@ func (m *Model) sigBadge(msg store.Message) string {
 	if text == "" {
 		return ""
 	}
-	return m.th.Fg(col, bold).Render(text)
+	return m.th.Paint(col, bold, text)
 }
 
 // sigVerdict is what a message's signature shows, and how loudly.
@@ -572,14 +572,14 @@ func (m *Model) signatureSummary(dec packets.Decoded) string {
 // prove anything, and a warning when more than one known key starts with them.
 func (m *Model) roomAuthor(msg store.Message) string {
 	th := m.th
-	out := th.Fg(th.Dim, false).Render(" · room post")
+	out := th.Paint(th.Dim, false, " · room post")
 	if len(msg.Author) != 4 {
 		return out
 	}
 	hex := radio.KeyHex(msg.Author)
-	out += th.Fg(th.Dim, false).Render(" · key " + hex)
+	out += th.Paint(th.Dim, false, " · key "+hex)
 	if n := m.names().shared[[4]byte(msg.Author)]; n > 1 {
-		out += th.Fg(th.Dim, false).Render(" · ") + th.Fg(th.Red, true).Render(fmt.Sprintf("⚠ %d keys start %s", n, hex))
+		out += th.Paint(th.Dim, false, " · ") + th.Paint(th.Red, true, fmt.Sprintf("⚠ %d keys start %s", n, hex))
 	}
 	return out
 }

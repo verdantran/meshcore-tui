@@ -19,6 +19,8 @@ import (
 )
 
 func (m *Model) View() tea.View {
+	m.mapv.drawing = true
+	defer func() { m.mapv.drawing, m.mapv.nodesSeen = false, nil }()
 	var lines []string
 	if m.w > 0 && m.h > 0 {
 		switch m.phase {
@@ -170,9 +172,9 @@ func (m *Model) panel(title string, body []string, w, h int, accent theme.RGB, f
 		tl, tr, bl, br, hz, vt = "┏", "┓", "┗", "┛", "━", "┃"
 		edge = accent
 	}
-	e := th.Fg(edge, false)
-	head := th.Fg(accent, true).Render("▌") + th.Fg(th.Muted, true).Render(title+" ")
-	top := e.Render(tl+hz) + head + e.Render(strings.Repeat(hz, max(w-4-visibleWidth(head), 0))+hz+tr)
+	paint := func(s string) string { return th.Paint(edge, false, s) }
+	head := th.Paint(accent, true, "▌") + th.Paint(th.Muted, true, title+" ")
+	top := paint(tl+hz) + head + paint(strings.Repeat(hz, max(w-4-visibleWidth(head), 0))+hz+tr)
 	out := []string{top}
 	inner := w - 4
 	// A row must never contain a line break, or the panel would draw taller than it thinks.
@@ -181,14 +183,15 @@ func (m *Model) panel(title string, body []string, w, h int, accent theme.RGB, f
 		rows = append(rows, strings.Split(b, "\n")...)
 	}
 	body = rows
+	side := paint(vt)
 	for i := 0; i < h-2; i++ {
 		content := ""
 		if i < len(body) {
 			content = body[i]
 		}
-		out = append(out, e.Render(vt)+" "+fit(content, inner)+" "+e.Render(vt))
+		out = append(out, side+" "+fit(content, inner)+" "+side)
 	}
-	out = append(out, e.Render(bl+strings.Repeat(hz, max(w-2, 0))+br))
+	out = append(out, paint(bl+strings.Repeat(hz, max(w-2, 0))+br))
 	return out
 }
 
@@ -497,7 +500,7 @@ func (m *Model) footer() []string {
 	}
 	contacts, channels := m.ready.Contacts, m.ready.Channels
 	if m.chat != nil && m.chat.Device() != "" {
-		contacts, channels = len(m.chat.Contacts()), len(m.chat.Channels()) // they change after connecting
+		contacts, channels = m.chat.ContactCount(), len(m.chat.Channels()) // they change after connecting
 	}
 	if !m.repeaterMode() {
 		status += dot + th.Fg(th.Muted, false).Render(fmt.Sprintf("%d contacts · %d channels", contacts, channels))

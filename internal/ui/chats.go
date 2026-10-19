@@ -36,6 +36,7 @@ type chatsModel struct {
 	input   lineEdit
 	msgs    []store.Message
 	scroll  int // messages hidden below the bottom of the pane
+	heights map[heightKey]msgHeight
 
 	filter    lineEdit // "/" narrows the open conversation to matching messages
 	filtering bool     // typing the filter
@@ -721,7 +722,7 @@ func (m *Model) convoPane(w, rows int) []string {
 	cur, _ := m.selectedConvo()
 
 	// Title line: the conversation and how messages will travel.
-	title := th.Fg(th.Magenta, true).Render("▌") + th.Fg(th.Text, true).Render(cur.Title)
+	title := th.Paint(th.Magenta, true, "▌") + th.Paint(th.Text, true, cur.Title)
 	route := ""
 	switch cur.Kind {
 	case chat.KindChannel:
@@ -738,10 +739,10 @@ func (m *Model) convoPane(w, rows int) []string {
 			}
 		}
 	}
-	head := title + th.Fg(th.Dim, false).Render("  "+route)
+	head := title + th.Paint(th.Dim, false, "  "+route)
 	if c.filter.text != "" || c.filtering {
-		head = title + th.Fg(th.Yellow, true).Render("  / ") + filterText(th, c.filter, c.filtering, 24) +
-			th.Fg(th.Dim, false).Render(fmt.Sprintf("  · %d matching · esc clear", len(c.msgs)))
+		head = title + th.Paint(th.Yellow, true, "  / ") + filterText(th, c.filter, c.filtering, 24) +
+			th.Paint(th.Dim, false, fmt.Sprintf("  · %d matching · esc clear", len(c.msgs)))
 	}
 
 	// Compose line, always at the bottom.
@@ -756,42 +757,38 @@ func (m *Model) convoPane(w, rows int) []string {
 	if counterCol != th.Dim && m.level.Allows(motion.Flash) {
 		counterCol = counterCol.Lerp(th.Bg, 0.55*motion.Pulse(m.now, pulsePeriod))
 	}
-	counter := th.Fg(counterCol, used*10 >= limit*9).Render(fmt.Sprintf("%d/%d", used, limit))
+	counter := th.Paint(counterCol, used*10 >= limit*9, fmt.Sprintf("%d/%d", used, limit))
 	if hint := m.mentionHint(); hint != "" {
-		counter = th.Fg(th.Cyan, false).Render(hint) + counter
+		counter = th.Paint(th.Cyan, false, hint) + counter
 	}
 	if c.writing && cur.Kind == chat.KindChannel {
 		if m.signThis() {
-			counter = th.Fg(th.Green, true).Render("✍ signed ") + th.Fg(th.Dim, false).Render("ctrl+s ") + counter
+			counter = th.Paint(th.Green, true, "✍ signed ") + th.Paint(th.Dim, false, "ctrl+s ") + counter
 		} else {
-			counter = th.Fg(th.Dim, false).Render("ctrl+s signs ") + counter
+			counter = th.Paint(th.Dim, false, "ctrl+s signs ") + counter
 		}
 	}
 	var compose string
 	if c.writing {
-		compose = th.Fg(th.Magenta, true).Render("▸ ") + c.input.render(th, w-3-visibleWidth(counter), false)
+		compose = th.Paint(th.Magenta, true, "▸ ") + c.input.render(th, w-3-visibleWidth(counter), false)
 	} else {
-		compose = th.Fg(th.Dim, false).Render("▸ enter write · ↑↓ conversations · → pick a message · r reply · / filter · ctrl+f search all")
+		compose = th.Paint(th.Dim, false, "▸ enter write · ↑↓ conversations · → pick a message · r reply · / filter · ctrl+f search all")
 		if c.reading {
-			compose = th.Fg(th.Magenta, true).Render("▸ ") + th.Fg(th.Text, false).Render("↑↓ messages · ") +
-				th.Fg(th.Cyan, true).Render("r") + th.Fg(th.Text, false).Render(" reply · ") +
+			compose = th.Paint(th.Magenta, true, "▸ ") + th.Paint(th.Text, false, "↑↓ messages · ") +
+				th.Paint(th.Cyan, true, "r") + th.Paint(th.Text, false, " reply · ") +
 				m.retryHint() +
-				th.Fg(th.Cyan, true).Render("M") + th.Fg(th.Text, false).Render(" route on the map · ") +
-				th.Fg(th.Cyan, true).Render("y") + th.Fg(th.Text, false).Render(" copy · ") +
-				th.Fg(th.Dim, false).Render("← back to conversations")
+				th.Paint(th.Cyan, true, "M") + th.Paint(th.Text, false, " route on the map · ") +
+				th.Paint(th.Cyan, true, "y") + th.Paint(th.Text, false, " copy · ") +
+				th.Paint(th.Dim, false, "← back to conversations")
 		}
 	}
 	compose = fit(compose, w-visibleWidth(counter)-1) + " " + counter
 
-	// Messages, newest at the bottom.
-	var lines []string
-	for _, msg := range c.msgs {
-		lines = append(lines, m.messageLines(msg, w)...)
-	}
-	avail := rows - 3
+	// Messages, newest at the bottom, drawn only as far up as the pane shows.
+	avail := max(rows-3, 0)
 	if p := m.picked(); c.reading && p >= 0 {
 		// Scroll up just far enough to show the picked message when it's above the top of the pane.
-		height := func(i int) int { return len(m.messageLines(c.msgs[i], w)) }
+		height := func(i int) int { return m.messageHeight(c.msgs[i], w) }
 		need, hidden := 0, 0
 		for i := p; i < len(c.msgs); i++ {
 			need += height(i)
@@ -804,21 +801,23 @@ func (m *Model) convoPane(w, rows int) []string {
 			hidden += height(len(c.msgs) - c.scroll)
 		}
 	}
-	end := len(lines)
-	if c.scroll > 0 {
-		// Scroll counts messages; skip the last c.scroll messages' lines.
-		skip := 0
-		for i := len(c.msgs) - 1; i >= len(c.msgs)-c.scroll && i >= 0; i-- {
-			skip += len(m.messageLines(c.msgs[i], w))
-		}
-		end = max(len(lines)-skip, 0)
+	// Scroll counts messages: the last c.scroll of them are below the pane.
+	var drawn [][]string
+	n := 0
+	for i := len(c.msgs) - 1 - c.scroll; i >= 0 && n < avail; i-- {
+		ls := m.messageLines(c.msgs[i], w)
+		drawn = append(drawn, ls)
+		n += len(ls)
 	}
-	start := max(end-avail, 0)
-	body := lines[start:end]
+	body := make([]string, 0, n)
+	for i := len(drawn) - 1; i >= 0; i-- {
+		body = append(body, drawn[i]...)
+	}
+	body = body[max(n-avail, 0):]
 	if len(c.msgs) == 0 {
-		body = []string{th.Fg(th.Dim, false).Render("No messages yet. Press enter to write the first one.")}
+		body = []string{th.Paint(th.Dim, false, "No messages yet. Press enter to write the first one.")}
 		if c.filter.text != "" {
-			body = []string{th.Fg(th.Dim, false).Render("Nothing here matches.")}
+			body = []string{th.Paint(th.Dim, false, "Nothing here matches.")}
 		}
 	}
 	out := []string{head, m.roomLine(w)}
@@ -835,6 +834,37 @@ func (m *Model) convoPane(w, rows int) []string {
 	return append(out, compose)
 }
 
+type heightKey struct {
+	id int64
+	w  int
+}
+
+type msgHeight struct {
+	text string
+	rows int
+}
+
+// messageHeight is how many rows messageLines takes, remembered while the message holds still.
+func (m *Model) messageHeight(msg store.Message, w int) int {
+	c := &m.chats
+	if at, ok := c.arrived[msg.ID]; ok && motion.Running(at, decodeDur, m.now) {
+		return len(m.messageLines(msg, w))
+	}
+	if at, ok := c.failed[msg.ID]; ok && motion.Running(at, glitchDur*3, m.now) {
+		return len(m.messageLines(msg, w))
+	}
+	k := heightKey{msg.ID, w}
+	if h, ok := c.heights[k]; ok && h.text == msg.Text {
+		return h.rows
+	}
+	if c.heights == nil || len(c.heights) > 4*historyLen {
+		c.heights = map[heightKey]msgHeight{}
+	}
+	rows := len(m.messageLines(msg, w))
+	c.heights[k] = msgHeight{msg.Text, rows}
+	return rows
+}
+
 func (m *Model) messageLines(msg store.Message, w int) []string {
 	th, now := m.th, m.now
 	bar := " "
@@ -842,16 +872,16 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 	picked := m.chats.reading && msg.ID == m.chats.cur
 	switch {
 	case picked:
-		bar = th.Fg(th.Magenta, true).Render("▶")
+		bar = th.Paint(th.Magenta, true, "▶")
 	case msg.ID == m.chats.focus:
-		bar = th.Fg(th.Cyan, true).Render("▌")
+		bar = th.Paint(th.Cyan, true, "▌")
 	case mention:
-		bar = th.Fg(th.Magenta, true).Render("▌")
+		bar = th.Paint(th.Magenta, true, "▌")
 	}
 	if at, ok := m.chats.arrived[msg.ID]; ok && m.level.Allows(motion.Flash) && motion.Running(at, arriveDur, now) {
-		bar = th.Fg(th.Magenta.Lerp(th.Bg, motion.Progress(at, arriveDur, now)), true).Render("▌")
+		bar = th.Paint(th.Magenta.Lerp(th.Bg, motion.Progress(at, arriveDur, now)), true, "▌")
 	}
-	stamp := th.Fg(th.Dim, false).Render(msg.RecvAt.Local().Format("15:04") + " ")
+	stamp := th.Paint(th.Dim, false, msg.RecvAt.Local().Format("15:04")+" ")
 	nameCol := m.nameColour(msg.Sender)
 	if msg.Out {
 		nameCol = th.Magenta
@@ -859,11 +889,11 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 	meta := m.messageMeta(msg)
 	if picked {
 		if _, pinned := m.pinOf(msg.Sender); msg.Sig == store.SigValid && !msg.Out && !pinned {
-			meta = th.Fg(th.Cyan, true).Render("K") + th.Fg(th.Dim, false).Render(" pin key · ") + meta
+			meta = th.Paint(th.Cyan, true, "K") + th.Paint(th.Dim, false, " pin key · ") + meta
 		}
-		meta = th.Fg(th.Cyan, true).Render("r") + th.Fg(th.Dim, false).Render(" reply · ") +
-			th.Fg(th.Cyan, true).Render("M") + th.Fg(th.Dim, false).Render(" route · ") +
-			th.Fg(th.Cyan, true).Render("y") + th.Fg(th.Dim, false).Render(" copy   ") + meta
+		meta = th.Paint(th.Cyan, true, "r") + th.Paint(th.Dim, false, " reply · ") +
+			th.Paint(th.Cyan, true, "M") + th.Paint(th.Dim, false, " route · ") +
+			th.Paint(th.Cyan, true, "y") + th.Paint(th.Dim, false, " copy   ") + meta
 	}
 
 	text, marks := emphasis(msg.Text)
@@ -874,7 +904,7 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 		text, marks = motion.GlitchText(text, msg.ID, int(now.Sub(at)/motion.FrameDur)), nil
 	}
 	room := w - visibleWidth(bar+stamp) - visibleWidth(meta) - 1
-	headLine := bar + stamp + th.Fg(nameCol, true).Render(clip(msg.Sender, max(min(senderMax, room), 4)))
+	headLine := bar + stamp + th.Paint(nameCol, true, clip(msg.Sender, max(min(senderMax, room), 4)))
 	gap := w - visibleWidth(headLine) - visibleWidth(meta)
 	out := []string{headLine + strings.Repeat(" ", max(gap, 1)) + meta}
 	lines, lineMarks := wrapEmph(text, marks, max(w-8, 10), func(s string, w int) string { return renderWidth.Wrap(s, w, "") })
@@ -914,15 +944,15 @@ func (m *Model) messageMeta(msg store.Message) string {
 		default:
 			parts = append(parts, plural(msg.Hops, "hop"))
 		}
-		meta := th.Fg(th.Dim, false).Render(strings.Join(parts, " "))
+		meta := th.Paint(th.Dim, false, strings.Join(parts, " "))
 		if msg.HasSNR {
-			meta += th.Fg(th.Dim, false).Render(" · ") + th.Fg(th.SNR(float64(msg.SNR)), false).Render(fmt.Sprintf("SNR %+.2f", msg.SNR))
+			meta += th.Paint(th.Dim, false, " · ") + th.Paint(th.SNR(float64(msg.SNR)), false, fmt.Sprintf("SNR %+.2f", msg.SNR))
 		}
 		if msg.Signed {
 			meta += m.roomAuthor(msg)
 		}
 		if b := m.sigBadge(msg); b != "" {
-			meta += th.Fg(th.Dim, false).Render(" · ") + b
+			meta += th.Paint(th.Dim, false, " · ") + b
 		}
 		return meta
 	}
@@ -931,7 +961,7 @@ func (m *Model) messageMeta(msg store.Message) string {
 		if m.level.Allows(motion.Ramp) {
 			r = motion.RampBar(now, 3)
 		}
-		return th.Fg(th.Yellow, true).Render(r) + th.Fg(th.Yellow, false).Render(" "+label)
+		return th.Paint(th.Yellow, true, r) + th.Paint(th.Yellow, false, " "+label)
 	}
 	switch msg.State {
 	case store.Pending:
@@ -942,7 +972,7 @@ func (m *Model) messageMeta(msg store.Message) string {
 	case store.Sent:
 		if strings.HasPrefix(string(msg.Convo), "ch:") {
 			if b := m.sigBadge(msg); b != "" {
-				return b + th.Fg(th.Dim, false).Render(" · ") + m.repeatsMeta(msg)
+				return b + th.Paint(th.Dim, false, " · ") + m.repeatsMeta(msg)
 			}
 			return m.repeatsMeta(msg)
 		}
@@ -957,10 +987,10 @@ func (m *Model) messageMeta(msg store.Message) string {
 		if popping {
 			col = th.Text.Lerp(th.Green, motion.Progress(m.chats.acked[msg.ID], popDur, now))
 		}
-		return th.Fg(col, true).Render("✓") + th.Fg(th.Green, popping).Render(" "+seconds(msg.RTT))
+		return th.Paint(col, true, "✓") + th.Paint(th.Green, popping, " "+seconds(msg.RTT))
 	case store.Failed:
-		return th.Fg(th.Red, true).Render(fmt.Sprintf("[FAIL] not delivered after %d tries", max(msg.Attempts, 1))) +
-			th.Fg(th.Dim, false).Render(" · R sends it again")
+		return th.Paint(th.Red, true, fmt.Sprintf("[FAIL] not delivered after %d tries", max(msg.Attempts, 1))) +
+			th.Paint(th.Dim, false, " · R sends it again")
 	}
 	return ""
 }
@@ -994,15 +1024,15 @@ func (m *Model) repeatsMeta(msg store.Message) string {
 		if at := m.chats.echoed[msg.ID]; m.level.Allows(motion.Flash) && motion.Running(at, popDur, now) {
 			col = th.Text.Lerp(th.Green, motion.Progress(at, popDur, now))
 		}
-		return th.Fg(col, true).Render(label)
+		return th.Paint(col, true, label)
 	case now.Sub(msg.SentAt) < listenFor:
 		r := "…"
 		if m.level.Allows(motion.Ramp) {
 			r = motion.RampBar(now, 3)
 		}
-		return th.Fg(th.Cyan, true).Render(r) + th.Fg(th.Cyan, false).Render(" sent · listening for repeats")
+		return th.Paint(th.Cyan, true, r) + th.Paint(th.Cyan, false, " sent · listening for repeats")
 	}
-	return th.Fg(th.Yellow, false).Render("sent · no repeats heard")
+	return th.Paint(th.Yellow, false, "sent · no repeats heard")
 }
 
 // heardEcho counts a heard copy of a channel message we sent.

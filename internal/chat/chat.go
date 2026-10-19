@@ -716,6 +716,8 @@ func (s *Service) Export(w io.Writer, c store.Convo, asJSON bool, verdict func(s
 // Contacts is every contact on the radio, as last synced.
 func (s *Service) Contacts() []radio.Contact { return append([]radio.Contact(nil), s.contacts...) }
 
+func (s *Service) ContactCount() int { return len(s.contacts) }
+
 // ReplaceContacts takes a fresh copy of the radio's table, such as after an import or a removal.
 func (s *Service) ReplaceContacts(cs []radio.Contact) error {
 	s.contacts = cs

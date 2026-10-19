@@ -61,18 +61,18 @@ func (m *Model) contactTable(w, rows int) []string {
 	th, c, now := m.th, &m.contacts, m.now
 	var out []string
 	if c.full {
-		out = append(out, th.Block(th.Bg, th.Yellow).Render(" TABLE FULL ")+th.Fg(th.Yellow, false).Render("  new nodes can't be added · P suggests contacts to prune"))
+		out = append(out, th.Block(th.Bg, th.Yellow).Render(" TABLE FULL ")+th.Paint(th.Yellow, false, "  new nodes can't be added · P suggests contacts to prune"))
 	}
 	if c.filtering || c.filter.text != "" {
-		out = append(out, th.Fg(th.Yellow, true).Render("/ ")+filterText(th, c.filter, c.filtering, w-16)+th.Fg(th.Dim, false).Render("  · esc clear"))
+		out = append(out, th.Paint(th.Yellow, true, "/ ")+filterText(th, c.filter, c.filtering, w-16)+th.Paint(th.Dim, false, "  · esc clear"))
 	}
 	nameW := min(max(w/4, 14), 26)
 	routeW := max(w-nameW-48, 10)
 	head := fmt.Sprintf("  %-*s %-9s %-9s %-*s %-4s %s", nameW, "NAME", "TYPE", "HEARD", routeW, "ROUTE", "LOC", "KEY")
-	out = append(out, th.Fg(th.Muted, true).Render(head))
+	out = append(out, th.Paint(th.Muted, true, head))
 	list := m.contactRows()
 	if len(list) == 0 {
-		return append(out, th.Fg(th.Dim, false).Render("  nothing matches"))
+		return append(out, th.Paint(th.Dim, false, "  nothing matches"))
 	}
 	room := rows - len(out)
 	start := min(max(c.sel-room/2, 0), max(len(list)-room, 0))
@@ -95,16 +95,16 @@ func (m *Model) contactTable(w, rows int) []string {
 		}
 		if i == c.sel {
 			line := fmt.Sprintf("%s %s %-9s %-9s %s %-4s %02X", star, col(ct.Name, nameW), ct.Type, heard, col(routeText(ct), routeW), loc, ct.Key[0])
-			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(line, w-1)))
+			out = append(out, th.Paint(th.Magenta, true, "▌")+m.raised(fit(line, w-1)))
 			continue
 		}
-		out = append(out, m.arriving(" "+th.Fg(th.Yellow, true).Render(star)+" "+
-			th.Fg(th.Text, false).Render(col(ct.Name, nameW))+" "+
-			th.Fg(typeColour(th, ct.Type), false).Render(fmt.Sprintf("%-9s", ct.Type))+" "+
-			th.Fg(th.Dim, false).Render(fmt.Sprintf("%-9s", heard))+" "+
-			th.Fg(th.Muted, false).Render(col(routeText(ct), routeW))+" "+
-			th.Fg(th.Dim, false).Render(fmt.Sprintf("%-4s", loc))+" "+
-			th.Fg(th.Muted, false).Render(fmt.Sprintf("%02X", ct.Key[0])), w, c.arrived[ct.Key]))
+		out = append(out, m.arriving(" "+th.Paint(th.Yellow, true, star)+" "+
+			th.Paint(th.Text, false, col(ct.Name, nameW))+" "+
+			th.Paint(typeColour(th, ct.Type), false, fmt.Sprintf("%-9s", ct.Type))+" "+
+			th.Paint(th.Dim, false, fmt.Sprintf("%-9s", heard))+" "+
+			th.Paint(th.Muted, false, col(routeText(ct), routeW))+" "+
+			th.Paint(th.Dim, false, fmt.Sprintf("%-4s", loc))+" "+
+			th.Paint(th.Muted, false, fmt.Sprintf("%02X", ct.Key[0])), w, c.arrived[ct.Key]))
 	}
 	return out
 }
