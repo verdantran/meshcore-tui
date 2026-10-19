@@ -114,6 +114,7 @@ type Model struct {
 	mapv      mapModel
 
 	queued tea.Cmd // a radio call started by a palette command
+	prune  pruner
 
 	cfgFallback *config.Config // settings for this run when there's no config file, as in tests
 
@@ -220,7 +221,7 @@ func New(opt Options) *Model {
 	m.device = newDevice()
 	m.notes = newNotifier(opt)
 	m.focused = true
-	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand(), notifyCommand(), traceCommand(), channelCommand(), mapCommand(), radioCommand())
+	m.extraCommands = append(m.extraCommands, msgCommand(), exportCommand(), notifyCommand(), historyCommand(), traceCommand(), channelCommand(), mapCommand(), radioCommand())
 	m.connect = newConnect(opt.Ports, m.savedTargets)
 	m.ticker = newTicker()
 	for _, n := range opt.Notes {
@@ -267,6 +268,7 @@ func waitEvent(ch <-chan radio.Event) tea.Cmd {
 }
 
 func (m *Model) shutdown() {
+	m.stopPrune()
 	if m.cancel != nil {
 		m.cancel()
 	}
@@ -340,6 +342,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.searchMsg(msg))
 	case exportDoneMsg:
 		m.exportDone(msg)
+	case pruneDoneMsg:
+		m.pruneDone(msg)
 	case sendResultMsg:
 		cmds = append(cmds, m.chatResult(msg))
 	case signedSentMsg:
@@ -365,6 +369,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	m.flushChats()
+	cmds = append(cmds, m.pruneDue())
 	if m.linked == linkUp && m.chat != nil {
 		if err := m.chat.Seen(m.now); err != nil {
 			m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io/fs"
 	"math"
 	"os"
@@ -45,6 +46,7 @@ type Config struct {
 	Messages struct {
 		DMRetries     int      `toml:"dm_retries"`
 		FloodFallback bool     `toml:"flood_fallback"`
+		KeepDays      int      `toml:"keep_days"`               // delete messages received longer ago than this; 0 keeps them all
 		SignIDs       []string `toml:"sign_channel_ids"`        // channels whose messages you send are signed (SIGNING.md), by ChannelID
 		SignChannels  []string `toml:"sign_channels,omitempty"` // the same by name, from before; moved to SignIDs once the radio's channels are known
 	} `toml:"messages"`
@@ -129,12 +131,25 @@ func Load(path string) (*Config, error) {
 	if _, err := toml.Decode(string(data), c); err != nil {
 		return c, err
 	}
+	if err := CheckKeepDays(c.Messages.KeepDays); err != nil {
+		return c, fmt.Errorf("[messages] keep_days: %w", err)
+	}
 	for k, p := range c.Locations {
 		if !(math.Abs(p[0]) <= 90 && math.Abs(p[1]) <= 180) { // TOML has inf and nan
 			delete(c.Locations, k)
 		}
 	}
 	return c, nil
+}
+
+// MaxKeepDays is a hundred years: longer is the same as keeping everything.
+const MaxKeepDays = 36500
+
+func CheckKeepDays(days int) error {
+	if days < 0 || days > MaxKeepDays {
+		return fmt.Errorf("%d isn't a number of days from 1 to %d, or 0 to keep every message", days, MaxKeepDays)
+	}
+	return nil
 }
 
 func (c *Config) Path() string { return c.path }

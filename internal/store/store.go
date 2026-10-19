@@ -681,6 +681,72 @@ func (s *Store) Unread(device string, c Convo) ([]Message, error) {
 		device, string(c), device, string(c))
 }
 
+// devices lists every radio with messages kept, visiting them through the index.
+const devices = `WITH RECURSIVE devices(d) AS (
+		SELECT MIN(device) FROM messages
+		UNION ALL SELECT (SELECT MIN(device) FROM messages WHERE device > d) FROM devices WHERE d IS NOT NULL)
+	SELECT d FROM devices WHERE d IS NOT NULL`
+
+// unfinished matches outgoing messages still waiting on the radio or an ack, which pruning leaves alone.
+const unfinished = `out = 1 AND state IN (1, 2)`
+
+// CountOlder counts the messages, across every radio, that pruning at a cutoff would delete.
+func (s *Store) CountOlder(cutoff time.Time) (int, error) {
+	var older, kept int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM messages INDEXED BY messages_recv WHERE device IN (`+devices+`) AND recv_at < ?`, cutoff.UnixMilli()).Scan(&older)
+	if err != nil {
+		return 0, err
+	}
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM messages INDEXED BY messages_unfinished WHERE `+unfinished+` AND recv_at < ?`, cutoff.UnixMilli()).Scan(&kept)
+	return older - kept, err
+}
+
+// pruneBatch is how many messages one transaction deletes; between batches the connection is free for others.
+var pruneBatch = 1000
+
+// PruneMessages deletes every radio's messages received before a cutoff, except unfinished sends, a batch at
+// a time until ctx is done. It returns how many went.
+func (s *Store) PruneMessages(ctx context.Context, cutoff time.Time) (int, error) {
+	rows, err := s.db.QueryContext(ctx, devices)
+	if err != nil {
+		return 0, err
+	}
+	var devs []string
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		devs = append(devs, d)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, d := range devs {
+		// LastSeen falls back on the latest message, so keep its time in case that one goes.
+		if _, err := s.db.ExecContext(ctx, `INSERT INTO seen SELECT device, MAX(recv_at) FROM messages INDEXED BY messages_recv WHERE device = ? AND recv_at < ? GROUP BY device
+			ON CONFLICT (device) DO UPDATE SET at = MAX(at, excluded.at)`, d, cutoff.UnixMilli()); err != nil {
+			return n, err
+		}
+		for {
+			r, err := s.db.ExecContext(ctx, `DELETE FROM messages WHERE id IN (SELECT id FROM messages INDEXED BY messages_recv
+				WHERE device = ? AND recv_at < ? AND NOT (`+unfinished+`) LIMIT ?)`, d, cutoff.UnixMilli(), pruneBatch)
+			if err != nil {
+				return n, err
+			}
+			gone, _ := r.RowsAffected()
+			n += int(gone)
+			if gone < int64(pruneBatch) {
+				break
+			}
+		}
+	}
+	return n, nil
+}
+
 // StatusRow is one status reply from a watched repeater or room server, as the node sent it.
 type StatusRow struct {
 	At   time.Time

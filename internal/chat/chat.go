@@ -643,6 +643,19 @@ func (s *Service) SearchLater(q string, c store.Convo, limit int) func(context.C
 	return func(ctx context.Context) ([]store.Message, error) { return st.SearchContext(ctx, device, q, c, limit) }
 }
 
+// CountOlder counts the messages, on every radio, that pruning at a cutoff would delete.
+func (s *Service) CountOlder(cutoff time.Time) (int, error) { return s.store.CountOlder(cutoff) }
+
+// PruneLater deletes every radio's messages received before a cutoff, to run off the UI goroutine. Once it
+// has deleted any, call Pruned.
+func (s *Service) PruneLater(cutoff time.Time) func(context.Context) (int, error) {
+	st := s.store
+	return func(ctx context.Context) (int, error) { return st.PruneMessages(ctx, cutoff) }
+}
+
+// Pruned drops the conversation list held, so it's read again without the messages a prune took.
+func (s *Service) Pruned() { s.sums = nil }
+
 type exported struct {
 	Conversation string    `json:"conversation"`
 	From         string    `json:"from"`

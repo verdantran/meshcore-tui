@@ -230,3 +230,34 @@ func TestSigningByChannelSecret(t *testing.T) {
 		t.Errorf("set = %v", back.Messages.SignIDs)
 	}
 }
+
+func TestKeepDays(t *testing.T) {
+	dir := t.TempDir()
+	c, err := Load(filepath.Join(dir, "none.toml"))
+	if err != nil || c.Messages.KeepDays != 0 {
+		t.Fatalf("the default keeps everything: %d, %v", c.Messages.KeepDays, err)
+	}
+	for text, want := range map[string]int{"": 0, "keep_days = 0": 0, "keep_days = 365": 365, "keep_days = 36500": 36500} {
+		path := filepath.Join(dir, "ok.toml")
+		os.WriteFile(path, []byte("[messages]\n"+text+"\n"), 0o600)
+		c, err := Load(path)
+		if err != nil || c.Messages.KeepDays != want {
+			t.Errorf("%q: %d, %v", text, c.Messages.KeepDays, err)
+		}
+	}
+	for _, text := range []string{"keep_days = -1", "keep_days = 36501", "keep_days = 9223372036854775807"} {
+		path := filepath.Join(dir, "bad.toml")
+		os.WriteFile(path, []byte("[messages]\n"+text+"\n"), 0o600)
+		if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "[messages] keep_days") {
+			t.Errorf("%q: %v", text, err)
+		}
+	}
+
+	c.Messages.KeepDays = 90
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if back, err := Load(c.Path()); err != nil || back.Messages.KeepDays != 90 {
+		t.Fatalf("saved: %d, %v", back.Messages.KeepDays, err)
+	}
+}

@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -547,6 +548,46 @@ func TestListKeptInStep(t *testing.T) {
 	check("reconnected")
 	in(radio.Incoming{Channel: true, ChannelIdx: 1, Text: "Carol: back"})
 	check("after reconnecting")
+}
+
+func TestListKeptInStepThroughAPrune(t *testing.T) {
+	s := newService(t, 2, true)
+	old, cutoff := t0.Add(-48*time.Hour), t0.Add(-24*time.Hour)
+	in := func(at time.Time, in radio.Incoming) {
+		in.At, in.SentAt = at, at
+		if _, err := s.Incoming(in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	in(old, radio.Incoming{Channel: true, ChannelIdx: 1, Text: "Carol: hi @[MeshCore-k4]"})
+	in(t0, radio.Incoming{Channel: true, ChannelIdx: 1, Text: "Carol: still here"})
+	in(old, radio.Incoming{From: alice.Prefix(), Text: "long ago"})
+	in(old, radio.Incoming{From: [6]byte{0xEE, 1}, Text: "who's this"})
+	in(t0, radio.Incoming{From: room.Prefix(), Text: "a post"})
+	s.Compose(store.ContactConvo(alice.Key), "never answered", old) // still waiting on its ack
+	held, _ := s.Conversations("")
+	if !held[1].Mention || held[1].Unread != 2 {
+		t.Fatalf("before:\n%s", dump(held))
+	}
+
+	if n, err := s.CountOlder(cutoff); n != 3 || err != nil {
+		t.Fatalf("count %d, %v", n, err)
+	}
+	n, err := s.PruneLater(cutoff)(context.Background())
+	if n != 3 || err != nil {
+		t.Fatalf("pruned %d, %v", n, err)
+	}
+	s.Pruned()
+	held, _ = s.Conversations("")
+	s.sums = nil
+	fresh, _ := s.Conversations("")
+	if !reflect.DeepEqual(held, fresh) {
+		t.Fatalf("held list\n%s\nwant\n%s", dump(held), dump(fresh))
+	}
+	got := dump(held)
+	if held[1].Mention || held[1].Unread != 1 || strings.Contains(got, "dm?:") || !strings.Contains(got, "never answered") {
+		t.Errorf("after:\n%s", got)
+	}
 }
 
 func dump(infos []Info) string {
