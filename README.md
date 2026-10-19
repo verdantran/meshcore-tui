@@ -1,5 +1,7 @@
 # meshcore-tui
 
+[![Latest release](https://img.shields.io/github/v/release/verdantran/meshcore-tui)](https://github.com/verdantran/meshcore-tui/releases/latest)
+
 A terminal client for [MeshCore](https://meshcore.io) radios: chats, contacts, a map of the mesh drawn in braille, a live packet inspector, and remote administration of repeaters and room servers. It connects over USB serial, Bluetooth or WiFi, runs happily over SSH and in tmux, and ships as a single binary.
 
 ![Moving from Chats to the map and packets, then finding #hilltop with ctrl+k](docs/screenshots/demo.gif)
@@ -61,7 +63,7 @@ curl -fsSL https://github.com/verdantran/meshcore-tui/releases/latest/download/m
 sudo install meshcore-tui/meshcore-tui /usr/local/bin/
 ```
 
-Or put it in `~/.local/bin` instead of `/usr/local/bin` to skip `sudo`. On Windows, unzip it and run `meshcore-tui.exe` from Windows Terminal.
+That always fetches the newest release; for a particular one, put its tag in place of `latest`, as in `releases/download/v0.1.0/…`. Or put it in `~/.local/bin` instead of `/usr/local/bin` to skip `sudo`. On Windows, unzip it and run `meshcore-tui.exe` from Windows Terminal.
 
 To check a download before unpacking it, fetch the archive and `SHA256SUMS` from the release into one folder and run `shasum -a 256 -c SHA256SUMS --ignore-missing`.
 
