@@ -87,6 +87,14 @@ func commands() []command {
 		{name: "close", help: "close the focused pane", run: func(m *Model, _ []string) error { return m.closePane() }},
 		{name: "frames", help: "show or hide the protocol frames pane", run: func(m *Model, _ []string) error { m.debug = !m.debug; return nil }},
 		{name: "help", help: "list keys and commands", run: func(m *Model, _ []string) error { m.help = true; return nil }},
+		{name: "version", help: "show which version of meshcore-tui this is", run: func(m *Model, _ []string) error {
+			v := m.opt.Version
+			if v == "" {
+				v = "unknown version"
+			}
+			m.addLog(m.now, "VERSION  meshcore-tui "+v, radio.ToneInfo)
+			return nil
+		}},
 		{name: "quit", help: "leave meshcore-tui", run: func(m *Model, _ []string) error { m.quitting = true; return nil }},
 	}
 	for i := range tabNames {

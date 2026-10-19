@@ -52,7 +52,7 @@ cd meshcore-tui
 go build -trimpath -o meshcore-tui ./cmd/meshcore-tui
 ```
 
-`-trimpath` keeps your own folder names out of the binary. Linux and Windows builds are fully static and can be cross-compiled from anywhere with `CGO_ENABLED=0 GOOS=linux go build -trimpath ./cmd/meshcore-tui`. `meshcore-tui --version` says which version or commit a binary was built from.
+`-trimpath` keeps your own folder names out of the binary. Linux and Windows builds are fully static and can be cross-compiled from anywhere with `CGO_ENABLED=0 GOOS=linux go build -trimpath ./cmd/meshcore-tui`. `meshcore-tui --version` says which version or commit a binary was built from; in the app it shows under the logo, in the help title and on `:version`.
 
 ## Connecting
 

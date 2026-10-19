@@ -451,3 +451,21 @@ func TestBeaconChoicePersists(t *testing.T) {
 		t.Error("a saved beacon = false should start with it off")
 	}
 }
+
+func TestVersionShows(t *testing.T) {
+	h := newHarness(t)
+	h.m.opt.Version = "v1.2.3"
+	h.toMain()
+	h.keys(":")
+	h.typeLine("version")
+	if !strings.Contains(h.lastLog(), "VERSION  meshcore-tui v1.2.3") {
+		t.Errorf(":version: %s", h.lastLog())
+	}
+	h.keys("?")
+	if !strings.Contains(h.screen(), "HELP · meshcore-tui v1.2.3") {
+		t.Errorf("help title doesn't carry the version:\n%s", h.screen())
+	}
+	if !strings.Contains(strings.Join(h.m.logo(h.m.now), "\n"), "companion radio console · v1.2.3") {
+		t.Error("the logo doesn't carry the version")
+	}
+}

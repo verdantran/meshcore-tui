@@ -56,6 +56,7 @@ type Options struct {
 	Notes     []string            // warnings from startup, put in the event log
 	ASCII     bool                // plain ASCII in place of braille, box drawing and symbols
 	Keys      config.Keys         // keys.toml: a key pressed does what another does by default
+	Version   string              // meshcore-tui's own release or commit; empty in tests
 }
 
 type phase int

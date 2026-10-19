@@ -109,7 +109,7 @@ var stdout io.Writer = os.Stdout
 func version() string {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
-		return "meshcore-tui (unknown version)"
+		return "unknown version"
 	}
 	v := info.Main.Version
 	var rev, dirty string
@@ -121,10 +121,11 @@ func version() string {
 			dirty = ", with local changes"
 		}
 	}
-	if (v == "" || v == "(devel)") && rev != "" {
-		return "meshcore-tui " + rev + dirty
+	// Go stamps a checkout build with a made-up version holding the commit; the commit alone reads better.
+	if rev != "" && (v == "" || v == "(devel)" || strings.Contains(v, rev) || strings.HasSuffix(v, "+dirty")) {
+		return rev + dirty
 	}
-	return "meshcore-tui " + v
+	return v
 }
 
 // setup turns the command line, config file and environment into the app's options.
@@ -191,7 +192,7 @@ func setup(args []string, env func(string) string, stderr io.Writer) (ui.Options
 	if oldConsole(goos, env) {
 		notes = append(notes, "CONSOLE  this looks like the old Windows console, which may not draw the map's braille, some symbols or the mouse. Windows Terminal, free from Microsoft, shows everything; --ascii draws in plain ASCII instead.")
 	}
-	opt := ui.Options{Keys: keys, ASCII: *asciiOnly || cfg.UI.ASCII, Notes: notes, Theme: th, Motion: level, Dial: dial, Ports: ports, Scan: scanBLE, Config: cfg, MotionChosen: chosen, Keychain: admin.SystemOr(passwordFile(*configPath))}
+	opt := ui.Options{Version: version(), Keys: keys, ASCII: *asciiOnly || cfg.UI.ASCII, Notes: notes, Theme: th, Motion: level, Dial: dial, Ports: ports, Scan: scanBLE, Config: cfg, MotionChosen: chosen, Keychain: admin.SystemOr(passwordFile(*configPath))}
 	if d, ok := cfg.Device(cfg.Connection.AutoConnect); ok {
 		opt.Start = &ui.Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name, Mode: d.Mode}
 	}
@@ -228,7 +229,7 @@ func run(args []string, env func(string) string, stderr io.Writer) int {
 		return 2
 	}
 	if errors.Is(err, errVersion) {
-		fmt.Fprintln(stdout, version())
+		fmt.Fprintln(stdout, "meshcore-tui "+version())
 		return 0
 	}
 	if err != nil {

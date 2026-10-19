@@ -216,10 +216,14 @@ func (m *Model) logo(opened time.Time) []string {
 		word = motion.DecodeText(word, 0x5eed, motion.Progress(opened, logoDecodeDur, m.now))
 	}
 	rule := strings.Repeat("━", len([]rune(word)))
+	tagline := "companion radio console"
+	if m.opt.Version != "" {
+		tagline += " · " + m.opt.Version
+	}
 	return []string{
 		th.Fg(th.Magenta, true).Render(word),
 		th.Fg(th.Cyan, false).Render(rule),
-		th.Fg(th.Dim, false).Render("companion radio console"),
+		th.Fg(th.Dim, false).Render(tagline),
 	}
 }
 

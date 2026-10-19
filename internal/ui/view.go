@@ -362,10 +362,13 @@ func (m *Model) body(w, h int) []string {
 	if m.help {
 		lines, room := m.helpLines(), mainH-2
 		title := "HELP"
+		if m.opt.Version != "" {
+			title += " · meshcore-tui " + m.opt.Version
+		}
 		if len(lines) > room {
 			start := min(m.helpScroll, len(lines)-room)
 			lines = lines[start : start+room]
-			title = fmt.Sprintf("HELP · %d%% · j k scroll", (start+room)*100/len(m.helpLines()))
+			title += fmt.Sprintf(" · %d%% · j k scroll", (start+room)*100/len(m.helpLines()))
 		}
 		box := m.panel(title, lines, w, mainH, th.Cyan, true)
 		return append(box, debug...)
