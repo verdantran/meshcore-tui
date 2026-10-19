@@ -42,7 +42,10 @@ func exportWhole(s *Service, w io.Writer, convos []store.Convo, asJSON bool, ver
 		}
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
-		enc.Encode(out)
+		enc.Encode(struct {
+			App      string     `json:"app,omitempty"`
+			Messages []exported `json:"messages"`
+		}{s.App, out})
 		return len(ms)
 	}
 	var last store.Convo
@@ -76,6 +79,7 @@ func exportWhole(s *Service, w io.Writer, convos []store.Convo, asJSON bool, ver
 
 func TestStreamedExportIsByteForByteTheSame(t *testing.T) {
 	s := newService(t, 1, false)
+	s.App = "meshcore-tui v1.2.3 \"quoted\""
 	verdict := func(m store.Message) string {
 		if m.Sig == store.SigValid {
 			return "✓ signed by the pinned key"

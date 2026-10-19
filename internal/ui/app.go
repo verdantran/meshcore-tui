@@ -202,6 +202,9 @@ func New(opt Options) *Model {
 	}
 	if opt.Store != nil {
 		m.chat = chat.New(opt.Store, retries, flood)
+		if opt.Version != "" {
+			m.chat.App = "meshcore-tui " + opt.Version
+		}
 	}
 	m.chats = newChats()
 	m.contacts = newContacts()

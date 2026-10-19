@@ -87,6 +87,7 @@ func TestNotifications(t *testing.T) {
 
 func TestFilterSearchAndExport(t *testing.T) {
 	m, c, _ := newChatModel(t)
+	m.chat.App = "meshcore-tui v1.2.3"
 	send(m, c, 0, aliceSays(c, "the route via Purdown works"))
 	send(m, c, 0, aliceSays(c, "battery is fine"))
 	send(m, c, 0, radio.Incoming{At: c.t, Channel: true, ChannelIdx: 1, Hops: 2, SentAt: c.t, Text: "Carol: purdown is back"})
@@ -137,9 +138,12 @@ func TestFilterSearchAndExport(t *testing.T) {
 	for _, f := range files {
 		data, _ := os.ReadFile(f)
 		if strings.HasSuffix(f, ".json") {
-			var rows []map[string]any
-			if err := json.Unmarshal(data, &rows); err != nil || len(rows) != 3 {
-				t.Errorf("json export: %v, %d rows", err, len(rows))
+			var doc struct {
+				App      string
+				Messages []map[string]any
+			}
+			if err := json.Unmarshal(data, &doc); err != nil || len(doc.Messages) != 3 || doc.App != "meshcore-tui v1.2.3" {
+				t.Errorf("json export: %v, %q, %d messages", err, doc.App, len(doc.Messages))
 			}
 		} else if !strings.Contains(string(data), "# #bristol") || !strings.Contains(string(data), "Carol: purdown is back") {
 			t.Errorf("text export:\n%s", data)

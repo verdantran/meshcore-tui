@@ -83,6 +83,8 @@ type Service struct {
 
 	sums map[store.Convo]*summary // every conversation with messages, kept in step with each write; nil until read
 
+	App string // what a JSON export says made it, such as "meshcore-tui v1.0.0"
+
 	lastRun time.Time // when the app was last connected to this radio, before this connection
 	live    bool      // connected, so the time is worth keeping
 	seenAt  time.Time
@@ -693,7 +695,12 @@ func (s *Service) Export(w io.Writer, c store.Convo, asJSON bool, verdict func(s
 	n := 0
 	var last store.Convo
 	if asJSON {
-		bw.WriteString("[")
+		bw.WriteString("{\n")
+		if s.App != "" {
+			app, _ := json.Marshal(s.App)
+			fmt.Fprintf(bw, "  \"app\": %s,\n", app)
+		}
+		bw.WriteString(`  "messages": [`)
 	}
 	err := s.store.Each(context.Background(), s.device, c, func(m store.Message) error {
 		n++
@@ -730,14 +737,14 @@ func (s *Service) Export(w io.Writer, c store.Convo, asJSON bool, verdict func(s
 	}
 	switch {
 	case asJSON && n == 0:
-		bw.WriteString("]\n")
+		bw.WriteString("]\n}\n")
 	case asJSON:
-		bw.WriteString("\n]\n")
+		bw.WriteString("\n  ]\n}\n")
 	}
 	return n, bw.Flush()
 }
 
-// exportJSON writes one message of a JSON export, laid out as encoding/json indents an array.
+// exportJSON writes one message of a JSON export, laid out as encoding/json indents the whole.
 func exportJSON(w *bufio.Writer, m store.Message, title string, verdict func(store.Message) string, first bool) error {
 	e := exported{Conversation: title, From: m.Sender, Outgoing: m.Out, Text: m.Text,
 		Sent: m.SentAt, Received: m.RecvAt, Status: stateNames[m.State], RoundTripMS: m.RTT.Milliseconds()}
@@ -752,14 +759,14 @@ func exportJSON(w *bufio.Writer, m store.Message, title string, verdict func(sto
 			e.SNR = &snr
 		}
 	}
-	b, err := json.MarshalIndent(e, "  ", "  ")
+	b, err := json.MarshalIndent(e, "    ", "  ")
 	if err != nil {
 		return err
 	}
 	if !first {
 		w.WriteString(",")
 	}
-	w.WriteString("\n  ")
+	w.WriteString("\n    ")
 	_, err = w.Write(b)
 	return err
 }
@@ -767,7 +774,7 @@ func exportJSON(w *bufio.Writer, m store.Message, title string, verdict func(sto
 // ExportLater is Export to run off the UI goroutine: it works from a copy of the names conversations are
 // titled by, so the radio can change them meanwhile.
 func (s *Service) ExportLater(c store.Convo, asJSON bool, verdict func(store.Message) string) func(io.Writer) (int, error) {
-	snap := &Service{store: s.store, device: s.device, self: s.self, contacts: slices.Clone(s.contacts), channels: slices.Clone(s.channels)}
+	snap := &Service{store: s.store, device: s.device, self: s.self, contacts: slices.Clone(s.contacts), channels: slices.Clone(s.channels), App: s.App}
 	return func(w io.Writer) (int, error) { return snap.Export(w, c, asJSON, verdict) }
 }
 
