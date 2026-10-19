@@ -790,20 +790,21 @@ func (m *Model) convoPane(w, rows int) []string {
 		}
 	}
 	var compose string
-	if c.writing {
+	switch {
+	case c.writing:
 		compose = th.Paint(th.Magenta, true, "▸ ") + c.input.render(th, w-3-visibleWidth(counter), false)
-	} else {
-		compose = th.Paint(th.Dim, false, "▸ enter write · ↑↓ conversations · → pick a message · r reply · / filter · ctrl+f search all")
-		if c.reading {
-			compose = th.Paint(th.Magenta, true, "▸ ") + th.Paint(th.Text, false, "↑↓ messages · ") +
-				th.Paint(th.Cyan, true, "r") + th.Paint(th.Text, false, " reply · ") +
-				m.retryHint() +
-				th.Paint(th.Cyan, true, "M") + th.Paint(th.Text, false, " route on the map · ") +
-				th.Paint(th.Cyan, true, "y") + th.Paint(th.Text, false, " copy · ") +
-				th.Paint(th.Dim, false, "← back to conversations")
-		}
+		compose = fit(compose, w-visibleWidth(counter)-1) + " " + counter
+	case c.reading:
+		compose = fit(th.Paint(th.Magenta, true, "▸ ")+th.Paint(th.Text, false, "↑↓ messages · ")+
+			th.Paint(th.Cyan, true, "r")+th.Paint(th.Text, false, " reply · ")+
+			m.retryHint()+
+			th.Paint(th.Cyan, true, "M")+th.Paint(th.Text, false, " route on the map · ")+
+			th.Paint(th.Cyan, true, "y")+th.Paint(th.Text, false, " copy · ")+
+			th.Paint(th.Dim, false, "← back to conversations"), w)
+	default:
+		compose = fit(th.Paint(th.Dim, false, "▸ "+fitHints([]string{"enter write", "↑↓ conversations", "→ pick a message",
+			"r reply", "/ filter", "ctrl+f search all"}, w-2)), w)
 	}
-	compose = fit(compose, w-visibleWidth(counter)-1) + " " + counter
 
 	// Messages, newest at the bottom, drawn only as far up as the pane shows.
 	avail := max(rows-3, 0)

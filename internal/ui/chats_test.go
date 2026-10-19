@@ -242,6 +242,18 @@ func TestChatsRetryFloodThenFail(t *testing.T) {
 	}
 }
 
+func TestChatsHintKeepsWholeHints(t *testing.T) {
+	m, _, _ := newChatModel(t)
+	selectConvo(t, m, "Public")
+	got := plain(screen(t, m))
+	if strings.Contains(got, "/147") {
+		t.Errorf("the counter shows only while writing:\n%s", got)
+	}
+	if !strings.Contains(got, "/ filter") || strings.Contains(got, "ctr ") {
+		t.Errorf("hints are dropped whole, never cut short:\n%s", got)
+	}
+}
+
 func TestChatsLimitAndPaletteSend(t *testing.T) {
 	m, c, r := newChatModel(t)
 	selectConvo(t, m, "Public")

@@ -17,13 +17,13 @@
 ┃                          │                                                                       ┃
 ┃                          │                                                                       ┃
 ┃                          │ No messages yet. Press enter to write the first one.                  ┃
-┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply · 0/147 ┃
+┃                          │ ▸ enter write · ↑↓ conversations · → pick a message · r reply         ┃
 ┏━ GO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ┃  Alice                                              contact  ┃ full
 ┃▌ channel                                            command  ┃rds are asked for
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2/2 ━┛
  mc▸ al   ↑↓ choose · enter go · tab complete · esc close
-styles 271ca083c0590a59
+styles ff2ad0f037752b34
 == 40 wide ==
  MeshCore-k4  RX ●  TX ●       ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKET
@@ -43,10 +43,10 @@ styles 271ca083c0590a59
 ┃                      │               ┃
 ┃                      │               ┃
 ┃                      │ No messages y ┃
-┃                      │ ▸ enter 0/147 ┃
+┃                      │ ▸ enter write ┃
 ┏━ GO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃  Alice                      contact  ┃
 ┃▌ channel                    command  ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2/2 ━┛
  mc▸ al   ↑↓ choose · enter go · tab c…
-styles 94f4769aaa4cdf4d
+styles 2ecca7f030e4c52a

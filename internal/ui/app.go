@@ -156,6 +156,16 @@ func hintLine(hs []hint) string {
 	return strings.Join(parts, " · ")
 }
 
+// fitHints joins as many hints as fit in w, dropping whole ones from the end rather than cutting one short.
+func fitHints(hs []string, w int) string {
+	for n := len(hs); n > 0; n-- {
+		if s := strings.Join(hs[:n], " · "); visibleWidth(s) <= w {
+			return s
+		}
+	}
+	return ""
+}
+
 func (m *Model) ask(what, verb string, run func() tea.Cmd) { m.asking = &question{what, verb, run} }
 
 func (m *Model) askLine() string {
