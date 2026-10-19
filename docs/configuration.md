@@ -24,7 +24,7 @@ auto_connect = ""          # the name of a saved device to connect to at startup
 [messages]
 dm_retries = 3             # attempts at a direct message before it's marked failed
 flood_fallback = true      # make the last attempt by flood, forgetting the stored route
-sign_channels = []         # channels whose messages you send are signed, e.g. ["#announcements"]
+sign_channel_ids = []      # channels whose messages you send are signed; set with S on Chats (see signing.md)
 keep_days = 0              # delete messages received more than this many days ago; 0 keeps every message
 
 [notifications]

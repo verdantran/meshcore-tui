@@ -10,7 +10,7 @@ The recording and screenshots here all come from `--demo`, a simulated mesh with
 
 ## Screens
 
-**1 Chats.** Channels and direct messages, with unread counts, delivery state (sent, heard repeating, delivered), hops and signal on every message, and replies. Incoming DMs and mentions show as toasts, and can ring the bell or raise a desktop notification; `m` mutes a busy conversation. To join a channel, pick **+ add a channel** under the channels (or press `n`): a `#name` joins a public hashtag channel, and a private one takes its secret or a shared link. Picking a message that mentions a `#channel` you're not in offers `J` to join it.
+**1 Chats.** Channels and direct messages, with unread counts, delivery state (sent, heard repeating, delivered), hops and signal on every message, and replies. Incoming DMs and mentions show as toasts, and can ring the bell or raise a desktop notification; `m` mutes a busy conversation. To join a channel, pick **+ add a channel** under the channels (or press `n`): a `#name` joins a public hashtag channel, and a private one takes its secret or a shared link. Picking a message that mentions a `#channel` you're not in offers `J` to join it. Channel messages can be signed, so someone posting under another person's name stands out; this is experimental, as [docs/signing.md](docs/signing.md) explains.
 
 ![Chats](docs/screenshots/chats.png)
 
