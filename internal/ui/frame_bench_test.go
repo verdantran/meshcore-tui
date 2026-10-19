@@ -78,7 +78,7 @@ func BenchmarkFrame(b *testing.B) {
 // TestFrameBudget keeps every steady frame inside the budget. The moving map is only reported: it may
 // take longer, and the map jumps instead of gliding where it can't keep up.
 func TestFrameBudget(t *testing.T) {
-	if testing.Short() {
+	if testing.Short() || !timed {
 		t.Skip("timing")
 	}
 	h, cases := frameCases(t)

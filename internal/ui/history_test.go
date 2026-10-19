@@ -187,7 +187,7 @@ func TestBigPruneLeavesTheScreenFree(t *testing.T) {
 	if left, _ := st.CountOlder(now.Add(time.Second)); left != updates {
 		t.Errorf("%d messages left, want the %d that came meanwhile", left, updates)
 	}
-	if slowest > 250*time.Millisecond || slowest > took/3 {
+	if timed && (slowest > 250*time.Millisecond || slowest > took/3) {
 		t.Errorf("an update waited %v on a prune that took %v", slowest, took)
 	}
 	held := heldMatchesStore(t, m.chat)

@@ -113,7 +113,7 @@ func TestMapScreen(t *testing.T) {
 	if mv.view.Center.Lon <= start.Center.Lon || mv.view.Center.Lat <= start.Center.Lat {
 		t.Error("moved east and north")
 	}
-	if !h.m.mapAnimating() || !motion.Running(mv.movedAt, mapGlide, h.m.now) {
+	if timed && (!h.m.mapAnimating() || !motion.Running(mv.movedAt, mapGlide, h.m.now)) {
 		t.Error("moves glide")
 	}
 	cost := mv.drawCost

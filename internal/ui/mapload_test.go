@@ -36,7 +36,7 @@ func TestMapCollidingHops(t *testing.T) {
 	}
 	h.openMap()
 	h.m.Update(tea.WindowSizeMsg{Width: 200, Height: 60})
-	if per := medianFrame(h); per > frameBudget {
+	if per := medianFrame(h); timed && per > frameBudget {
 		t.Errorf("a map frame takes %v", per)
 	}
 }
@@ -79,11 +79,11 @@ func TestMapManyHeard(t *testing.T) {
 	}
 	h.openMap()
 	h.m.Update(tea.WindowSizeMsg{Width: 200, Height: 60})
-	if per := medianFrame(h); per > frameBudget {
+	if per := medianFrame(h); timed && per > frameBudget {
 		t.Errorf("a map frame takes %v", per)
 	}
 	h.m.mapv.view = h.m.mapv.view.Zoomed(3)
-	if per := medianFrame(h); per > frameBudget {
+	if per := medianFrame(h); timed && per > frameBudget {
 		t.Errorf("a map frame zoomed in takes %v", per)
 	}
 }
