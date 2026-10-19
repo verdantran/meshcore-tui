@@ -261,3 +261,32 @@ func TestKeepDays(t *testing.T) {
 		t.Fatalf("saved: %d, %v", back.Messages.KeepDays, err)
 	}
 }
+
+func TestNotificationLimitAndMutes(t *testing.T) {
+	dir := t.TempDir()
+	c, _ := Load(filepath.Join(dir, "none.toml"))
+	if c.Notifications.PerMin != 6 || c.Notifications.Muted != nil {
+		t.Fatalf("defaults: %d a minute, muted %v", c.Notifications.PerMin, c.Notifications.Muted)
+	}
+	path := filepath.Join(dir, "bad.toml")
+	os.WriteFile(path, []byte("[notifications]\nmax_per_minute = -1\n"), 0o600)
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "max_per_minute") {
+		t.Errorf("a negative limit: %v", err)
+	}
+
+	until := time.Date(2026, 10, 20, 8, 0, 0, 0, time.UTC)
+	c.Notifications.PerMin = 0
+	c.Notifications.Muted = []Mute{{Channel: "#bristol", Until: until}, {Contact: "3AAA01"}}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(c.Path())
+	if strings.Count(string(data), "until") != 1 {
+		t.Errorf("a mute until unmuted has no until:\n%s", data)
+	}
+	back, err := Load(c.Path())
+	if err != nil || back.Notifications.PerMin != 0 || len(back.Notifications.Muted) != 2 ||
+		!back.Notifications.Muted[0].Until.Equal(until) || back.Notifications.Muted[1].Contact != "3AAA01" {
+		t.Fatalf("saved: %+v, %v", back.Notifications, err)
+	}
+}

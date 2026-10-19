@@ -2,29 +2,32 @@ package notify
 
 import (
 	"errors"
+	"os/exec"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func env(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
 
 func TestDetect(t *testing.T) {
 	cases := []struct {
-		vars map[string]string
-		want Method
+		vars   map[string]string
+		remote bool
+		want   Method
 	}{
-		{map[string]string{"TERM_PROGRAM": "ghostty"}, Terminal},
-		{map[string]string{"TERM": "xterm-kitty"}, Terminal},
-		{map[string]string{"TERM_PROGRAM": "ghostty", "SSH_CONNECTION": "1 2 3 4"}, Terminal},
-		{map[string]string{"TERM": "xterm-256color", "SSH_CONNECTION": "1 2 3 4"}, BellOnly},
+		{map[string]string{"TERM_PROGRAM": "ghostty"}, false, Terminal},
+		{map[string]string{"TERM": "xterm-kitty"}, false, Terminal},
+		{map[string]string{"TERM_PROGRAM": "ghostty", "SSH_CONNECTION": "1 2 3 4"}, true, Terminal},
+		{map[string]string{"TERM": "xterm-256color", "SSH_CONNECTION": "1 2 3 4"}, true, BellOnly},
 	}
 	for _, c := range cases {
-		if got := Detect(env(c.vars)); got != c.want {
+		if got := Detect(env(c.vars), c.remote); got != c.want {
 			t.Errorf("Detect(%v) = %s, want %s", c.vars, got, c.want)
 		}
 	}
-	if got := Resolve("off", nil); got != Off {
+	if got := Resolve("off", nil, false); got != Off {
 		t.Errorf("Resolve(off) = %s", got)
 	}
 }
@@ -58,8 +61,15 @@ func TestDesktopAndPlatforms(t *testing.T) {
 	}
 
 	goos = "darwin"
-	if Detect(env(nil)) != OS {
+	if Detect(env(nil), false) != OS {
 		t.Error("macOS without a known terminal uses system notifications")
+	}
+	// tmux keeps SSH_CONNECTION from whichever login started it; whether the session is remote decides.
+	if Detect(env(map[string]string{"SSH_CONNECTION": "1 2 3 4"}), false) != OS {
+		t.Error("a stale SSH_CONNECTION on a local session still uses system notifications")
+	}
+	if Detect(env(nil), true) != BellOnly {
+		t.Error("a remote session without a known terminal rings the bell")
 	}
 	Desktop(`say "hi"`, "line\nbreak \\ done")
 	if len(calls) != 1 || calls[0][0] != "osascript" || calls[0][2] != `display notification "line break \\ done" with title "say \"hi\""` {
@@ -68,7 +78,7 @@ func TestDesktopAndPlatforms(t *testing.T) {
 
 	goos = "linux"
 	lookPath = func(string) (string, error) { return "/usr/bin/notify-send", nil }
-	if Detect(env(nil)) != OS {
+	if Detect(env(nil), false) != OS {
 		t.Error("Linux with notify-send uses it")
 	}
 	Desktop("--wait", "hi\x07 <b>&'\"")
@@ -76,13 +86,13 @@ func TestDesktopAndPlatforms(t *testing.T) {
 		t.Errorf("notify-send call = %q", calls[1])
 	}
 	lookPath = func(string) (string, error) { return "", errNotFound }
-	if Detect(env(nil)) != BellOnly {
+	if Detect(env(nil), false) != BellOnly {
 		t.Error("Linux without notify-send falls back to the bell")
 	}
 
 	goos = "windows"
 	lookPath = func(string) (string, error) { return `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, nil }
-	if Detect(env(nil)) != OS {
+	if Detect(env(nil), false) != OS {
 		t.Error("Windows raises toasts through PowerShell")
 	}
 	Desktop("Bob's node", "it’s'); Start-Process calc; ('\nup")
@@ -95,17 +105,33 @@ func TestDesktopAndPlatforms(t *testing.T) {
 	}
 
 	goos = "plan9"
-	if Detect(env(nil)) != BellOnly || Desktop("a", "b") != nil {
+	if Detect(env(nil), false) != BellOnly || Desktop("a", "b") != nil {
 		t.Error("other systems ring the bell only")
 	}
 	for _, m := range []string{"terminal", "os", "bell"} {
-		if Resolve(m, nil) != Method(m) {
+		if Resolve(m, nil, false) != Method(m) {
 			t.Errorf("Resolve(%s)", m)
 		}
 	}
-	if Resolve("auto", env(map[string]string{"TERM_PROGRAM": "iTerm.app"})) != Terminal {
+	if Resolve("auto", env(map[string]string{"TERM_PROGRAM": "iTerm.app"}), false) != Terminal {
 		t.Error("auto detects iTerm2")
 	}
 }
 
 var errNotFound = errors.New("not found")
+
+func TestHungNotifierIsStopped(t *testing.T) {
+	if _, err := exec.LookPath("sleep"); err != nil {
+		t.Skip("no sleep command")
+	}
+	saved := runLimit
+	t.Cleanup(func() { runLimit = saved })
+	runLimit = 50 * time.Millisecond
+	start := time.Now()
+	if err := run(nil, "sleep", "10"); err == nil {
+		t.Error("a notifier that never finishes is an error")
+	}
+	if took := time.Since(start); took > 5*time.Second {
+		t.Errorf("a hung notifier ran for %s", took)
+	}
+}

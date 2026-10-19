@@ -486,6 +486,8 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		m.addLog(m.now, "RETRY  nothing here failed to send", radio.ToneInfo)
 	case "S":
 		m.toggleChannelSigning()
+	case "m":
+		m.toggleMute()
 	case "pgup", "ctrl+u":
 		c.scroll = min(c.scroll+5, max(len(c.msgs)-1, 0))
 	case "pgdown", "ctrl+d":
@@ -689,12 +691,22 @@ func (m *Model) convoList(w, rows int) []string {
 			out = append(out, th.Fg(th.Muted, true).Render([]string{"CHANNELS", "DIRECT"}[g]))
 			group = g
 		}
+		_, muted := m.mutedUntil(info.Convo, info.Title)
 		badge := ""
-		if info.Unread > 0 {
+		switch {
+		case muted && info.Unread > 0:
+			badge = th.Paint(th.Dim, false, fmt.Sprintf(" %d ", info.Unread))
+		case info.Unread > 0:
 			badge = m.unreadBadge(info)
 		}
-		if info.Mention {
+		switch {
+		case muted && info.Mention:
+			badge = th.Paint(th.Dim, false, "@") + badge
+		case info.Mention:
 			badge = th.Fg(th.Magenta, true).Render("@") + badge
+		}
+		if muted {
+			badge = th.Paint(th.Dim, false, "×") + badge
 		}
 		icon := map[chat.Kind]string{chat.KindChannel: "#", chat.KindDirect: "●", chat.KindRoom: "■"}[info.Kind]
 		title := strings.TrimPrefix(info.Title, "#")
@@ -706,14 +718,14 @@ func (m *Model) convoList(w, rows int) []string {
 			continue
 		}
 		col := th.Muted
-		if info.Last == nil {
+		if info.Last == nil || muted {
 			col = th.Dim
 		}
 		iconCol := th.Dim
 		if info.Kind == chat.KindRoom {
 			iconCol = th.Violet
 		}
-		out = append(out, " "+th.Fg(iconCol, false).Render(icon)+" "+th.Fg(col, info.Unread > 0).Render(fit(name, w-3-visibleWidth(badge)))+badge)
+		out = append(out, " "+th.Fg(iconCol, false).Render(icon)+" "+th.Fg(col, info.Unread > 0 && !muted).Render(fit(name, w-3-visibleWidth(badge)))+badge)
 	}
 	// Keep the selection in view.
 	if len(out) > rows {
@@ -744,6 +756,9 @@ func (m *Model) convoPane(w, rows int) []string {
 				route = "direct · " + strings.TrimSpace(plural(ct.PathLen, "hop")+" "+pathText(ct.Path, 1)) + " · M shows it"
 			}
 		}
+	}
+	if until, ok := m.mutedUntil(cur.Convo, cur.Title); ok {
+		route += " · × muted " + m.untilText(until) + " (m)"
 	}
 	head := title + th.Paint(th.Dim, false, "  "+route)
 	if c.filter.text != "" || c.filtering {

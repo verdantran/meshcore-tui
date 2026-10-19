@@ -3,10 +3,12 @@
 package notify
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
@@ -20,8 +22,9 @@ const (
 	BellOnly Method = "bell"
 )
 
-// Detect picks the best method for this session. Over SSH only terminal escapes reach the user's desktop.
-func Detect(env func(string) string) Method {
+// Detect picks the best method for this session. When it's remote, over SSH or mosh, only terminal escapes
+// reach the user's desktop.
+func Detect(env func(string) string, remote bool) Method {
 	if env == nil {
 		env = os.Getenv
 	}
@@ -31,7 +34,7 @@ func Detect(env func(string) string) Method {
 	case strings.Contains(env("TERM"), "kitty") || strings.Contains(env("TERM"), "ghostty"):
 		return Terminal
 	}
-	if env("SSH_CONNECTION") != "" {
+	if remote {
 		return BellOnly
 	}
 	switch goos {
@@ -50,12 +53,12 @@ func Detect(env func(string) string) Method {
 }
 
 // Resolve turns the config value into a method; "auto" or empty means Detect.
-func Resolve(setting string, env func(string) string) Method {
+func Resolve(setting string, env func(string) string, remote bool) Method {
 	switch m := Method(setting); m {
 	case Off, Terminal, OS, BellOnly:
 		return m
 	}
-	return Detect(env)
+	return Detect(env, remote)
 }
 
 // clean keeps notification text to one line with no control characters, which would end an escape sequence
@@ -87,7 +90,9 @@ func Escape(m Method, title, body string, bell bool, env func(string) string) st
 // run starts an external command, with extra environment variables; tests replace it so they don't raise
 // real notifications.
 var run = func(env []string, name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), runLimit)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
 	if env != nil {
 		cmd.Env = append(os.Environ(), env...)
 	}
@@ -97,6 +102,7 @@ var run = func(env []string, name string, args ...string) error {
 var (
 	goos     = runtime.GOOS
 	lookPath = exec.LookPath
+	runLimit = 5 * time.Second // so a hung notification daemon can't pile up waiting notifiers
 )
 
 // Desktop sends an OS notification; it's only used when the method is OS.

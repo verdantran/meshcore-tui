@@ -48,6 +48,7 @@ type Options struct {
 	Store        *store.Store   // message history; nil disables chats
 
 	Env       func(string) string // environment lookups for notification detection; nil uses the process's
+	Remote    bool                // the terminal is reached over SSH or mosh, as worked out at startup
 	ExportDir string              // where :export writes; empty uses the data directory
 	Keychain  admin.Keychain      // node passwords; nil keeps them only while the program runs
 	MapDir    string              // street detail and its download; empty uses the data directory
@@ -323,6 +324,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.focused = false
 	case notifyFlushMsg:
 		cmds = append(cmds, m.flushNotes())
+	case noteSummaryMsg:
+		cmds = append(cmds, m.summariseNotes())
 	case contactsSyncedMsg, advertPathMsg, traceStartedMsg, traceTimeoutMsg, exportedMsg, autoAddMsg, opDoneMsg:
 		cmd, _ := m.contactsMsg(msg)
 		cmds = append(cmds, cmd)
@@ -965,6 +968,7 @@ func (m *Model) screenKeys() []string {
 			key("M", "show on the map the route of the picked message, or the newest received"),
 			key("R", "send your newest failed message again; on a picked one, R or enter sends that one"),
 			key("L", "log in to or out of the room server whose conversation is open"),
+			key("m", "mute the open conversation, or unmute it: its messages still arrive, without notifications; :mute 8h mutes for a while"),
 			key("n", "add a channel: #name, a private one with its secret, or a shared link"),
 			key("e x", "share or leave the channel that's open; :channel rename renames it"), ""}
 	}

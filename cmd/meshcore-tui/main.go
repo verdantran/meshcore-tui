@@ -192,7 +192,7 @@ func setup(args []string, env func(string) string, sess session, stderr io.Write
 	if oldConsole(goos, env) {
 		notes = append(notes, "CONSOLE  this looks like the old Windows console, which may not draw the map's braille, some symbols or the mouse. Windows Terminal, free from Microsoft, shows everything; --ascii draws in plain ASCII instead.")
 	}
-	opt := ui.Options{Version: version(), Keys: keys, ASCII: *asciiOnly || cfg.UI.ASCII, Notes: notes, Theme: th, Motion: level, Dial: dial, Ports: ports, Scan: scanBLE, Config: cfg, MotionChosen: chosen, Keychain: admin.SystemOr(passwordFile(*configPath))}
+	opt := ui.Options{Version: version(), Keys: keys, ASCII: *asciiOnly || cfg.UI.ASCII, Notes: notes, Theme: th, Motion: level, Dial: dial, Ports: ports, Scan: scanBLE, Config: cfg, MotionChosen: chosen, Remote: sess.remote, Keychain: admin.SystemOr(passwordFile(*configPath))}
 	if d, ok := cfg.Device(cfg.Connection.AutoConnect); ok {
 		opt.Start = &ui.Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name, Mode: d.Mode}
 	}

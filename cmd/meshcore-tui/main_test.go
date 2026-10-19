@@ -99,6 +99,12 @@ func TestSetupEnvironment(t *testing.T) {
 	if opt.Motion != motion.Reduced || opt.Theme.Name != "mono" {
 		t.Errorf("over SSH with NO_COLOR: motion %s, theme %s", opt.Motion, opt.Theme.Name)
 	}
+	if !opt.Remote {
+		t.Error("notifications are told the session is remote")
+	}
+	if opt, _ := setup([]string{"--config", cfgPath}, e, session{}, &errs); opt.Remote {
+		t.Error("the session decides, not a stale SSH_CONNECTION")
+	}
 }
 
 func TestOldWindowsConsole(t *testing.T) {

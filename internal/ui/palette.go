@@ -103,6 +103,7 @@ func commands() []command {
 		}
 	}
 	cs = append(cs, splitCommand())
+	cs = append(cs, muteCommands()...)
 	return cs
 }
 

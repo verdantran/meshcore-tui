@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/verdantran/meshcore-tui/internal/config"
 	"github.com/verdantran/meshcore-tui/internal/notify"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/store"
@@ -22,6 +23,9 @@ type note struct {
 
 type notifyFlushMsg struct{}
 
+// noteSummaryMsg comes when the notifications held back by the limit can go out as one.
+type noteSummaryMsg struct{}
+
 type notifier struct {
 	method  notify.Method
 	show    string // message, sender or nothing: how much of it leaves the app
@@ -30,17 +34,26 @@ type notifier struct {
 	env     func(string) string
 	pending []note
 	waiting bool
+
+	limit   int         // notifications a minute; 0 is no limit
+	sent    []time.Time // those that went out in the last minute
+	held    []note      // over the limit, for the summary
+	summing bool        // a summary is due
+	muted   []config.Mute
 }
 
 func newNotifier(o Options) notifier {
-	n := notifier{method: notify.Resolve("auto", o.Env), show: "message", bell: true, events: []string{"dm", "mention"}, env: o.Env}
+	n := notifier{method: notify.Resolve("auto", o.Env, o.Remote), show: "message", bell: true, events: []string{"dm", "mention"}, env: o.Env,
+		limit: config.Default().Notifications.PerMin}
 	if c := o.Config; c != nil {
-		n.method = notify.Resolve(c.Notifications.Desktop, o.Env)
+		n.method = notify.Resolve(c.Notifications.Desktop, o.Env, o.Remote)
 		if slices.Contains(showLevels, c.Notifications.Show) {
 			n.show = c.Notifications.Show
 		}
 		n.bell = c.Notifications.Bell
 		n.events = c.Notifications.Events
+		n.limit = c.Notifications.PerMin
+		n.muted = slices.Clone(c.Notifications.Muted)
 	}
 	return n
 }
@@ -54,6 +67,9 @@ func (m *Model) considerNote(msg store.Message, title string) tea.Cmd {
 		return nil
 	}
 	if cur, ok := m.selectedConvo(); ok && m.focused && m.phase == phaseMain && m.visible(0) && cur.Convo == msg.Convo {
+		return nil
+	}
+	if _, ok := m.mutedUntil(msg.Convo, title); ok {
 		return nil
 	}
 	head := msg.Sender
@@ -74,33 +90,82 @@ func (m *Model) flushNotes() tea.Cmd {
 	if len(n.pending) == 0 {
 		return nil
 	}
-	title, body := "meshcore-tui · "+n.pending[0].title, n.pending[0].body
-	if len(n.pending) > 1 {
-		var who []string
-		for _, p := range n.pending {
-			if !slices.Contains(who, p.title) {
-				who = append(who, p.title)
-			}
-		}
-		title = fmt.Sprintf("meshcore-tui · %d new messages", len(n.pending))
-		body = strings.Join(who, ", ")
-	}
-	count := len(n.pending)
+	notes := n.pending
 	n.pending = nil
-	m.pushToast(strings.TrimPrefix(title, "meshcore-tui · "), body)
+	title, body := gather(notes, "new")
+	m.pushToast(title, body)
 	if n.method == notify.Off {
 		return nil
 	}
-	switch {
-	case n.show == "nothing":
-		title, body = "meshcore-tui", "New message"
-		if count > 1 {
-			body = fmt.Sprintf("%d new messages", count)
+	if len(n.held) > 0 || !n.room(m.now) {
+		n.held = append(n.held, notes...)
+		return n.summaryDue(m.now)
+	}
+	n.sent = append(n.sent, m.now)
+	return m.sendNote(n.private(title, body, len(notes), "new"))
+}
+
+// summariseNotes sends what the limit held back as one notification, once the minute has room again.
+func (m *Model) summariseNotes() tea.Cmd {
+	n := &m.notes
+	n.summing = false
+	if len(n.held) == 0 {
+		return nil
+	}
+	if !n.room(m.now) {
+		return n.summaryDue(m.now)
+	}
+	title, body := gather(n.held, "more")
+	title, body = n.private(title, body, len(n.held), "more")
+	n.held = nil
+	n.sent = append(n.sent, m.now)
+	return m.sendNote(title, body)
+}
+
+// room reports whether another notification fits in the last minute, forgetting those older than that.
+func (n *notifier) room(now time.Time) bool {
+	n.sent = slices.DeleteFunc(n.sent, func(t time.Time) bool { return now.Sub(t) >= time.Minute })
+	return n.limit <= 0 || len(n.sent) < n.limit
+}
+
+func (n *notifier) summaryDue(now time.Time) tea.Cmd {
+	if n.summing {
+		return nil
+	}
+	n.summing = true
+	wait := time.Second
+	if len(n.sent) > 0 {
+		wait = max(n.sent[0].Add(time.Minute).Sub(now), wait)
+	}
+	return tea.Tick(wait, func(time.Time) tea.Msg { return noteSummaryMsg{} })
+}
+
+// gather is the title and body for some messages: the one, or how many ("new" or "more") and from whom.
+func gather(notes []note, which string) (title, body string) {
+	if len(notes) == 1 && which == "new" {
+		return notes[0].title, notes[0].body
+	}
+	var who []string
+	for _, p := range notes {
+		if !slices.Contains(who, p.title) {
+			who = append(who, p.title)
 		}
-	case n.show == "sender" && count == 1:
+	}
+	return plural(len(notes), which+" message"), strings.Join(who, ", ")
+}
+
+// private keeps back what the show setting says shouldn't leave the app.
+func (n *notifier) private(title, body string, count int, which string) (string, string) {
+	one := count == 1 && which == "new"
+	switch {
+	case n.show == "nothing" && one:
+		return "meshcore-tui", "New message"
+	case n.show == "nothing":
+		return "meshcore-tui", plural(count, which+" message")
+	case n.show == "sender" && one:
 		body = "New message"
 	}
-	return m.sendNote(title, body)
+	return "meshcore-tui · " + title, body
 }
 
 var showLevels = []string{"message", "sender", "nothing"}

@@ -29,6 +29,14 @@ type Device struct {
 	LastUsed time.Time `toml:"last_used"`
 }
 
+// Mute silences a channel, by name, or a contact, by public key (hex), until a time or, when Until is zero,
+// until unmuted.
+type Mute struct {
+	Channel string    `toml:"channel,omitempty"`
+	Contact string    `toml:"contact,omitempty"`
+	Until   time.Time `toml:"until,omitempty"`
+}
+
 type Config struct {
 	UI struct {
 		Theme        string `toml:"theme"`
@@ -53,8 +61,10 @@ type Config struct {
 	Notifications struct {
 		Events  []string `toml:"events"` // dm, mention
 		Bell    bool     `toml:"bell"`
-		Desktop string   `toml:"desktop"` // auto, terminal, os, bell or off
-		Show    string   `toml:"show"`    // what reaches the desktop and lock screen: message, sender or nothing
+		Desktop string   `toml:"desktop"`        // auto, terminal, os, bell or off
+		Show    string   `toml:"show"`           // what reaches the desktop and lock screen: message, sender or nothing
+		PerMin  int      `toml:"max_per_minute"` // more than this in a minute are gathered into one; 0 is no limit
+		Muted   []Mute   `toml:"muted,omitempty"`
 	} `toml:"notifications"`
 	Admin struct {
 		StatusPoll   int      `toml:"status_poll_s"` // the auto-refresh interval on a node's status
@@ -85,6 +95,7 @@ func Default() *Config {
 	c.Notifications.Bell = true
 	c.Notifications.Desktop = "auto"
 	c.Notifications.Show = "message"
+	c.Notifications.PerMin = 6
 	c.Admin.StatusPoll = 60
 	c.Admin.FleetSpacing = 20
 	c.Admin.BatteryAlert = 3.5
@@ -133,6 +144,9 @@ func Load(path string) (*Config, error) {
 	}
 	if err := CheckKeepDays(c.Messages.KeepDays); err != nil {
 		return c, fmt.Errorf("[messages] keep_days: %w", err)
+	}
+	if c.Notifications.PerMin < 0 {
+		return c, fmt.Errorf("[notifications] max_per_minute: %d isn't a number of notifications, or 0 for no limit", c.Notifications.PerMin)
 	}
 	for k, p := range c.Locations {
 		if !(math.Abs(p[0]) <= 90 && math.Abs(p[1]) <= 180) { // TOML has inf and nan
