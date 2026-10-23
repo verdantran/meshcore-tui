@@ -4,7 +4,7 @@ Thanks for wanting to help. Issues and pull requests are welcome; for anything l
 
 ## Building and testing
 
-You need Go 1.26.9 or later; on a Mac, the Xcode command line tools too (the build uses cgo for serial ports and Bluetooth).
+You need Go 1.26.10 or later; on a Mac, the Xcode command line tools too (the build uses cgo for serial ports and Bluetooth).
 
 ```sh
 go build -trimpath ./cmd/meshcore-tui

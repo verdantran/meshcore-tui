@@ -75,7 +75,7 @@ On Linux, serial ports belong to a group, usually `dialout` (`uucp` on Arch). If
 
 ### From source
 
-You need Go 1.26.9 or later. On a Mac, the build needs cgo for listing serial ports and for Bluetooth, which works out of the box once the Xcode command line tools are installed.
+You need Go 1.26.10 or later. On a Mac, the build needs cgo for listing serial ports and for Bluetooth, which works out of the box once the Xcode command line tools are installed.
 
 ```sh
 go install github.com/verdantran/meshcore-tui/cmd/meshcore-tui@latest
