@@ -13,7 +13,7 @@ meshcore-tui keeps what it needs on your own computer and sends nothing anywhere
 | Settings, saved devices and their keys, locations you placed by hand | `config.toml` | Until you change them |
 | Repeater and room passwords you chose to save | the OS keychain, or `passwords.json` beside the config where there's none | Until you forget them (`x` on the Admin list) |
 | Street detail for your mesh's area, once downloaded | the data folder's `maps` | Until `:map remove` |
-| Exports | the data folder's `exports` | Until you delete them |
+| Exports, and radio backups | the data folder's `exports` | Until you delete them. A backup can hold channel secrets and, if you chose, the radio's private key; see [backup.md](backup.md) |
 
 The data folder is `~/.local/share/meshcore-tui/` on macOS and Linux and `%LOCALAPPDATA%\meshcore-tui\` on Windows; the config is in `~/.config/meshcore-tui/` or `%APPDATA%\meshcore-tui\`. On macOS and Linux both folders and everything in them are readable only by you, and the app refuses to keep private files in a folder anyone else could write to. On Windows they take their permissions from your user profile.
 

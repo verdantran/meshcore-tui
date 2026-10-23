@@ -42,6 +42,8 @@ const (
 	devPresets
 	devConfirm
 	devShowKey
+	devBackup
+	devRestorePath
 )
 
 type rowKind int
@@ -85,6 +87,7 @@ type deviceModel struct {
 	pick     int
 	confirm  devConfirmation
 	key      string
+	bak      backupState
 	busy     map[string]time.Time
 	doneAt   map[string]time.Time
 	failedAt map[string]time.Time
@@ -462,6 +465,22 @@ func (m *Model) deviceRows() []devRow {
 					op: func(ctx context.Context, d radio.Device) error { return d.FactoryReset(ctx) }}
 				return nil
 			}},
+		devRow{id: "backup", group: "Backup", label: "Back up this radio", value: "", kind: rowAction,
+			hint: "Settings, channels and contacts to a file; you choose what goes in, and the private key only if you ask.",
+			press: func(m *Model) tea.Cmd {
+				if err := m.startBackup(); err != nil {
+					m.fail("BACKUP  " + err.Error())
+				}
+				return nil
+			}},
+		devRow{id: "restore", group: "Backup", label: "Restore a backup", value: "", kind: rowAction,
+			hint: "Pick what to bring back from a backup file; channels and contacts you have are kept.",
+			press: func(m *Model) tea.Cmd {
+				if err := m.startRestore(""); err != nil {
+					m.fail("RESTORE  " + err.Error())
+				}
+				return nil
+			}},
 		devRow{id: "clock", group: "Clock", label: "Radio clock", value: m.clockText(), kind: rowAction, hint: "Messages carry the radio's time, so it should match yours.",
 			press: func(m *Model) tea.Cmd {
 				return m.runOp("clock", "CLOCK SYNCED", func(ctx context.Context, d radio.Device) error { return d.SyncClock(ctx) }, true)
@@ -630,6 +649,17 @@ func (m *Model) devicePromptKey(s string) tea.Cmd {
 			return c.after(m)
 		}
 		return m.runOp(c.id, c.what, c.op, c.id != "reboot" && c.id != "reset")
+	case devBackup:
+		return m.backupKey(s)
+	case devRestorePath:
+		if s != "enter" {
+			typing()
+			return nil
+		}
+		dm.prompt = devNone
+		if err := m.openBackup(strings.TrimSpace(dm.input.text)); err != nil {
+			m.fail("RESTORE  " + err.Error())
+		}
 	case devShowKey:
 		if s == "y" && dm.key != "" {
 			m.addLog(m.now, "COPIED  private key to the clipboard; it's cleared in 30 s", radio.ToneWarn)

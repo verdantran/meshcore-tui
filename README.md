@@ -28,7 +28,7 @@ The recording and screenshots here all come from `--demo`, a simulated mesh with
 
 **5 Admin.** Log in to repeaters and room servers over the mesh for status, health history, every setting, neighbours, access lists, regions, telemetry, the log and a raw console. A fleet view and a watch list keep an eye on several nodes at once. A repeater plugged in by USB opens straight onto its console with `--repeater`.
 
-**6 Device.** Your own radio's settings: name and location, radio presets, TX power, tuning, telemetry sharing, BLE PIN, clock sync, key export and import, reboot and factory reset. Changes go to the radio as soon as you enter them.
+**6 Device.** Your own radio's settings, and [backing it up](docs/backup.md) to a file you can restore later, choosing what goes in: name and location, radio presets, TX power, tuning, telemetry sharing, BLE PIN, clock sync, key export and import, reboot and factory reset. Changes go to the radio as soon as you enter them.
 
 **7 Stats.** Uptime, battery, noise floor, airtime and packet counters with sparklines, and an overview of the mesh from what you've heard: busiest repeaters, hop counts, signal spread and channel activity.
 
@@ -68,6 +68,8 @@ That always fetches the newest release; for a particular one, use `releases/down
 To check a download before unpacking it, fetch the archive and `SHA256SUMS` from the release into one folder and run `shasum -a 256 -c SHA256SUMS --ignore-missing`.
 
 The binaries aren't signed. macOS only objects to one downloaded through a browser; if it says the app can't be opened, run `xattr -d com.apple.quarantine meshcore-tui` once. Windows SmartScreen may warn the first time too: **More info**, then **Run anyway**.
+
+On a Mac, the first launch asks for Bluetooth, even if you only connect over USB or WiFi: the Bluetooth library sets itself up as the app starts, and macOS asks then. Saying no only turns off Bluetooth radios; everything else works, and you can change your mind in System Settings → Privacy & Security → Bluetooth.
 
 On Linux, serial ports belong to a group, usually `dialout` (`uucp` on Arch). If a radio on USB says permission denied, add yourself with `sudo usermod -aG dialout $USER` and log in again.
 

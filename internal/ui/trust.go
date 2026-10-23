@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -182,10 +183,15 @@ func (m *Model) identityRow() devRow {
 }
 
 func radioCommand() command {
-	return command{name: "radio", args: "trust", help: "accept a radio that proved its key but isn't the one saved, after a factory reset or a new key",
+	return command{name: "radio", args: "trust | backup | restore [file]", help: "back up the radio or restore a backup, choosing what goes in; or accept a radio that proved its key but isn't the one saved",
 		run: func(m *Model, a []string) error {
-			if len(a) != 1 || a[0] != "trust" {
-				return fmt.Errorf("radio trust is the only one")
+			switch {
+			case len(a) == 1 && a[0] == "backup":
+				return m.startBackup()
+			case len(a) >= 1 && a[0] == "restore":
+				return m.startRestore(strings.Join(a[1:], " "))
+			case len(a) != 1 || a[0] != "trust":
+				return fmt.Errorf("radio takes trust, backup or restore")
 			}
 			if m.trust != trustChanged {
 				return fmt.Errorf("this radio isn't flagged as different")
