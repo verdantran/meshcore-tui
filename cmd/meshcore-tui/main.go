@@ -16,6 +16,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"go.bug.st/serial/enumerator"
 
 	"github.com/verdantran/meshcore-tui/internal/admin"
@@ -247,6 +248,9 @@ func run(args []string, env func(string) string, stderr io.Writer) int {
 	out := &timedOutput{File: os.Stdout}
 	p := tea.NewProgram(ui.New(opt), tea.WithOutput(out), tea.WithFPS(motion.FrameRate), tea.WithEnvironment(teaEnv(os.Environ(), sess))) // the app never animates faster
 	out.slow = func() { p.Send(ui.SlowTerminalMsg{}) }
+	if sess.tmux && terminalDrawsGraphemes() {
+		go p.Send(tea.ModeReportMsg{Mode: ansi.ModeUnicodeCore, Value: ansi.ModeSet}) // as the answer tmux doesn't give
+	}
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

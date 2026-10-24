@@ -536,3 +536,39 @@ func TestVersionShows(t *testing.T) {
 		t.Error("the logo doesn't carry the version")
 	}
 }
+
+// clears reports whether running cmd clears the screen, giving up on commands that wait.
+func clears(cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	got := make(chan tea.Msg, 1)
+	go func() { got <- cmd() }()
+	select {
+	case msg := <-got:
+		if batch, ok := msg.(tea.BatchMsg); ok {
+			for _, c := range batch {
+				if clears(c) {
+					return true
+				}
+			}
+		}
+		return msg == tea.ClearScreen()
+	case <-time.After(50 * time.Millisecond):
+		return false
+	}
+}
+
+// Rows drawn before the terminal said it lays out graphemes were measured a character at a time.
+func TestGraphemeWidthsRedrawOnce(t *testing.T) {
+	defer setRenderWidth(renderWidth)
+	setRenderWidth(ansi.WcWidth)
+	h := newHarness(t)
+	report := tea.ModeReportMsg{Mode: ansi.ModeUnicodeCore, Value: ansi.ModeSet}
+	if _, cmd := h.m.Update(report); !clears(cmd) || renderWidth != ansi.GraphemeWidth {
+		t.Error("switching to grapheme widths didn't redraw the screen")
+	}
+	if _, cmd := h.m.Update(report); clears(cmd) {
+		t.Error("a second report redrew the screen again")
+	}
+}

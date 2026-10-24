@@ -330,8 +330,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.w, m.h = msg.Width, msg.Height
 	case tea.ModeReportMsg:
 		// Bubble Tea switches its renderer to grapheme widths on the same answer.
-		if msg.Mode == ansi.ModeUnicodeCore && (msg.Value == ansi.ModeReset || msg.Value == ansi.ModeSet || msg.Value == ansi.ModePermanentlySet) {
+		if msg.Mode == ansi.ModeUnicodeCore && (msg.Value == ansi.ModeReset || msg.Value == ansi.ModeSet || msg.Value == ansi.ModePermanentlySet) && renderWidth != ansi.GraphemeWidth {
 			setRenderWidth(ansi.GraphemeWidth)
+			cmds = append(cmds, tea.ClearScreen) // rows already drawn were laid out a character at a time
 		}
 	case frameMsg:
 		m.ticking = false
