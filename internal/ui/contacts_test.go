@@ -271,6 +271,25 @@ func TestContactsHeardAutoAddAndPrune(t *testing.T) {
 	}
 }
 
+// A heard list longer than the viewport must scroll with the selection, as the contact table does:
+// the highlighted row going off the bottom leaves no cursor on screen at all.
+func TestContactsHeardListScrollsWithSelection(t *testing.T) {
+	h := newHarness(t)
+	h.keys("2")
+	for i := 0; i < 60; i++ {
+		_, cmd := h.m.Update(eventMsg{radio.Heard{Contact: radio.Contact{
+			Key: [32]byte{byte(i), 0xE5}, Name: fmt.Sprintf("Node %02d", i), Type: radio.TypeChat, PathLen: -1, LastAdvert: h.clk.t,
+		}}})
+		h.start(cmd)
+	}
+	h.keys("a")
+	h.keys(strings.Repeat("j", 59))
+	got := h.screen()
+	if want := h.m.contacts.heard[h.m.contacts.heardSel].c.Name; !strings.Contains(got, want) {
+		t.Fatalf("the selected heard node %q scrolled out of view:\n%s", want, got)
+	}
+}
+
 func TestContactsMessageJumpsToChat(t *testing.T) {
 	h := newHarness(t)
 	h.keys("2")
