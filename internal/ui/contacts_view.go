@@ -224,10 +224,10 @@ func (m *Model) heardLines(w, rows int) []string {
 	if len(c.heard) == 0 {
 		return append(out, th.Fg(th.Dim, false).Render("Nothing yet. Nodes appear here when their advert arrives but auto-add doesn't cover them (A to change)."))
 	}
-	for i, h := range c.heard {
-		if len(out) >= rows {
-			break
-		}
+	room := rows - len(out)
+	start := min(max(c.heardSel-room/2, 0), max(len(c.heard)-room, 0))
+	for i := start; i < len(c.heard) && len(out) < rows; i++ {
+		h := c.heard[i]
 		line := fmt.Sprintf(" %s %-9s %s  heard %s", col(h.c.Name, 24), h.c.Type, m.keyHash(h.c.Key), ago(m.now.Sub(h.at)))
 		if i == c.heardSel {
 			out = append(out, th.Fg(th.Magenta, true).Render("▌")+m.raised(fit(line, w-1)))
