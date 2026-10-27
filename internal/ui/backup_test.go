@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -72,6 +73,9 @@ func TestBackupAndRestore(t *testing.T) {
 	}
 	a.key(tea.KeyEscape)
 	path, b := a.makeBackup(false)
+	if !strings.Contains(a.screen(), filepath.Base(path)) {
+		t.Errorf("the backup row shows where it went:\n%s", a.screen())
+	}
 	if st, _ := os.Stat(path); runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
 		t.Errorf("a backup is %v; only you should read it", st.Mode().Perm())
 	}
@@ -146,6 +150,38 @@ func TestBackupWithTheKey(t *testing.T) {
 	}
 }
 
+func TestARestoredKeyIsAcceptedAfterARestart(t *testing.T) {
+	a := newHarness(t)
+	path, _ := a.makeBackup(true)
+
+	z := newHarness(t)
+	z.until("checked", func() bool { return z.m.trust != trustChecking })
+	z.onDevice("BLE", "AA:BB", radio.KeyHex(z.m.ready.Self.PubKey[:]))
+	z.openDevice()
+	if err := z.m.startRestore(path); err != nil {
+		t.Fatal(err)
+	}
+	for range 10 {
+		z.key(tea.KeyDown)
+	}
+	z.keys(" ")
+	z.key(tea.KeyEnter)
+	z.typeLine("restore")
+	z.until("restored", func() bool { return strings.Contains(plainLog(z), "private key") })
+
+	// The app is closed before the radio proves its new key: it isn't flagged when it does.
+	z.m.renewKey = false
+	if z.m.opt.Config.Devices[0].Key != "" {
+		t.Fatalf("the old key is forgotten: %q", z.m.opt.Config.Devices[0].Key)
+	}
+	z.m.ready.Self.PubKey = a.m.ready.Self.PubKey
+	z.s = a.s // the radio now signs as the one backed up
+	z.prove(true)
+	if z.m.trust != trustVerified || z.m.opt.Config.Devices[0].Key != radio.KeyHex(a.m.ready.Self.PubKey[:]) {
+		t.Errorf("the restored key is taken as the radio's identity: %v %q", z.m.trust, z.m.opt.Config.Devices[0].Key)
+	}
+}
+
 func TestRestoreRefusesWhatWouldMislead(t *testing.T) {
 	h := newHarness(t)
 	h.openDevice()
@@ -173,5 +209,50 @@ func TestRestoreRefusesWhatWouldMislead(t *testing.T) {
 	h.key(tea.KeyEscape)
 	if err := h.m.startRestore(path); err == nil || h.m.device.prompt == devBackup {
 		t.Error("a file that isn't a backup is refused")
+	}
+}
+
+func TestRestorePathTakesAPaste(t *testing.T) {
+	a := newHarness(t)
+	path, _ := a.makeBackup(false)
+	a.moveTo("restore")
+	a.key(tea.KeyEnter)
+	if a.m.device.prompt != devRestorePath || a.m.device.input.text != path {
+		t.Fatalf("the newest backup is filled in: %q", a.m.device.input.text)
+	}
+	a.paste(`"` + path + `"`) // as Windows' Copy as path gives it
+	if a.m.device.input.text != `"`+path+`"` {
+		t.Fatalf("a paste replaces what was filled in: %q", a.m.device.input.text)
+	}
+	a.key(tea.KeyEnter)
+	a.until("opened", func() bool { return a.m.device.prompt == devBackup })
+}
+
+func hasContact(h *harness, key [32]byte) bool {
+	return slices.ContainsFunc(h.m.chat.Contacts(), func(c radio.Contact) bool { return c.Key == key })
+}
+
+func TestRestoreBringsBackAContact(t *testing.T) {
+	a := newHarness(t)
+	path, b := a.makeBackup(false)
+	gone := a.m.chat.Contacts()[0]
+	if err := a.s.RemoveContact(t0ctx, gone.Key); err != nil {
+		t.Fatal(err)
+	}
+	a.start(a.m.syncContacts())
+	a.until("removed", func() bool { return !hasContact(a, gone.Key) })
+
+	a.keys(":")
+	a.typeFast("radio restore " + path)
+	a.key(tea.KeyEnter)
+	a.until("opened", func() bool { return a.m.device.prompt == devBackup })
+	if !strings.Contains(a.screen(), fmt.Sprintf("1 to add, %d already here", len(b.Contacts)-1)) {
+		t.Fatalf("plan:\n%s", a.screen())
+	}
+	a.key(tea.KeyEnter)
+	a.typeLine("restore")
+	a.until("restored", func() bool { return hasContact(a, gone.Key) })
+	if a.keys("2"); !strings.Contains(a.screen(), gone.Name) {
+		t.Errorf("%s isn't on the Contacts screen:\n%s", gone.Name, a.screen())
 	}
 }

@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"crypto/ed25519"
+	"errors"
 	"strings"
 	"testing"
 
@@ -75,8 +76,22 @@ func TestAnImpostorGetsNoPasswords(t *testing.T) {
 	h.keys("5")
 	h.choose("Dundry")
 	h.key(tea.KeyEnter)
-	if h.m.adm.prompt != promptPassword || !strings.Contains(h.screen(), "This may not be your radio") {
+	if h.m.adm.prompt != promptPassword || !strings.Contains(h.screen(), "didn't prove it's the one saved") {
 		t.Fatalf("the login is typed, with a warning:\n%s", h.screen())
+	}
+}
+
+func TestACheckThatFailsIsntADifferentRadio(t *testing.T) {
+	h := newHarness(t)
+	h.until("checked", func() bool { return h.m.trust != trustChecking })
+	h.onDevice("BLE", "AA:BB", radio.KeyHex(h.m.ready.Self.PubKey[:]))
+	h.m.Update(radioCheckedMsg{key: h.m.ready.Self.PubKey, err: errors.New("a 61-byte frame is more than this Bluetooth link carries")})
+	h.settle()
+	if h.m.trust != trustUnproven || strings.Contains(plainLog(h), "DIFFERENT RADIO") || !strings.Contains(h.m.trustText(), "didn't go through") {
+		t.Errorf("a check that couldn't run leaves it unverified, saying why: %v %q", h.m.trust, h.m.trustText())
+	}
+	if safe, _ := h.m.savedPasswordsOK(); safe {
+		t.Error("an unverified radio still gets no saved passwords unasked")
 	}
 }
 

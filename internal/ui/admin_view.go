@@ -280,7 +280,11 @@ func (m *Model) promptLines(ct radio.Contact, sess *admin.Session, w, rows int) 
 		}
 		switch {
 		case m.trust == trustChanged:
-			out = append(out, th.Fg(th.Red, true).Render(clip("⚠ This may not be your radio: it isn't the one saved for this connection.", w)), "")
+			warn := "⚠ Your radio didn't prove it's the one saved for this connection, so no saved password is sent: type it to log in. If it's yours with a new key, :radio trust accepts it."
+			for _, l := range strings.Split(renderWidth.Wrap(warn, w, " "), "\n") {
+				out = append(out, th.Fg(th.Red, true).Render(l))
+			}
+			out = append(out, "")
 		case note != "":
 			out = append(out, th.Fg(th.Yellow, false).Render(clip(note, w)), "")
 		}

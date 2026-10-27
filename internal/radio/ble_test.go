@@ -136,22 +136,48 @@ func TestBLEHints(t *testing.T) {
 		goos, err, want string
 	}{
 		{"linux", "org.bluez.Error.NotPermitted: Not paired", "bluetoothctl"},
-		{"windows", "access denied", "Settings → Bluetooth & devices"},
+		{"windows", "access denied", "Windows Settings (Win+I) → Bluetooth & devices"},
 		{"darwin", "insufficient encryption", "System Settings → Bluetooth"},
 		{"darwin", "bluetooth is not authorized for this app", "Privacy & Security"},
 		{"linux", "bluetooth adapter not powered", "turn Bluetooth on"},
+		{"windows", "async operation failed with status 3: Bluetooth ATT error (code 0x0005)", "Windows Settings (Win+I) → Bluetooth & devices"},
+		{"windows", "async operation failed with status 3: Bluetooth ATT error (code 0x000F)", "Windows Settings (Win+I) → Bluetooth & devices"},
 	} {
 		bleOS = c.goos
 		if got := bleHint(errors.New(c.err)).Error(); !strings.Contains(got, c.want) {
 			t.Errorf("%s %q: %s", c.goos, c.err, got)
 		}
 	}
-	if bleHint(nil) != nil || bleHint(errors.New("timeout")).Error() != "timeout" {
+	if bleHint(nil) != nil || bleHint(errors.New("timeout")).Error() != "timeout" || bleHint(errors.New("Bluetooth ATT error (code 0x0003)")).Error() != "Bluetooth ATT error (code 0x0003)" {
 		t.Error("other errors pass through")
 	}
 
 	f := &fakeBLE{fail: errors.New("not paired")}
 	if err := bleStream(f, "x").Connect(context.Background()); err == nil || !strings.Contains(err.Error(), "pair it once") {
 		t.Errorf("a first connection that needs pairing says how: %v", err)
+	}
+}
+
+func TestBLEWriteWaitsForTheMTU(t *testing.T) {
+	var slept time.Duration
+	sleep := func(d time.Duration) { slept += d }
+
+	// Windows starts at the minimum and agrees more a moment later.
+	sizes := []int{20, 20, 244}
+	carries := func() int { n := sizes[0]; sizes = sizes[min(1, len(sizes)-1):]; return n }
+	if _, ok := bleRoomFor(148, carries, sleep); !ok || slept == 0 {
+		t.Errorf("a contact waits for the MTU to grow: ok %v after %v", ok, slept)
+	}
+
+	slept = 0
+	if most, ok := bleRoomFor(148, func() int { return 20 }, sleep); ok || most != 20 || slept < bleMTUWait {
+		t.Errorf("a link that stays small refuses it in the end: %d %v after %v", most, ok, slept)
+	}
+	slept = 0
+	if _, ok := bleRoomFor(20, func() int { return 20 }, sleep); !ok || slept != 0 {
+		t.Error("what fits goes at once")
+	}
+	if _, ok := bleRoomFor(148, func() int { return 0 }, sleep); !ok {
+		t.Error("a link that doesn't say lets the system decide")
 	}
 }

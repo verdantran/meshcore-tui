@@ -253,11 +253,13 @@ func (m *Model) renderConnect() []string {
 	if c.editing {
 		hs = []hint{{"", "type a host"}, {"enter", "connect"}, {"esc", "cancel"}}
 	}
-	line := th.Fg(th.Dim, false).Render(truncate(hintLine(hs), inner))
 	if m.asking != nil {
-		line = truncate(m.askLine(), inner)
+		body = append(body, truncate(m.askLine(), inner))
+	} else {
+		for _, l := range hintLines(hs, inner) {
+			body = append(body, th.Fg(th.Dim, false).Render(truncate(l, inner)))
+		}
 	}
-	body = append(body, line)
 	box := m.panel("SELECT LINK", body, width, len(body)+2, th.Magenta, true)
 	block := append(m.logo(c.openedAt), "")
 	block = append(block, box...)

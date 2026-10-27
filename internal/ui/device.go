@@ -88,6 +88,7 @@ type deviceModel struct {
 	confirm  devConfirmation
 	key      string
 	bak      backupState
+	saved    string // the file the last backup went to
 	busy     map[string]time.Time
 	doneAt   map[string]time.Time
 	failedAt map[string]time.Time
@@ -178,7 +179,7 @@ func (m *Model) deviceMsg(msg tea.Msg) tea.Cmd {
 		dm.doneAt[msg.id] = m.now
 		m.addLog(m.now, msg.what, radio.ToneOK)
 		if msg.id == "reset" || msg.id == "import" {
-			m.renewKey = true // the radio has a new identity, so its next proof is saved as the new one
+			m.expectNewKey()
 		}
 		if msg.reload {
 			return m.loadDevice()
@@ -465,8 +466,8 @@ func (m *Model) deviceRows() []devRow {
 					op: func(ctx context.Context, d radio.Device) error { return d.FactoryReset(ctx) }}
 				return nil
 			}},
-		devRow{id: "backup", group: "Backup", label: "Back up this radio", value: "", kind: rowAction,
-			hint: "Settings, channels and contacts to a file; you choose what goes in, and the private key only if you ask.",
+		devRow{id: "backup", group: "Backup", label: "Back up this radio", value: m.device.saved, kind: rowAction,
+			hint: "Settings, channels and contacts to a file in " + m.exportDir() + "; you choose what goes in, and the private key only if you ask.",
 			press: func(m *Model) tea.Cmd {
 				if err := m.startBackup(); err != nil {
 					m.fail("BACKUP  " + err.Error())

@@ -22,7 +22,7 @@ import (
 const (
 	appName       = "meshcore-tui"
 	appVersion    = 3
-	stepTimeout   = 6 * time.Second
+	listLimit     = 2 * time.Minute  // the most a list may take while the radio keeps sending it
 	fetchTimeout  = 30 * time.Second // long, because the fetch queues behind whatever command is running
 	fetchTries    = 3
 	silentPolls   = 2 // battery polls unanswered before the link is redialled
@@ -31,6 +31,9 @@ const (
 
 // batteryEvery is how often the battery is read; tests shorten it.
 var batteryEvery = 60 * time.Second
+
+// stepTimeout bounds each connect step, and how long a list may go quiet; tests shorten it.
+var stepTimeout = 6 * time.Second
 
 // pollTimeout bounds each battery poll; tests shorten it.
 var pollTimeout = stepTimeout
@@ -207,10 +210,22 @@ func (l *Link) step(key, label, detail string, s StepState) {
 
 // run times out one connect step and reports it.
 func run[T any](l *Link, ctx context.Context, key, label string, f func(context.Context) (T, error), detail func(T) string) (T, bool) {
-	l.step(key, label, "", StepWait)
 	sctx, cancel := context.WithTimeout(ctx, stepTimeout)
 	defer cancel()
-	v, err := f(sctx)
+	return report(l, sctx, key, label, f, detail)
+}
+
+// runList is run for a list, which over Bluetooth arrives an entry at a time: it gives up when
+// the radio goes quiet, not when a long list is still coming.
+func runList[T any](l *Link, ctx context.Context, key, label string, f func(context.Context) (T, error), detail func(T) string) (T, bool) {
+	sctx, cancel := l.whileTalking(ctx)
+	defer cancel()
+	return report(l, sctx, key, label, f, detail)
+}
+
+func report[T any](l *Link, ctx context.Context, key, label string, f func(context.Context) (T, error), detail func(T) string) (T, bool) {
+	l.step(key, label, "", StepWait)
+	v, err := f(ctx)
 	if err != nil {
 		l.step(key, label, untrusted.Line(err.Error()), StepFail)
 		return v, false
@@ -223,11 +238,19 @@ func run[T any](l *Link, ctx context.Context, key, label string, f func(context.
 // messages that queued while we were away. They're delivered after Ready, when the UI can store them.
 func (l *Link) sync(ctx context.Context) {
 	c := l.client
+	var helloErr error
 	self, ok := run(l, ctx, "hello", "HELLO", func(ctx context.Context) (companion.SelfInfoResponse, error) {
-		return c.AppStart(ctx, appVersion, appName)
+		s, err := c.AppStart(ctx, appVersion, appName)
+		helloErr = err
+		return s, err
 	}, func(s companion.SelfInfoResponse) string { return s.Name })
 	if !ok {
-		l.emit(Fatal{Err: errors.New("the radio didn't answer APP_START; is this companion firmware?")})
+		err := errors.New("the radio didn't answer APP_START; is this companion firmware?")
+		if errors.As(helloErr, new(writeError)) {
+			// It never got there, as when Bluetooth refuses the write: say why, with what to do about it.
+			err = fmt.Errorf("couldn't reach the radio: %w", helloErr)
+		}
+		l.emit(Fatal{Err: err})
 		return
 	}
 	dev, _ := run(l, ctx, "device", "DEVICE", c.DeviceQuery, func(d companion.DeviceInfoResponse) string {
@@ -247,12 +270,12 @@ func (l *Link) sync(ctx context.Context) {
 		}
 		return fmt.Sprintf("synced, was %+v off", drift), nil
 	}, func(s string) string { return s })
-	contacts, _ := run(l, ctx, "contacts", "CONTACTS", c.GetContacts, func(cs []companion.ContactResponse) string {
+	contacts, _ := runList(l, ctx, "contacts", "CONTACTS", c.GetContacts, func(cs []companion.ContactResponse) string {
 		return fmt.Sprintf("%d synced", len(cs))
 	})
 	l.slots.Store(int32(dev.MaxChannels))
 	channels, _ := run(l, ctx, "channels", "CHANNELS", l.Channels, func(cs []Channel) string { return fmt.Sprintf("%d configured", len(cs)) })
-	waiting, _ := run(l, ctx, "queue", "QUEUE", c.GetWaitingMessages, func(ms []client.WaitingMessage) string {
+	waiting, _ := runList(l, ctx, "queue", "QUEUE", c.GetWaitingMessages, func(ms []client.WaitingMessage) string {
 		return fmt.Sprintf("%d received", len(ms))
 	})
 	batt, _ := run(l, ctx, "power", "POWER", c.GetBattAndStorage, func(b companion.BattAndStorageResponse) string {
@@ -367,6 +390,42 @@ func (l *Link) fetch(ctx context.Context) error {
 	ms, err := l.client.GetWaitingMessages(ctx)
 	l.deliver(ms, false)
 	return err
+}
+
+// whileTalking is ctx, ended once the radio has sent nothing for stepTimeout, or after listLimit.
+// It ends with context.DeadlineExceeded, as a timeout would.
+func (l *Link) whileTalking(ctx context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancelLimit := context.WithTimeout(ctx, listLimit)
+	ctx, cancel := context.WithCancelCause(ctx)
+	start := time.Now().UnixNano()
+	go func() {
+		t := time.NewTimer(stepTimeout)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+			quiet := time.Duration(time.Now().UnixNano() - max(start, l.tap.heard.Load()))
+			if quiet >= stepTimeout {
+				cancel(context.DeadlineExceeded)
+				return
+			}
+			t.Reset(stepTimeout - quiet)
+		}
+	}()
+	return causeCtx{ctx}, func() { cancel(context.Canceled); cancelLimit() }
+}
+
+// causeCtx reports why it ended as its error, so a quiet radio reads as a timeout.
+type causeCtx struct{ context.Context }
+
+func (c causeCtx) Err() error {
+	if c.Context.Err() == nil {
+		return nil
+	}
+	return context.Cause(c.Context)
 }
 
 // Explain words an error for the log, turning Go's timeout message into something plain.
@@ -645,6 +704,7 @@ func (l *Link) registerPushes() {
 type tap struct {
 	inner client.Transport
 	emit  func(Event)
+	heard atomic.Int64 // when the radio last sent anything, in Unix nanoseconds
 }
 
 func (t *tap) Connect(ctx context.Context) error { return t.inner.Connect(ctx) }
@@ -667,12 +727,14 @@ func (t *tap) SetResponseHandler(h func(companion.Response)) {
 		SetFrameHandler(func(companion.Response, []byte))
 	}); ok {
 		s.SetFrameHandler(func(r companion.Response, raw []byte) {
+			t.heard.Store(time.Now().UnixNano())
 			t.emit(ResponseFrame(time.Now(), raw))
 			h(r)
 		})
 		return
 	}
 	t.inner.SetResponseHandler(func(r companion.Response) {
+		t.heard.Store(time.Now().UnixNano())
 		t.emit(Frame{At: time.Now(), Dir: FromRadio, Code: r.Code, Name: ResponseName(r.Code)})
 		h(r)
 	})
@@ -688,6 +750,8 @@ var overAir = map[byte]bool{
 }
 
 func (l *Link) SyncContacts(ctx context.Context) ([]Contact, error) {
+	ctx, cancel := l.whileTalking(ctx)
+	defer cancel()
 	cs, err := l.client.GetContacts(ctx)
 	if err != nil {
 		return nil, err
