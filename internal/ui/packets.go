@@ -229,8 +229,8 @@ func (m *Model) shows(r *packetRow) bool {
 	case r.bestSNR() < snrChoices[in.snrIdx]:
 		return false
 	}
-	q := strings.ToLower(in.filter.text)
-	return q == "" || strings.Contains(strings.ToLower(r.dec.Summary+" "+r.dec.Type+" "+hashes(r.dec.Path, r.dec.HashSize)), q)
+	q := fold(in.filter.text)
+	return q == "" || strings.Contains(fold(r.dec.Summary+" "+r.dec.Type+" "+hashes(r.dec.Path, r.dec.HashSize)), q)
 }
 
 // visiblePackets is the filtered list, newest first. While paused, rows that arrived since stay hidden.
@@ -453,7 +453,7 @@ func (m *Model) packetTable(list []*packetRow, w, rows int) []string {
 		if compact {
 			at, typ, snr, n := r.first.Local().Format("15:04")+" ", fmt.Sprintf("%-8s ", truncate(r.dec.Type, 8)), fmt.Sprintf("%+6.2f ", c.snr), fmt.Sprintf("%-4s", fmt.Sprintf("%2s", times))
 			if i == in.sel {
-				out = append(out, th.Paint(th.Magenta, true, "▌")+m.raised(fit(" "+at+typ+snr+n+summary, w-1)))
+				out = append(out, th.Paint(th.Magenta, true, "▌")+m.raised(col(" "+at+typ+snr+n+summary, w-1)))
 			} else {
 				out = append(out, m.typedRow("  "+th.Paint(th.Dim, false, at)+th.Paint(m.typeColour(r), true, typ)+
 					th.Paint(th.SNR(float64(c.snr)), false, snr)+th.Paint(th.Magenta, true, n)+
@@ -464,7 +464,7 @@ func (m *Model) packetTable(list []*packetRow, w, rows int) []string {
 		if i == in.sel {
 			line := fmt.Sprintf("%-8s %-6s %-8s %4d  %-14s %+6.2f %5d %4d %3s  %s", r.first.Local().Format("15:04:05"), route, truncate(r.dec.Type, 8),
 				len(r.dec.Path), truncate(path, 14), c.snr, c.rssi, len(r.dec.Raw), times, summary)
-			out = append(out, th.Paint(th.Magenta, true, "▌")+m.raised(fit(" "+line, w-1)))
+			out = append(out, th.Paint(th.Magenta, true, "▌")+m.raised(col(" "+line, w-1)))
 			continue
 		}
 		bar := " "
@@ -476,7 +476,7 @@ func (m *Model) packetTable(list []*packetRow, w, rows int) []string {
 			th.Paint(th.Muted, false, fmt.Sprintf("%-6s ", route))+th.Paint(typeCol, true, fmt.Sprintf("%-8s ", truncate(r.dec.Type, 8)))+
 			th.Paint(th.Muted, false, fmt.Sprintf("%4d  ", len(r.dec.Path)))+th.Paint(th.Cyan, false, fmt.Sprintf("%-14s ", truncate(path, 14)))+
 			th.Paint(th.SNR(float64(c.snr)), false, fmt.Sprintf("%+6.2f ", c.snr))+th.Paint(th.Dim, false, fmt.Sprintf("%5d %4d ", c.rssi, len(r.dec.Raw)))+
-			th.Paint(th.Magenta, true, fmt.Sprintf("%3s  ", times))+th.Paint(th.Text, false, truncate(summary, max(w-70, 10))), r.first))
+			th.Paint(th.Magenta, true, fmt.Sprintf("%3s  ", times))+th.Paint(th.Text, false, truncate(summary, max(w-71, 10))), r.first))
 	}
 	return out
 }
@@ -541,11 +541,16 @@ func (m *Model) packetDetail(w, rows int) []string {
 		}
 		return packets.PartBody
 	}
+	// Sixteen bytes a row, or fewer when that would leave the fields too little room.
+	per := 16
+	for per > 8 && w-2-hexWidth(per) < 30 {
+		per -= 4
+	}
 	var right []string
-	for off := 0; off < len(r.dec.Raw); off += 16 {
+	for off := 0; off < len(r.dec.Raw); off += per {
 		var b strings.Builder
 		b.WriteString(th.Fg(th.Dim, false).Render(fmt.Sprintf("%04X ", off)))
-		for i := off; i < off+16 && i < len(r.dec.Raw); i++ {
+		for i := off; i < off+per && i < len(r.dec.Raw); i++ {
 			if i >= shown {
 				b.WriteString(th.Fg(th.Line, false).Render(" ··"))
 				continue
@@ -562,7 +567,7 @@ func (m *Model) packetDetail(w, rows int) []string {
 		}
 		right = append(right, b.String())
 	}
-	leftW := max(w-52, 30)
+	leftW := max(w-2-hexWidth(per), 10)
 	var out []string
 	for i := 0; i < rows && (i < len(left) || i < len(right)); i++ {
 		l, rr := "", ""
@@ -572,10 +577,13 @@ func (m *Model) packetDetail(w, rows int) []string {
 		if i < len(right) {
 			rr = right[i]
 		}
-		out = append(out, fit(l, leftW)+"  "+rr)
+		out = append(out, col(l, leftW)+"  "+rr)
 	}
 	return out
 }
+
+// hexWidth is the cells a hex dump row takes: its offset, then each byte and the space before it.
+func hexWidth(per int) int { return 5 + 3*per }
 
 type packetJSON struct {
 	Time      time.Time `json:"time"`

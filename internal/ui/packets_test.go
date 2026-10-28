@@ -3,6 +3,7 @@ package ui
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -274,4 +275,31 @@ func (h *harness) typeChannel(key, name, secret string) {
 	h.typeFast(secret)
 	h.key(tea.KeyEnter)
 	h.until(name, func() bool { _, ok := h.channel(name); return ok })
+}
+
+// The hex dump shows every byte of the packet at any width, and every row fits.
+func TestHexDumpShowsEveryByte(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.keys("4")
+	raw := channelPacket(t, h, "#bristol", "Carol", "a message long enough to take a few rows of hex 👍🏽 東京", []byte{0xA3})
+	h.hear(raw, 6.5)
+	row := regexp.MustCompile(`([0-9A-F]{4}) ((?: (?:[0-9A-F]{2}|··))+) *[┃│|]`)
+	for _, size := range [][2]int{{80, 24}, {120, 40}, {200, 60}} {
+		h.m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+		h.advance(time.Second)
+		n := 0
+		for _, m := range row.FindAllStringSubmatch(h.screen(), -1) {
+			n += len(m[2]) / 3
+		}
+		if n != len(raw) {
+			t.Errorf("%dx%d: the hex dump shows %d of %d bytes:\n%s", size[0], size[1], n, len(raw), h.screen())
+		}
+		// A summary cut to fit its column ends in …, rather than the row being cut at the frame.
+		for _, l := range strings.Split(h.screen(), "\n") {
+			if strings.Contains(l, "#bristol · Carol") && !strings.Contains(l, "東京") && !strings.Contains(l, "…") {
+				t.Errorf("%dx%d: the summary is cut without …: %q", size[0], size[1], l)
+			}
+		}
+	}
 }

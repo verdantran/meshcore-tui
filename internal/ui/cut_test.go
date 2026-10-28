@@ -63,3 +63,17 @@ func TestCutsKeepStyles(t *testing.T) {
 		t.Errorf("take = %q", got)
 	}
 }
+
+// Filters find a name however its accents were typed or stored.
+func TestFoldMatchesAccents(t *testing.T) {
+	for _, name := range []string{"Zoë", "Zoë", "ZOË"} {
+		for _, q := range []string{"zoë", "zoë", "zoe", "Zoë"} {
+			if !strings.Contains(fold(name), fold(q)) {
+				t.Errorf("%q doesn't find %q", q, name)
+			}
+		}
+	}
+	if strings.Contains(fold("Zed"), fold("zoe")) {
+		t.Error("zoe finds Zed")
+	}
+}
