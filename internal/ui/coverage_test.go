@@ -54,7 +54,7 @@ func TestContactsOverlaysRender(t *testing.T) {
 	h.keys("x")
 	has(t, h.screen(), "REMOVE CONTACT", "Remove Alice from the radio?")
 	h.keys("n")
-	if len(h.m.chat.Contacts()) != 15 {
+	if len(h.m.chat.Contacts()) != 18 {
 		t.Fatal("any key but y cancels removal")
 	}
 
@@ -146,7 +146,7 @@ func TestContactsSortFilterAndErrors(t *testing.T) {
 	h.m.Update(eventMsg{radio.TraceResult{Tag: 999}})
 	h.m.Update(eventMsg{radio.PathFound{Prefix: [6]byte{0xEE}}})
 	h.m.Update(eventMsg{radio.ContactRemoved{Key: h.contact("Dundry").Key}})
-	if len(h.m.chat.Contacts()) != 14 {
+	if len(h.m.chat.Contacts()) != 17 {
 		t.Error("a contact the radio dropped should go")
 	}
 	h.m.Update(eventMsg{radio.Heard{Contact: radio.Contact{Key: [32]byte{1}, Name: "Eve"}}})

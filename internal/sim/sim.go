@@ -31,20 +31,24 @@ var repeaters = []node{
 	{"Dundry", 0xA3, radio.TypeRepeater, 51.399, -2.639}, {"Cabot Tower", 0x1E, radio.TypeRepeater, 51.452, -2.603},
 	{"Purdown", 0x77, radio.TypeRepeater, 51.484, -2.564}, {"Kelston", 0x5F, radio.TypeRepeater, 51.399, -2.431},
 	{"Lansdown", 0x5F, radio.TypeRepeater, 51.420, -2.410}, {"Blackdown", 0xB2, radio.TypeRepeater, 51.303, -2.715},
-	{"Clevedon", 0x4D, radio.TypeRepeater, 51.440, -2.850}, {"Aust", 0x90, radio.TypeRepeater, 51.600, -2.620},
-	{"Brean Down", 0xE1, radio.TypeRepeater, 51.324, -3.025}, {"Twmbarlwm", 0x08, radio.TypeRepeater, 51.623, -3.088},
+	{"Clevedon", 0x4D, radio.TypeRepeater, 51.440, -2.850}, {"Aust 🌉", 0x90, radio.TypeRepeater, 51.600, -2.620},
+	{"Brean Down 🌊", 0xE1, radio.TypeRepeater, 51.324, -3.025}, {"Twmbarlwm", 0x08, radio.TypeRepeater, 51.623, -3.088},
 }
 
 var people = []node{
 	{"Alice", 0x3A, radio.TypeChat, 51.346, -2.970}, {"Bob", 0xB0, radio.TypeChat, 51.381, -2.360},
 	{"Carol", 0xCA, radio.TypeChat, 51.484, -2.766}, {"Dan", 0xD4, radio.TypeChat, 51.588, -2.997},
-	{"Clifton Room", 0x6C, radio.TypeRoom, 51.456, -2.620},
+	{"Clifton Room", 0x6C, radio.TypeRoom, 51.456, -2.620}, {"🍺 Harbourside Room", 0x2B, radio.TypeRoom, 51.468, -2.700},
+	{"Zoe\u0308", 0x2E, radio.TypeChat, 51.468, -2.480}, {"健二 Kenji", 0x4B, radio.TypeChat, 51.380, -2.500},
 }
 
 // strangers are heard on air but aren't contacts until you add them.
 var strangers = []node{
-	{"Eve", 0xE5, radio.TypeChat, 51.410, -2.540}, {"Frank", 0xF4, radio.TypeChat, 51.330, -2.810},
-	{"Weston Relay", 0x3B, radio.TypeRepeater, 51.350, -2.980}, {"Portishead Room", 0x9C, radio.TypeRoom, 51.486, -2.770},
+	{"Eve 🦊", 0xE5, radio.TypeChat, 51.410, -2.540}, {"Frank 🎣", 0xF4, radio.TypeChat, 51.330, -2.810},
+	{"🗼 Weston Relay", 0x3B, radio.TypeRepeater, 51.350, -2.980}, {"☕ Portishead Room", 0x9C, radio.TypeRoom, 51.486, -2.770},
+	{"⛰️ Mendip Mast", 0xD9, radio.TypeRepeater, 51.262, -2.613}, {"👩‍🚀 Space Club Room", 0x61, radio.TypeRoom, 51.458, -2.585},
+	{"🇬🇧 Siân", 0x5C, radio.TypeChat, 51.500, -2.700}, {"Bristol Harbourside Repeater 2", 0xC7, radio.TypeRepeater, 51.448, -2.611},
+	{"سلام Salam", 0x7A, radio.TypeChat, 51.470, -2.520},
 }
 
 var channelNames = []string{"Public", "#bristol", "#hilltop"}
@@ -81,16 +85,23 @@ var chatter = map[string][]string{
 		"anyone hearing the coast relay this morning?", "Purdown's back up after the power cut",
 		"new repeater going up on Lansdown this weekend", "getting 3 hops to Bath from Bedminster now",
 		"is the #hilltop channel still a thing?", "solid -2 dB to Clevedon from the harbourside",
+		"Purdown is back 🎉", "pints at the harbourside after? 🍺", "fog on the Severn, signal's still 👍",
+		"nice one 👍🏽 see you there ❤️", "the whole family's on now 👨‍👩‍👧‍👦", "🇬🇧🇮🇪🇫🇷 hello from three countries",
+		"東京からこんにちは！メッシュは最高です", "مرحبا من بريستول", "café crème at Zoë's, ½ price ☕",
+		"tab\there and a  double  space", "keycap test 1️⃣ 2️⃣ 3️⃣ and ★ ✓ ✗ → ←",
+		"this is a long message to see how wrapping copes when someone uses almost all of the space a channel message allows, ending in an emoji 🚀",
 	},
-	"Public":   {"hello from Weston", "test test, 1 2", "first packet from a new Heltec V4!"},
-	"#hilltop": {"Dundry repeater battery looks low, 3.6 V", "swapped the antenna on Blackdown, much better"},
+	"Public":   {"hello from Weston 👋", "test test, 1 2", "first packet from a new Heltec V4!", "📡 testing from the car, anyone?"},
+	"#hilltop": {"Dundry repeater battery looks low, 3.6 V 🔋", "swapped the antenna on Blackdown, much better", "windy up here today 💨"},
 }
 
 var dms = map[string][]string{
-	"Alice": {"are you on the mesh tonight?", "the trace to Brean Down worked", "nice, that's a clean route"},
-	"Bob":   {"got your message via Kelston", "battery's at 80% here", "back in 10"},
-	"Carol": {"Portishead is coming through loud and clear", "can you see my advert?"},
-	"Dan":   {"hello from across the estuary!", "Twmbarlwm to Aust is a long hop"},
+	"Alice":     {"are you on the mesh tonight?", "the trace to Brean Down worked 🎉", "nice, that's a clean route"},
+	"Bob":       {"got your message via Kelston 👍", "battery's at 80% here 🔋", "back in 10"},
+	"Carol":     {"Portishead is coming through loud and clear", "can you see my advert? 👀"},
+	"Dan":       {"hello from across the estuary! 🌊", "Twmbarlwm to Aust is a long hop 😅"},
+	"Zoe\u0308": {"Zoë here, with a combining diaeresis", "naïve café résumé, typed two ways: cafe\u0301"},
+	"健二 Kenji":  {"こんにちは！届いていますか？", "テスト 🇯🇵 from Clifton", "全角スペース　が入っています"},
 }
 
 // Sim implements radio.Radio with timings close to a real companion over USB.
@@ -201,8 +212,8 @@ func prefix(k [32]byte) [6]byte {
 func queued(now time.Time) []radio.Incoming {
 	return []radio.Incoming{
 		{At: now, Channel: true, ChannelIdx: 1, Hops: 3, SentAt: now.Add(-42 * time.Minute), Text: "Carol: morning all, Purdown is back", SNR: 6.5, HasSNR: true},
-		{At: now, Channel: true, ChannelIdx: 1, Hops: 2, SentAt: now.Add(-38 * time.Minute), Text: "Bob: 3 hops to Bath now", SNR: 2.25, HasSNR: true},
-		{At: now, From: prefix(key(0x3A, "Alice")), Hops: -1, SentAt: now.Add(-20 * time.Minute), Text: "ping me when you're back on", SNR: 9.5, HasSNR: true},
+		{At: now, Channel: true, ChannelIdx: 1, Hops: 2, SentAt: now.Add(-38 * time.Minute), Text: "Bob: 3 hops to Bath now 🚀", SNR: 2.25, HasSNR: true},
+		{At: now, From: prefix(key(0x3A, "Alice")), Hops: -1, SentAt: now.Add(-20 * time.Minute), Text: "ping me when you're back on ☕", SNR: 9.5, HasSNR: true},
 	}
 }
 
@@ -397,7 +408,7 @@ func (s *Sim) packet(now time.Time) ([]byte, string, bool) {
 		if len(cs) == 0 {
 			return nil, "", false
 		}
-		return s.groupText(now, hops, cs[s.intn(len(cs))], []string{"Alice", "Bob", "Carol", "Eve"}[s.intn(4)], ""), "", true
+		return s.groupText(now, hops, cs[s.intn(len(cs))], []string{"Alice", "Bob", "Carol", "Eve 🦊", "Priya 🌸", "🇬🇧 Siân", "👩‍🚀 Ada"}[s.intn(7)], ""), "", true
 	case x < 64:
 		return build(meshcore.RouteTypeDirect, meshcore.PayloadTypeTxtMsg, hops, encrypted()), "", false
 	case x < 78:
@@ -468,7 +479,7 @@ func (s *Sim) chatter(now time.Time) {
 	if !ok {
 		lines = []string{"hello from " + ch.Name, "anyone else on here?", "testing the new channel"}
 	}
-	who := []string{"Alice", "Bob", "Carol", "Dan", "Eve", "Hilltop Ops"}[s.intn(6)]
+	who := []string{"Alice", "Bob", "Carol", "Dan", "Eve 🦊", "Hilltop Ops", "Priya 🌸", "🇬🇧 Siân", "👩‍🚀 Ada", "健二 Kenji", "سلام Salam"}[s.intn(11)]
 	text := lines[s.intn(len(lines))]
 	hops := s.hops(s.intn(4) + 1)
 	// The radio hears the encrypted packet and then hands over the message it decrypted.

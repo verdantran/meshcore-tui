@@ -390,7 +390,7 @@ func TestAdminServers(t *testing.T) {
 		t.Errorf("first post = %+v", first)
 	}
 	s.SendText(ctx, room, "range test at 7?")
-	if n := len(s.posts); n != 4 {
+	if n := len(s.posts); n != len(seededPosts(time.Now()))+1 {
 		t.Errorf("posts = %d", n)
 	}
 	s.RequestStatus(ctx, room)

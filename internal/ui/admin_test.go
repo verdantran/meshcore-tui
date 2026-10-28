@@ -68,7 +68,7 @@ func TestAdminLoginAndStatus(t *testing.T) {
 	h := newHarness(t)
 	h.keys("5")
 	scr := h.screen()
-	for _, want := range []string{"ADMIN · 11 NODES · 0 SIGNED IN", "Dundry", "Clifton Room", "signed out"} {
+	for _, want := range []string{"ADMIN · 12 NODES · 0 SIGNED IN", "Dundry", "Clifton Room", "signed out"} {
 		if !strings.Contains(scr, want) {
 			t.Fatalf("node list lacks %q:\n%s", want, scr)
 		}

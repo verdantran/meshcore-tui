@@ -340,7 +340,9 @@ func seededPosts(now time.Time) []post {
 	return []post{
 		{"Alice", "Welcome to the Clifton room. Be nice!", now.Add(-26 * time.Hour)},
 		{"Bob", "Kelston repeater is getting a new antenna on Saturday", now.Add(-5 * time.Hour)},
-		{"Carol", "anyone want to meet at Cabot Tower for a range test?", now.Add(-40 * time.Minute)},
+		{"Carol", "anyone want to meet at Cabot Tower for a range test? 🗼", now.Add(-40 * time.Minute)},
+		{"Dan", "range test was ace, 4 hops to Cardiff 🎉📡", now.Add(-12 * time.Minute)},
+		{"健二 Kenji", "次のテストは土曜日 👍🏽", now.Add(-6 * time.Minute)},
 	}
 }
 
