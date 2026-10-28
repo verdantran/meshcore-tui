@@ -19,6 +19,8 @@ func TestToASCII(t *testing.T) {
 		"東京 ok":                "???? ok",
 		"👨‍👩‍👧 family":         "?????? family", // as wide as the renderer draws it
 		"plain text":           "plain text",
+		"Zoë café":             "Zoe cafe",
+		"Zoe\u0308 cafe\u0301": "Zoe cafe", // the same accents as marks
 	} {
 		if got := toASCII(in); got != want {
 			t.Errorf("toASCII(%q) = %q, want %q", in, got, want)

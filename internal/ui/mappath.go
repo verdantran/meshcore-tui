@@ -128,13 +128,12 @@ func (m *Model) renderPath(w, mapH int) []string {
 	key := fmt.Sprintf("path|%.6f|%.6f|%.4f|%d|%d|%v|%v|%p|%d|%s", v.Center.Lat, v.Center.Lon, v.Zoom, w, mapH, th, layers,
 		mv.detail, len(nodes), routeKey([]mapview.Route{drawn}, m.now)) + fmt.Sprint(drawn.Links)
 	if key != mv.cacheKey || mv.cache == nil {
-		mv.cache = m.mapDraw(mapview.Input{World: mv.world, Detail: mv.detail, Nodes: nodes, Routes: []mapview.Route{drawn},
-			Layers: layers, Now: m.now}, v, w, mapH, pal)
 		credit := "Natural Earth"
 		if mv.detail != nil && v.Zoom >= 7 && mv.detail.Covers(v.Center) {
 			credit = mapview.DetailCredit
 		}
-		mapview.Credit(mv.cache, credit, pal)
+		mv.cache = m.mapDraw(mapview.Input{World: mv.world, Detail: mv.detail, Nodes: nodes, Routes: []mapview.Route{drawn},
+			Layers: layers, Now: m.now, Credit: credit}, v, w, mapH, pal)
 		mv.rows, mv.cacheKey = mv.cache.Render(!th.Mono), key
 	}
 	out := append([]string(nil), mv.rows...)

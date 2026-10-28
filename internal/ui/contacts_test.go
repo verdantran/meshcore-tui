@@ -175,7 +175,7 @@ func TestContactsBrowseTraceAndRoutes(t *testing.T) {
 	h := newHarness(t)
 	h.keys("2")
 	got := h.screen()
-	for _, want := range []string{"CONTACTS 15", "NAME", "ROUTE", "Dundry", "Alice", "Repeater", "advert path"} {
+	for _, want := range []string{"CONTACTS 18", "NAME", "ROUTE", "Dundry", "Alice", "Repeater", "advert path"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("contacts screen missing %q:\n%s", want, got)
 		}
@@ -236,14 +236,14 @@ func TestContactsShareRemoveImport(t *testing.T) {
 
 	h.keys("x")
 	h.keys("y")
-	h.until("removed", func() bool { return len(h.m.chat.Contacts()) == 14 })
+	h.until("removed", func() bool { return len(h.m.chat.Contacts()) == 17 })
 
 	h.key(tea.KeyEscape) // clear the name filter
 	h.keys("I")
 	h.keys(link)
 	h.key(tea.KeyEnter)
 	h.keys("y")
-	h.until("imported", func() bool { return len(h.m.chat.Contacts()) == 15 })
+	h.until("imported", func() bool { return len(h.m.chat.Contacts()) == 18 })
 }
 
 func TestContactsHeardAutoAddAndPrune(t *testing.T) {
@@ -261,7 +261,7 @@ func TestContactsHeardAutoAddAndPrune(t *testing.T) {
 		t.Fatalf("heard list:\n%s", got)
 	}
 	h.key(tea.KeyEnter)
-	h.until("eve added", func() bool { return len(h.m.chat.Contacts()) == 16 })
+	h.until("eve added", func() bool { return len(h.m.chat.Contacts()) == 19 })
 	h.key(tea.KeyEscape)
 
 	h.keys("A")
@@ -280,7 +280,7 @@ func TestContactsHeardAutoAddAndPrune(t *testing.T) {
 		t.Fatalf("prune overlay:\n%s", got)
 	}
 	h.keys("y")
-	h.until("pruned", func() bool { return len(h.m.chat.Contacts()) == 11 })
+	h.until("pruned", func() bool { return len(h.m.chat.Contacts()) == 14 })
 	if h.m.contacts.full {
 		t.Error("pruning should clear the full banner")
 	}
@@ -505,5 +505,27 @@ func TestHeardFloodKeepsNamesakes(t *testing.T) {
 	hear(newSigner("new").pub, "New")
 	if _, ok := c.heardIdx[zed.pub]; ok {
 		t.Error("a node gone quiet for days makes room first")
+	}
+}
+
+// The column headings sit over their columns.
+func TestContactHeadingsOverColumns(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.keys("2")
+	at := func(marker string) int {
+		for _, l := range strings.Split(h.screen(), "\n") {
+			if i := strings.Index(l, marker); i >= 0 {
+				return ansi.StringWidth(l[:i])
+			}
+		}
+		t.Fatalf("no %q:\n%s", marker, h.screen())
+		return 0
+	}
+	if name, row := at("NAME"), at("Cabot Tower"); name != row {
+		t.Errorf("NAME is at cell %d, names at %d", name, row)
+	}
+	if typ, row := at("TYPE"), at("Repeater"); typ != row {
+		t.Errorf("TYPE is at cell %d, types at %d", typ, row)
 	}
 }

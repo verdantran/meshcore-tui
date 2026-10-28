@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/clipperhouse/uax29/v2/graphemes"
 
 	"github.com/verdantran/meshcore-tui/internal/mapview"
 	"github.com/verdantran/meshcore-tui/internal/motion"
@@ -125,20 +126,75 @@ func setRenderWidth(m ansi.Method) {
 
 func visibleWidth(s string) int { return renderWidth.StringWidth(s) }
 
+// clusters walks s a grapheme or escape sequence at a time. Text is measured with visibleWidth, so cuts
+// agree with it; the library's own cuts measure clusters one way and whole strings another, and let rows
+// through wider than they say.
+func clusters(s string, yield func(seq string, w int, esc bool)) {
+	g := graphemes.FromString(s)
+	g.AnsiEscapeSequences = true
+	for g.Next() {
+		seq := g.Value()
+		if r, _ := utf8.DecodeRuneInString(seq); r < 0x20 || r >= 0x7f && r < 0xa0 {
+			yield(seq, 0, true)
+		} else {
+			yield(seq, visibleWidth(seq), false)
+		}
+	}
+}
+
+// take is the longest start of s at most n cells wide, and its width, with tail written where it was cut.
+// Escape sequences are all kept, so styles still close and the tail is drawn in the style of the text it ends.
+func take(s string, n int, tail string) (string, int) {
+	var b strings.Builder
+	w, full := 0, false
+	clusters(s, func(seq string, sw int, esc bool) {
+		if !esc && (full || w+sw > n) {
+			if !full {
+				b.WriteString(tail)
+			}
+			full = true
+			return
+		}
+		b.WriteString(seq)
+		w += sw
+	})
+	return b.String(), w
+}
+
+// skip drops the first n cells of s. A wide character cut in two leaves spaces for its remaining cells, so
+// what follows stays in its column; escape sequences are kept, so styles carry on.
+func skip(s string, n int) string {
+	var b strings.Builder
+	w := 0
+	clusters(s, func(seq string, sw int, esc bool) {
+		switch {
+		case esc || w >= n:
+			b.WriteString(seq)
+		case w+sw > n:
+			b.WriteString(strings.Repeat(" ", w+sw-n))
+		}
+		w += sw
+	})
+	return b.String()
+}
+
 func truncate(s string, n int) string {
 	if n <= 0 {
 		return ""
 	}
-	return renderWidth.Truncate(s, n, "…")
+	if visibleWidth(s) <= n {
+		return s
+	}
+	head, _ := take(s, n-1, "…")
+	return head
 }
 
 func fit(s string, w int) string {
-	if vw := visibleWidth(s); vw > w {
-		return renderWidth.Truncate(s, w, "")
-	} else if vw < w {
-		return s + strings.Repeat(" ", w-vw)
+	vw := visibleWidth(s)
+	if vw > w {
+		s, vw = take(s, w, "")
 	}
-	return s
+	return s + strings.Repeat(" ", max(w-vw, 0))
 }
 
 func centre(block []string, w, h int) []string {
@@ -174,7 +230,7 @@ func (m *Model) panel(title string, body []string, w, h int, accent theme.RGB, f
 		edge = accent
 	}
 	paint := func(s string) string { return th.Paint(edge, false, s) }
-	head := th.Paint(accent, true, "▌") + th.Paint(th.Muted, true, title+" ")
+	head := th.Paint(accent, true, "▌") + th.Paint(th.Muted, true, truncate(title, w-6)+" ")
 	top := paint(tl+hz) + head + paint(strings.Repeat(hz, max(w-4-visibleWidth(head), 0))+hz+tr)
 	out := []string{top}
 	inner := w - 4
@@ -230,7 +286,7 @@ func wipe(line string, w int, t float64, th theme.Theme) string {
 		return line
 	}
 	edge := th.Fg(th.Cyan, false).Render("░▒▓█")
-	return renderWidth.Truncate(line, max(x-4, 0), "") + edge
+	return fit(line, max(x-4, 0)) + edge
 }
 
 func (m *Model) header() string {
@@ -620,10 +676,7 @@ func (m *Model) cycleBattery(node [32]byte, name string) {
 // col fits s to exactly w cells, cut with … or padded. Names often hold emoji, which take two cells,
 // so padding by character count would push the columns after them out of line.
 func col(s string, w int) string {
-	if visibleWidth(s) > w {
-		s = renderWidth.Truncate(s, w, "…")
-	}
-	return s + strings.Repeat(" ", max(w-visibleWidth(s), 0))
+	return fit(truncate(s, w), w)
 }
 
 // repeaterStatus is the footer's summary of a repeater on USB: its latest poll and the watch.

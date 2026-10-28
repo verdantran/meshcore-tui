@@ -507,7 +507,7 @@ func (m *Model) overlayFinder(lines []string) {
 		th.Fg(th.Muted, false).Render(count)+edge.Render("━┛"))
 	top := len(lines) - 1 - len(box)
 	for j, b := range box {
-		lines[top+j] = b + renderWidth.TruncateLeft(lines[top+j], w, "")
+		lines[top+j] = b + skip(lines[top+j], w)
 	}
 }
 

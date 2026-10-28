@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -162,5 +163,29 @@ func TestLabelsMeasuredAsDrawn(t *testing.T) {
 	}
 	if used != textWidth(name) {
 		t.Errorf("Text used %d cells, textWidth says %d", used, textWidth(name))
+	}
+}
+
+// Writing over either half of a wide character blanks the rest of it, so the row keeps its width.
+func TestTextOverHalfAWideCharacter(t *testing.T) {
+	for _, at := range []int{2, 3} {
+		c := NewCanvas(20, 1, theme.RGB{})
+		c.Text(0, 0, "ab東京x", theme.RGB{R: 1}, false)
+		c.Text(at, 0, "z", theme.RGB{R: 1}, false)
+		if row := c.RenderRow(0, false); ansi.StringWidth(row) != c.W {
+			t.Errorf("x over cell %d: row is %d wide in %d: %q", at, ansi.StringWidth(row), c.W, row)
+		}
+	}
+}
+
+// Labels keep clear of the credit rather than running under it.
+func TestLabelsKeepClearOfTheCredit(t *testing.T) {
+	pal := PaletteFor(theme.Neon)
+	v := View{Center: LatLon{51.44, -2.6}, Zoom: 9}
+	c := Draw(Input{World: LoadWorld(), Nodes: []Node{{Name: "Aust 🌉", Kind: KindRepeater, Pos: LatLon{51.44, -2.6}}}, Layers: Layers{Labels: true},
+		Credit: "Natural Earth"}, v, 30, 1, pal)
+	row := ansi.Strip(c.RenderRow(0, false))
+	if !strings.Contains(row, "Natural Earth ") || !strings.Contains(row, "Aust 🌉") || ansi.StringWidth(row) != 30 {
+		t.Errorf("credit row = %q", row)
 	}
 }

@@ -65,6 +65,10 @@ func Draw(in Input, v View, w, h int, pal Palette) *Canvas {
 		}
 	}
 
+	if in.Credit != "" {
+		Credit(c, in.Credit, pal)
+	}
+
 	type placed struct {
 		m      sMark
 		cx, cy int

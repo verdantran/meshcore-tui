@@ -136,7 +136,7 @@ func TestTwoByteTraceAndRoutes(t *testing.T) {
 	h.keys("j")
 	h.key(tea.KeyEnter) // Blackdown
 	h.keys("s")
-	aust, blackdown := h.contact("Aust").Key, h.contact("Blackdown").Key
+	aust, blackdown := h.contact("Aust 🌉").Key, h.contact("Blackdown").Key
 	h.until("route saved", func() bool {
 		c := h.contact("Bob")
 		return c.PathLen == 2 && c.HashSize == 2 && string(c.Path) == string(append(aust[:2:2], blackdown[:2]...))

@@ -85,7 +85,7 @@ func (m *Model) overlayToasts(lines []string) {
 			if visible <= 0 {
 				break
 			}
-			lines[row+j] = renderWidth.Truncate(lines[row+j], x, "") + renderWidth.Truncate(b, visible, "") + renderWidth.TruncateLeft(lines[row+j], x+visible, "")
+			lines[row+j] = fit(lines[row+j], x) + fit(b, visible) + skip(lines[row+j], x+visible)
 		}
 		row += len(box)
 	}

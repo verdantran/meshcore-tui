@@ -19,6 +19,11 @@ func TestPlanChannel(t *testing.T) {
 		p.Channel.Secret != meshcore.DeriveHashtagPSK("#Hilltop") {
 		t.Fatalf("hashtag = %+v %v", p, err)
 	}
+	// An emoji sequence keeps its joiner, so the secret is the one other apps derive from the same name.
+	if p, err := s.PlanChannel("#👩\u200d🚀crew", "", 4); err != nil || p.Channel.Name != "#👩\u200d🚀crew" ||
+		p.Channel.Secret != meshcore.DeriveHashtagPSK("#👩\u200d🚀crew") {
+		t.Errorf("joined emoji = %+v %v", p, err)
+	}
 	if p, _ := s.PlanChannel("Family", "", 4); p.Kind != "new" || p.Channel.Secret == ([16]byte{}) {
 		t.Errorf("new = %+v", p)
 	}

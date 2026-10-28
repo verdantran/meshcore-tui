@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	meshcore "github.com/OwlShack/meshcore-go"
@@ -51,6 +52,22 @@ const (
 	applyCPS   = 40.0
 	logTimeout = 65 * time.Second
 )
+
+// typeable is a name as someone would type it to confirm: its letters, digits and spaces, without the emoji
+// and symbols many names carry. A name of nothing but symbols is typed as it is.
+func typeable(name string) string {
+	s := strings.Join(strings.Fields(strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsSpace(r) ||
+			unicode.In(r, unicode.Mn, unicode.Mc) && !unicode.Is(unicode.Variation_Selector, r) {
+			return r
+		}
+		return ' '
+	}, name)), " ")
+	if s == "" {
+		return name
+	}
+	return s
+}
 
 // confirmAction is a dangerous change waiting for the node's name to be typed.
 type confirmAction struct {
@@ -203,7 +220,7 @@ func (m *Model) adminNodes() []radio.Contact {
 	var list []node
 	for _, c := range m.allNodes() {
 		if !m.adm.favOnly || favourite(c) {
-			list = append(list, node{c, favourite(c), strings.ToLower(c.Name)})
+			list = append(list, node{c, favourite(c), sortName(c.Name)})
 		}
 	}
 	sort.Slice(list, func(i, j int) bool {
@@ -1243,7 +1260,7 @@ func (m *Model) adminPromptKey(s string) tea.Cmd {
 			typing()
 			return nil
 		}
-		if !strings.EqualFold(strings.TrimSpace(a.input.text), ct.Name) {
+		if typed := fold(strings.TrimSpace(a.input.text)); typed != fold(typeable(ct.Name)) && typed != fold(ct.Name) {
 			m.fail("NOT CONFIRMED  type the node's name exactly to go ahead")
 			return nil
 		}
@@ -1289,7 +1306,7 @@ func (m *Model) aclCandidates(sess *admin.Session) []radio.Contact {
 			out = append(out, c)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name) })
+	sort.Slice(out, func(i, j int) bool { return sortName(out[i].Name) < sortName(out[j].Name) })
 	return out
 }
 

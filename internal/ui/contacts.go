@@ -225,12 +225,12 @@ func (m *Model) contactRows() []radio.Contact {
 	c := &m.contacts
 	var out []radio.Contact
 	want, favOnly := typeFilters[c.typeFilter].typ, typeFilters[c.typeFilter].fav
-	q := strings.ToLower(c.filter.text)
+	q := fold(c.filter.text)
 	for _, ct := range m.chat.Contacts() {
 		if want != 0 && ct.Type != want || favOnly && ct.Flags&radio.FlagFavourite == 0 {
 			continue
 		}
-		if q != "" && !strings.Contains(strings.ToLower(ct.Name), q) && !strings.Contains(strings.ToLower(radio.KeyHex(ct.Key[:1])), q) {
+		if q != "" && !strings.Contains(fold(ct.Name), q) && !strings.Contains(fold(radio.KeyHex(ct.Key[:1])), q) {
 			continue
 		}
 		out = append(out, ct)
@@ -242,7 +242,7 @@ func (m *Model) contactRows() []radio.Contact {
 		}
 		switch c.sortBy {
 		case 1:
-			return strings.ToLower(a.Name) < strings.ToLower(b.Name)
+			return sortName(a.Name) < sortName(b.Name)
 		case 2:
 			ha, hb := a.PathLen, b.PathLen
 			if ha < 0 {
@@ -254,7 +254,7 @@ func (m *Model) contactRows() []radio.Contact {
 			if ha != hb {
 				return ha < hb
 			}
-			return strings.ToLower(a.Name) < strings.ToLower(b.Name)
+			return sortName(a.Name) < sortName(b.Name)
 		}
 		return a.LastAdvert.After(b.LastAdvert)
 	})

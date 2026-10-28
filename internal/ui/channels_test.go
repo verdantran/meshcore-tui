@@ -58,7 +58,13 @@ func TestAddChannels(t *testing.T) {
 		t.Error("the footer counts the new channel")
 	}
 
-	// A private channel: a name, then its secret.
+	// A private channel: a name, then its secret. A name too long is refused before the secret is asked for.
+	h.keys("n")
+	h.typeLine("健二健二健二健二健二健二")
+	if !strings.Contains(h.lastLog(), "at most 31 bytes") || strings.Contains(h.screen(), "SECRET FOR") {
+		t.Fatalf("a 36-byte name goes on to the secret:\n%s", h.screen())
+	}
+	h.key(tea.KeyEscape)
 	h.keys("n")
 	h.typeLine("Family")
 	if !strings.Contains(h.screen(), "SECRET FOR FAMILY") {

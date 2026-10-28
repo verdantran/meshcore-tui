@@ -2,7 +2,7 @@
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CONTACTS 3 · type all · sort last heard ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃   NAME                     TYPE      HEARD     ROUTE                    LOC  KEY                 ┃
+┃    NAME                     TYPE      HEARD     ROUTE                    LOC  KEY                ┃
 ┃                                                                                                  ┃
 ┃ ▌  Alice                    Chat      never     direct A3·1E             —    3A                 ┃
 ┃    Dundry                   Repeater  never     flood                    —    A3                 ┃
@@ -29,12 +29,12 @@
  [10:03:00] ▸ RADIO NOT VERIFIED  it can't sign, so saved passwords are asked for
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 76e0eede04159700
+styles 7f793f0531d34330
 == 120ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CONTACTS 3 · type all · sort last heard ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃   NAME                     TYPE      HEARD     ROUTE                    LOC  KEY                 ┃
+┃    NAME                     TYPE      HEARD     ROUTE                    LOC  KEY                ┃
 ┃                Zed                      Chat      1h ago    flood                    —    B0     ┃
 ┃ ▌  Alice                    Chat      never     direct A3·1E             —    3A                 ┃
 ┃    Dundry                   Repeater  never     flood                    —    A3                 ┃
@@ -61,12 +61,12 @@ styles 76e0eede04159700
  [10:03:00] ▸ RADIO NOT VERIFIED  it can't sign, so saved passwords are asked for
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles f6eb8c24b5927545
+styles 65ed397c85a46a15
 == 300ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CONTACTS 3 · type all · sort last heard ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃   NAME                     TYPE      HEARD     ROUTE                    LOC  KEY                 ┃
+┃    NAME                     TYPE      HEARD     ROUTE                    LOC  KEY                ┃
 ┃    Zed                      Chat      1h ago    flood                    —    B0                 ┃
 ┃ ▌  Alice                    Chat      never     direct A3·1E             —    3A                 ┃
 ┃    Dundry                   Repeater  never     flood                    —    A3                 ┃
@@ -93,12 +93,12 @@ styles f6eb8c24b5927545
  [10:03:00] ▸ RADIO NOT VERIFIED  it can't sign, so saved passwords are asked for
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 23b1ded58da9dadb
+styles b858e0a864b5fb2b
 == 600ms ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CONTACTS 3 · type all · sort last heard ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃   NAME                     TYPE      HEARD     ROUTE                    LOC  KEY                 ┃
+┃    NAME                     TYPE      HEARD     ROUTE                    LOC  KEY                ┃
 ┃    Zed                      Chat      1h ago    flood                    —    B0                 ┃
 ┃ ▌  Alice                    Chat      never     direct A3·1E             —    3A                 ┃
 ┃    Dundry                   Repeater  never     flood                    —    A3                 ┃
@@ -125,4 +125,4 @@ styles 23b1ded58da9dadb
  [10:03:00] ▸ RADIO NOT VERIFIED  it can't sign, so saved passwords are asked for
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles 6c62c8c268c991a2
+styles ea0a93cf30e547f2

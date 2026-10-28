@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	tea "charm.land/bubbletea/v2"
+	"golang.org/x/text/unicode/norm"
 
 	"github.com/verdantran/meshcore-tui/internal/chat"
 	"github.com/verdantran/meshcore-tui/internal/config"
@@ -19,6 +20,27 @@ import (
 	"github.com/verdantran/meshcore-tui/internal/store"
 	"github.com/verdantran/meshcore-tui/internal/theme"
 )
+
+// fold is text as a filter compares it: lower case, without accents, so "zoe" finds "Zoë" whether the ë
+// came as one character or as an e and a mark.
+func fold(s string) string {
+	var b strings.Builder
+	for _, r := range norm.NFKD.String(s) {
+		if !unicode.Is(unicode.Mn, r) {
+			b.WriteRune(unicode.ToLower(r))
+		}
+	}
+	return b.String()
+}
+
+// sortName is what a name sorts by: folded, and without the emoji or symbols some lead with, so
+// "🍺 Harbourside" sorts among the H's rather than after every letter.
+func sortName(s string) string {
+	if t := strings.TrimLeftFunc(s, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }); t != "" {
+		s = t
+	}
+	return fold(s)
+}
 
 // searchModel is the ctrl+f overlay that searches every conversation.
 type searchModel struct {

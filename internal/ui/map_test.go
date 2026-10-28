@@ -51,7 +51,7 @@ func TestMapScreen(t *testing.T) {
 	h := newHarness(t)
 	h.openMap()
 	scr := h.screen()
-	for _, want := range []string{"MAP · 16 NODES PLACED · 0 ROUTES", "◉", "Dundry", "press d to download street detail from OpenFreeMap: 12 map tiles, up to about 2.0 MB", "Natural Earth",
+	for _, want := range []string{"MAP · 19 NODES PLACED · 0 ROUTES", "◉", "Dundry", "press d to download street detail from OpenFreeMap: 12 map tiles, up to about 2.0 MB", "Natural Earth",
 		"Adverts and messages" /* in the help below */} {
 		if want == "Adverts and messages" {
 			continue

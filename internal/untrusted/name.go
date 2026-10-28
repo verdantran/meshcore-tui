@@ -11,7 +11,9 @@ import (
 )
 
 // Name is the one form of a name someone gives themselves: NFKC, without invisible characters, with its
-// spacing trimmed and collapsed, so "Zed ", "Zed​" and "Ｚｅｄ" are all "Zed".
+// spacing trimmed and collapsed, so "Zed ", "Zed​" and "Ｚｅｄ" are all "Zed". The joiner inside an emoji
+// sequence and a flag's tags stay, as Text keeps them: they're part of how the name is drawn and spelt, so
+// a channel named "#👩‍🚀crew" keeps the secret other apps derive from it.
 func Name(s string) string {
 	s = norm.NFKC.String(Text(s))
 	s = strings.Map(func(r rune) rune {
@@ -25,6 +27,8 @@ func Name(s string) string {
 
 func invisible(r rune) bool {
 	switch {
+	case r == zwj, tag(r):
+		return false // Text has already dropped any not inside an emoji sequence or flag
 	case unicode.Is(unicode.Cf, r), unicode.Is(unicode.Cc, r) && !unicode.IsSpace(r):
 		return true
 	case r == 0x034f, r == 0x115f, r == 0x1160, r == 0x17b4, r == 0x17b5, r == 0x2800, r == 0x3164, r == 0xffa0:
@@ -35,11 +39,13 @@ func invisible(r rune) bool {
 
 // Skeleton is what a name looks like: two names with the same skeleton are hard to tell apart on screen,
 // whatever their letters. It folds case, drops accents and maps look-alikes from any script to Latin.
-// Capitals are looked up before folding, since "І" looks like "l" where "і" looks like "i".
+// Capitals are looked up before folding, since "І" looks like "l" where "і" looks like "i". Joiners go too,
+// since a terminal that doesn't join emoji draws "👩‍🚀" as "👩🚀", and so do a flag's tags, which take no
+// cell: any run of them after 🏴 is kept, and one that spells no flag is drawn as the 🏴 alone.
 func Skeleton(s string) string {
 	var b strings.Builder
 	for _, r := range norm.NFKD.String(Name(s)) {
-		if unicode.Is(unicode.Mn, r) {
+		if unicode.Is(unicode.Mn, r) || r == zwj || tag(r) {
 			continue
 		}
 		if l, ok := lookalikes[r]; ok {

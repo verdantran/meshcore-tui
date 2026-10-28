@@ -673,6 +673,11 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 			return cmd, false
 		}
 	}
+	if m.phase == phaseMain && m.tab == 6 {
+		if cmd, handled := m.statsKey(s); handled {
+			return cmd, false
+		}
+	}
 	if m.phase == phaseMain && m.tab == 3 {
 		if cmd, handled := m.inspectorKey(s); handled {
 			return cmd, false

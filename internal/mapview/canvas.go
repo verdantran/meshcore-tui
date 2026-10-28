@@ -113,6 +113,7 @@ func (c *Canvas) Text(cx, cy int, s string, col theme.RGB, bold bool) {
 		}
 		fits := x >= 0 && x+w <= c.W
 		for i := range w {
+			c.unseat(x+i, cy)
 			ce := c.at(x+i, cy)
 			switch {
 			case ce == nil:
@@ -125,6 +126,26 @@ func (c *Canvas) Text(cx, cy int, s string, col theme.RGB, bold bool) {
 			}
 		}
 		x += w
+	}
+}
+
+// unseat blanks a wide character that covers a cell about to be written, so none is left half drawn and the
+// row keeps its width.
+func (c *Canvas) unseat(cx, cy int) {
+	ce := c.at(cx, cy)
+	if ce == nil || !ce.cont && labelWidth.StringWidth(ce.text) < 2 {
+		return
+	}
+	head := cx
+	for head > 0 && c.cells[cy*c.W+head].cont {
+		head--
+	}
+	for i := head; i < c.W; i++ {
+		ce := &c.cells[cy*c.W+i]
+		if i > head && !ce.cont {
+			break
+		}
+		ce.text, ce.cont = " ", false
 	}
 }
 

@@ -305,3 +305,40 @@ func TestFinderInASCII(t *testing.T) {
 		}
 	}
 }
+
+// Overlays drawn over wide characters leave every row its full width, at either parity of column.
+func TestOverlaysOverWideText(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	for _, w := range []int{200, 199} {
+		h.m.Update(tea.WindowSizeMsg{Width: w, Height: 60})
+		rows := func() []string {
+			lines := make([]string, 60)
+			for i := range lines {
+				lines[i] = fit(strings.Repeat("東", i%2)+strings.Repeat("東京", w), w)
+			}
+			return lines
+		}
+		check := func(what string, lines []string) {
+			t.Helper()
+			for n, l := range lines {
+				if got := visibleWidth(l); got != w {
+					t.Errorf("%s at %d wide: row %d is %d cells: %q", what, w, n, got, ansi.Strip(l))
+				}
+			}
+		}
+		h.find("a")
+		lines := rows()
+		h.m.overlayFinder(lines)
+		check("finder", lines)
+		h.key(tea.KeyEscape)
+
+		h.m.pushToast("👨‍👩‍👧‍👦 the whole family's on now", "東京からこんにちは！メッシュは最高です 1️⃣")
+		for range 6 {
+			h.advance(50 * time.Millisecond) // through the slide, so the toast's edge crosses both halves of a character
+			lines = rows()
+			h.m.overlayToasts(lines)
+			check("toast", lines)
+		}
+	}
+}

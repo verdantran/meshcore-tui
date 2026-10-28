@@ -130,6 +130,7 @@ type Input struct {
 	Flows  []Flow
 	Layers Layers
 	Now    time.Time
+	Credit string // the map data's attribution, drawn before labels so they keep clear of it
 }
 
 // Only the newest routes are drawn, each at full strength for a couple of minutes and then fading out;

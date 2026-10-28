@@ -1005,15 +1005,22 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 	if msg.Out {
 		nameCol = th.Magenta
 	}
+	// The sender keeps a few cells; the detail gets the rest, dropping the keys before it's cut.
+	metaRoom := w - visibleWidth(bar+stamp) - min(visibleWidth(msg.Sender), senderMax, 12) - 1
 	meta := m.messageMeta(msg)
 	if picked {
+		keys := ""
 		if _, pinned := m.pinOf(msg.Sender); msg.Sig == store.SigValid && !msg.Out && !pinned {
-			meta = th.Paint(th.Cyan, true, "K") + th.Paint(th.Dim, false, " pin key · ") + meta
+			keys = th.Paint(th.Cyan, true, "K") + th.Paint(th.Dim, false, " pin key · ")
 		}
-		meta = th.Paint(th.Cyan, true, "r") + th.Paint(th.Dim, false, " reply · ") +
+		keys = th.Paint(th.Cyan, true, "r") + th.Paint(th.Dim, false, " reply · ") +
 			th.Paint(th.Cyan, true, "M") + th.Paint(th.Dim, false, " route · ") +
-			th.Paint(th.Cyan, true, "y") + th.Paint(th.Dim, false, " copy   ") + meta
+			th.Paint(th.Cyan, true, "y") + th.Paint(th.Dim, false, " copy   ") + keys
+		if visibleWidth(keys+meta) <= metaRoom {
+			meta = keys + meta
+		}
 	}
+	meta = clip(meta, metaRoom)
 
 	text, marks := emphasis(msg.Text)
 	if at, ok := m.chats.arrived[msg.ID]; ok && m.level.Allows(motion.Decode) && motion.Running(at, decodeDur, now) {

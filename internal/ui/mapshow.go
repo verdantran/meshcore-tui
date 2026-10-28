@@ -88,6 +88,6 @@ func (m *Model) overlayShow(rows []string, w int) {
 	x := w - inner - 3
 	for i, b := range box {
 		row := i + 1
-		rows[row] = renderWidth.Truncate(rows[row], x, "") + b + renderWidth.TruncateLeft(rows[row], x+inner+2, "")
+		rows[row] = fit(rows[row], x) + b + skip(rows[row], x+inner+2)
 	}
 }
