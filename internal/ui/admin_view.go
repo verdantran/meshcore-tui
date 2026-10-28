@@ -184,9 +184,9 @@ func (m *Model) nodeList(w, rows int) []string {
 	nameW := min(max(w/6, 12), 24)
 	const trendW = 12
 	out := []string{th.Fg(th.Muted, true).Render(fmt.Sprintf("   %-*s %-9s %-15s %-2s %-18s %-9s %-6s %-9s %-9s %-*s %s", nameW, "NAME", "TYPE", "SESSION", "PW", "BATTERY", "UPTIME", "NOISE", "FIRMWARE", "POLLED", trendW, "RX 24H", "ALERTS"))}
-	room := rows - 2
+	room := rows - 3 // the headings, and the blank line and hint below
 	start := min(max(m.adm.sel-room/2, 0), max(len(nodes)-room, 0))
-	for i := start; i < len(nodes) && len(out) < rows-1; i++ {
+	for i := start; i < len(nodes) && len(out) < rows-2; i++ {
 		c := nodes[i]
 		sess, has := m.admin.Find(c.Key)
 		batt := th.Fg(th.Text, false).Render(fmt.Sprintf("%-18s", "—"))
@@ -307,7 +307,7 @@ func (m *Model) promptLines(ct radio.Contact, sess *admin.Session, w, rows int) 
 		for _, l := range strings.Split(renderWidth.Wrap(c.warning, w, " "), "\n") {
 			out = append(out, th.Fg(th.Yellow, false).Render(l))
 		}
-		return append(out, "", th.Fg(th.Text, false).Render("Type "+ct.Name+" to go ahead:"), field("name", false), "",
+		return append(out, "", th.Fg(th.Text, false).Render("Type "+typeable(ct.Name)+" to go ahead:"), field("name", false), "",
 			th.Fg(th.Dim, false).Render("enter go ahead · esc cancel"))
 	case promptPick:
 		people := m.aclCandidates(sess)

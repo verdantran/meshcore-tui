@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1002,5 +1003,47 @@ func TestFavouriteFilters(t *testing.T) {
 	h.m.contacts.typeFilter = 1
 	if rows := h.m.contactRows(); len(rows) != 1 || rows[0].Name != "Alice" {
 		t.Errorf("favourite contacts = %v", rows)
+	}
+}
+
+// The hint stays on screen when there are more nodes than rows, and the selection stays in view.
+func TestAdminHintWithAFullList(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	cs := h.m.chat.Contacts()
+	for i := range 12 {
+		cs = append(cs, radio.Contact{Key: [32]byte{0xF0, byte(i)}, Name: fmt.Sprint("Relay ", i), Type: radio.TypeRepeater, PathLen: -1})
+	}
+	h.m.chat.ReplaceContacts(cs)
+	h.m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	h.keys("5")
+	for range 30 {
+		h.keys("j")
+		if got := h.screen(); !strings.Contains(got, "enter open · L log in") || !strings.Contains(got, "▌") {
+			t.Fatalf("hint or selection gone:\n%s", got)
+		}
+	}
+}
+
+// A node's name is confirmed as it would be typed: without its emoji, in any case, with or without accents.
+func TestConfirmTypesNameWithoutEmoji(t *testing.T) {
+	t.Parallel()
+	for name, want := range map[string]string{"Aust 🌉": "Aust", "⛰️ Mendip Mast": "Mendip Mast", "🍺": "🍺", "Zoë ★ 2": "Zoë 2"} {
+		if got := typeable(name); got != want {
+			t.Errorf("typeable(%q) = %q, want %q", name, got, want)
+		}
+	}
+	h := newHarness(t)
+	h.keys("5")
+	_, sess := h.login("Aust 🌉", "password")
+	h.idle(sess)
+	h.keys("R")
+	if !strings.Contains(h.screen(), "Type Aust to go ahead") {
+		t.Fatalf("confirm prompt:\n%s", h.screen())
+	}
+	h.typeLine("aust")
+	h.idle(sess)
+	if strings.Contains(h.m.log[len(h.m.log)-1].text, "NOT CONFIRMED") {
+		t.Error("typing the name without its emoji should confirm")
 	}
 }
