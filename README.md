@@ -167,7 +167,7 @@ The file is optional; everything has a default. [docs/configuration.md](docs/con
 
 ## Built with AI
 
-Most of meshcore-tui was written with Claude, Anthropic's AI model. It's had security and performance reviews, but not an independent audit, so do your own due diligence before relying on it; [AI_DISCLOSURE.md](AI_DISCLOSURE.md) says what was checked and what wasn't.
+Nearly all of meshcore-tui was written with Claude, Anthropic's AI model. It's had security and performance reviews, but not an independent audit, so do your own due diligence before relying on it; [AI_DISCLOSURE.md](AI_DISCLOSURE.md) says what was checked and what wasn't.
 
 ## Thanks
 
