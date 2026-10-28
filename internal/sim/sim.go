@@ -120,8 +120,8 @@ type Sim struct {
 	book     []radio.Contact
 	quiet    bool
 	servers  map[[32]byte]*server
-	sessions map[[32]byte]byte // logged-in servers and the level granted
-	posts    []post
+	sessions map[[32]byte]byte   // logged-in servers and the level granted
+	posts    map[[32]byte][]post // by room
 	born     time.Time
 	auto     radio.AutoAdd
 	tag      uint32
@@ -563,7 +563,7 @@ func (s *Sim) SendText(ctx context.Context, to [32]byte, text string) (radio.Sen
 	isRoom := s.book[s.known(to)].Type == radio.TypeRoom
 	s.mu.Unlock()
 	if isRoom {
-		s.postToRoom(text)
+		s.postToRoom(to, text)
 	}
 	if !lost {
 		go func() {

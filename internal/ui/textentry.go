@@ -308,7 +308,7 @@ func (e lineEdit) render(th theme.Theme, w int, mask bool) string {
 	for width(before) > w-1 && len(before) > 0 {
 		before, lead = before[1:], "…"
 	}
-	for width(after) > w-width(before)-len(lead) && len(after) > 0 {
+	for width(after) > w-width(before)-visibleWidth(lead) && len(after) > 0 {
 		after = after[:len(after)-1]
 	}
 	text := th.Fg(th.Text, false)

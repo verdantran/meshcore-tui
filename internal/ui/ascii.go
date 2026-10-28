@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/clipperhouse/uax29/v2/graphemes"
+	"golang.org/x/text/unicode/norm"
 
 	"github.com/verdantran/meshcore-tui/internal/motion"
 )
@@ -42,6 +43,9 @@ func toASCII(frame string) string {
 		default:
 			if a, ok := asciiFor[s]; ok {
 				b.WriteString(a)
+			} else if d := norm.NFD.String(s); d[0] >= 0x20 && d[0] < 0x7f && len(d) > 1 {
+				b.WriteByte(d[0]) // an accented letter, as its plain one, as if its accent came as a mark
+				b.WriteString(strings.Repeat("?", max(renderWidth.StringWidth(s)-1, 0)))
 			} else {
 				b.WriteString(strings.Repeat("?", renderWidth.StringWidth(s)))
 			}

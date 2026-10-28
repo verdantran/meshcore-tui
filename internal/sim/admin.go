@@ -113,7 +113,7 @@ func (s *Sim) Login(ctx context.Context, k [32]byte, password string) error {
 func (s *Sim) syncRoom(k [32]byte) {
 	time.Sleep(s.delay(1500))
 	s.mu.Lock()
-	posts := append([]post(nil), s.posts...)
+	posts := append([]post(nil), s.posts[k]...)
 	s.mu.Unlock()
 	for _, p := range posts {
 		if p.author == device.self.Name {
@@ -168,7 +168,7 @@ func (s *Sim) RequestStatus(ctx context.Context, k [32]byte) error {
 	st.BattMilliVolts, st.NoiseFloor, st.LastSNR = uint16(4050+int(k[1])%60), noise, 38
 	var data []byte
 	if srv.typ == radio.TypeRoom {
-		data = meshcore.BuildRoomStats(meshcore.RoomStats{CommonStats: st.CommonStats, Posted: uint16(len(s.posts)), PostPushes: 12})
+		data = meshcore.BuildRoomStats(meshcore.RoomStats{CommonStats: st.CommonStats, Posted: uint16(len(s.posts[k])), PostPushes: 12})
 	} else {
 		data = meshcore.BuildRepeaterStats(st)
 	}
@@ -330,19 +330,25 @@ func (s *Sim) console(srv *server, cmd string) (string, bool) {
 }
 
 // postToRoom stores a post sent to a simulated room server.
-func (s *Sim) postToRoom(text string) {
+func (s *Sim) postToRoom(room [32]byte, text string) {
 	s.mu.Lock()
-	s.posts = append(s.posts, post{author: device.self.Name, text: text, at: time.Now()})
+	s.posts[room] = append(s.posts[room], post{author: device.self.Name, text: text, at: time.Now()})
 	s.mu.Unlock()
 }
 
-func seededPosts(now time.Time) []post {
-	return []post{
-		{"Alice", "Welcome to the Clifton room. Be nice!", now.Add(-26 * time.Hour)},
-		{"Bob", "Kelston repeater is getting a new antenna on Saturday", now.Add(-5 * time.Hour)},
-		{"Carol", "anyone want to meet at Cabot Tower for a range test? 🗼", now.Add(-40 * time.Minute)},
-		{"Dan", "range test was ace, 4 hops to Cardiff 🎉📡", now.Add(-12 * time.Minute)},
-		{"健二 Kenji", "次のテストは土曜日 👍🏽", now.Add(-6 * time.Minute)},
+func seededPosts(now time.Time) map[[32]byte][]post {
+	return map[[32]byte][]post{
+		key(0x6C, "Clifton Room"): {
+			{"Alice", "Welcome to the Clifton room. Be nice!", now.Add(-26 * time.Hour)},
+			{"Bob", "Kelston repeater is getting a new antenna on Saturday", now.Add(-5 * time.Hour)},
+			{"Carol", "anyone want to meet at Cabot Tower for a range test? 🗼", now.Add(-40 * time.Minute)},
+			{"Dan", "range test was ace, 4 hops to Cardiff 🎉📡", now.Add(-12 * time.Minute)},
+		},
+		key(0x2B, "🍺 Harbourside Room"): {
+			{"Carol", "Harbourside room is up 🍺 post here for the Thursday meet", now.Add(-3 * time.Hour)},
+			{"Zoe\u0308", "I'll bring the spare Heltec, Zoë", now.Add(-50 * time.Minute)},
+			{"健二 Kenji", "次のテストは土曜日 👍🏽", now.Add(-6 * time.Minute)},
+		},
 	}
 }
 

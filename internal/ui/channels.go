@@ -133,6 +133,10 @@ func (m *Model) channelKey(s string) (tea.Cmd, bool) {
 		case "enter":
 			in := strings.TrimSpace(c.chanInput.text)
 			if c.chanStage == chanName && !strings.HasPrefix(in, "#") && !strings.HasPrefix(in, chat.ChannelLinkPrefix) && in != "" {
+				if len(untrusted.Name(in)) > 31 {
+					m.fail("CHANNEL  a channel name is at most 31 bytes") // said now, not after the secret's typed
+					return nil, true
+				}
 				c.chanName, c.chanInput, c.chanStage = in, lineEdit{}, chanSecret
 				return nil, true
 			}

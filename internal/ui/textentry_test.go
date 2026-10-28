@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 func TestPasteAndEmoji(t *testing.T) {
@@ -203,5 +204,18 @@ func TestLineEditCursor(t *testing.T) {
 	}
 	if got := ansi.Strip(newLine("secret").render(h.m.th, 20, true)); strings.Contains(got, "secret") {
 		t.Errorf("masked: %q", got)
+	}
+}
+
+// Scrolled text fills the field, give or take a wide character that won't fit, whatever the mix of widths.
+func TestScrolledFieldFillsItsWidth(t *testing.T) {
+	t.Parallel()
+	text := strings.Repeat("東a", 20)
+	for pos := 0; pos < len(text); pos++ {
+		e := lineEdit{text: text, pos: pos}
+		// A wide character that won't fit can leave one cell spare, but no more.
+		if got := visibleWidth(e.render(theme.Neon, 12, false)); got < 11 {
+			t.Errorf("cursor at byte %d: %d cells, want 11 or 12", pos, got)
+		}
 	}
 }
