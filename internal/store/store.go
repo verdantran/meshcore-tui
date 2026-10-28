@@ -628,6 +628,13 @@ func (s *Store) SearchContext(ctx context.Context, device, q string, c Convo, li
 		device, string(c), likePattern(q), likePattern(q), limit)
 }
 
+// ChessMessages returns the messages in a conversation that could be chess moves, those starting with ♟, oldest
+// first: a game is rebuilt from them, however long ago it started.
+func (s *Store) ChessMessages(device string, c Convo) ([]Message, error) {
+	return s.queryMessages(`SELECT `+messageCols+` FROM messages INDEXED BY messages_convo WHERE device = ? AND convo = ? AND text LIKE '♟%' ORDER BY id`,
+		device, string(c))
+}
+
 // All returns every message in a conversation, or in all of them when convo is empty, oldest first.
 func (s *Store) All(device string, c Convo) ([]Message, error) {
 	var out []Message

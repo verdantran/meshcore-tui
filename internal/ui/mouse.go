@@ -36,6 +36,14 @@ func (m *Model) click(c tea.Mouse) tea.Cmd {
 				return m.setPane(p)
 			}
 		}
+		if b := m.chats.board; m.tab == 0 && b != nil {
+			// The chats screen's content starts inside the box's edge; the board is in the pane right of the list.
+			listW := min(max((r.w-4)/4, 20), 32)
+			if sq, ok := b.boardSquareAt(c.X-r.x-2-listW-3, y-r.y-1); ok {
+				b.chat = false
+				return m.pressSquare(sq)
+			}
+		}
 	}
 	if m.tab == 1 && !m.repeaterMode() {
 		return m.onSelectContact()

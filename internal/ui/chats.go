@@ -46,6 +46,9 @@ type chatsModel struct {
 	reading bool  // moving through the open conversation's messages, to reply to one or see its route
 	cur     int64 // the message picked while reading
 
+	board       *boardView // chess open in the conversation, or nil
+	boardLayout string     // "board" or "both", once changed; until then the config's
+
 	heard []heardMessage // message packets heard lately, for giving messages their paths
 
 	sigs     []pendingSig         // signatures waiting for their message
@@ -172,6 +175,9 @@ func (m *Model) rebuildChats(reload bool) {
 		}
 	default:
 		c.msgs, _ = m.chat.Messages(cur.Convo, historyLen)
+	}
+	if c.board != nil && (reload || cur.Convo != c.board.convo) {
+		m.refreshBoard()
 	}
 	c.unread = 0
 	for _, info := range c.infos {
@@ -393,6 +399,13 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		m.refreshChats()
 		return nil, true
 	}
+	if c.board != nil && !c.board.chat {
+		return m.boardKey(s)
+	}
+	if c.board != nil && !c.writing && !c.reading && (s == "tab" || s == "esc") {
+		c.board.chat = false // back to the board from the conversation beside it
+		return nil, true
+	}
 	if c.reading {
 		if cmd, handled := m.readingKey(s); handled {
 			return cmd, true
@@ -431,6 +444,8 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		}
 	}
 	switch s {
+	case "c":
+		m.openBoard()
 	case "/":
 		c.filtering, c.filter = true, lineEdit{}
 	case "esc":
@@ -730,9 +745,12 @@ func (m *Model) renderChats(inner, rows int) []string {
 	paneW := inner - listW - 3
 	left := m.convoList(listW, rows)
 	var right []string
-	if c.onAdd || len(c.infos) == 0 {
+	switch {
+	case c.onAdd || len(c.infos) == 0:
 		right = m.addPreview(paneW)
-	} else {
+	case c.board != nil:
+		right = m.boardPane(paneW, rows)
+	default:
 		right = m.convoPane(paneW, rows)
 	}
 	sep := th.Fg(th.Line, false).Render(" │ ")
@@ -899,8 +917,11 @@ func (m *Model) convoPane(w, rows int) []string {
 			m.joinHint()+
 			th.Paint(th.Dim, false, "← back to conversations"), w)
 	default:
-		compose = fit(th.Paint(th.Dim, false, "▸ "+fitHints([]string{"enter write", "↑↓ conversations", "n add channel", "→ pick a message",
-			"r reply", "/ filter", "ctrl+f search all"}, w-2)), w)
+		hs := []string{"enter write", "↑↓ conversations", "n add channel", "→ pick a message", "r reply", "/ filter", "ctrl+f search all"}
+		if ct, ok := m.chat.Contact(cur.Convo); ok && cur.Kind == chat.KindDirect && ct.Type == radio.TypeChat {
+			hs = slices.Insert(hs, 1, "c chess")
+		}
+		compose = fit(th.Paint(th.Dim, false, "▸ "+fitHints(hs, w-2)), w)
 	}
 
 	// Messages, newest at the bottom, drawn only as far up as the pane shows.

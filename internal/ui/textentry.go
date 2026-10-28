@@ -27,7 +27,7 @@ func (m *Model) typing() bool {
 	switch m.tab {
 	case 0:
 		c := &m.chats
-		return c.writing || c.filtering || c.chanStage != chanNone
+		return c.writing || c.filtering || c.chanStage != chanNone || c.board != nil && c.board.typing
 	case 1:
 		return m.contacts.filtering || m.contacts.overlay == importOverlay || m.contacts.overlay == placeOverlay
 	case 3:

@@ -20,6 +20,8 @@ var asciiFor = map[string]string{
 	"┌": "+", "┐": "+", "└": "+", "┘": "+", "┏": "+", "┓": "+", "┗": "+", "┛": "+",
 	"✓": "v", "✕": "x", "★": "*", "✎": "%", "✍": "%", "⚠": "!", "⌂": "H",
 	"◉": "@", "●": "o", "○": "o", "■": "#", "▲": "^",
+	"♔": "K", "♕": "Q", "♖": "R", "♗": "B", "♘": "N", "♙": "P",
+	"♚": "k", "♛": "q", "♜": "r", "♝": "b", "♞": "n", "♟": "p",
 }
 
 // toASCII rewrites a frame in plain ASCII for terminals without Unicode symbols, keeping its colours.

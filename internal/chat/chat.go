@@ -457,6 +457,11 @@ func (s *Service) Messages(c store.Convo, limit int) ([]store.Message, error) {
 	return s.store.Messages(s.device, c, limit)
 }
 
+// ChessMessages is a conversation's messages that could be chess, oldest first.
+func (s *Service) ChessMessages(c store.Convo) ([]store.Message, error) {
+	return s.store.ChessMessages(s.device, c)
+}
+
 func (s *Service) MarkRead(c store.Convo) error {
 	if err := s.store.MarkRead(s.device, c); err != nil {
 		s.sums = nil
