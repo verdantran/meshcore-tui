@@ -29,6 +29,14 @@ EOF
 	cat internal/untrusted/UNICODE-LICENSE
 	cat <<'EOF'
 
+Chess over direct messages follows the message format, and the way a game is rebuilt
+from its messages, of meshcore-companion by edleeman17
+(https://github.com/edleeman17/meshcore-companion), under the MIT License, which follows.
+
+EOF
+	cat internal/chess/MESHCORE-COMPANION-LICENSE
+	cat <<'EOF'
+
 The Go standard library is compiled into the app under the licence below, followed by
 the Go modules the app uses, each with its licence in full.
 EOF
