@@ -4,6 +4,8 @@
 
 A terminal client for [MeshCore](https://meshcore.io) radios: chats, contacts, a map of the mesh drawn in braille, a live packet inspector, and remote administration of repeaters and room servers. It connects over USB serial, Bluetooth or WiFi, runs happily over SSH and in tmux, and ships as a single binary.
 
+meshcore-tui is an independent project. It isn't affiliated with, or endorsed by, the MeshCore project or its developers; it talks to radios running MeshCore's companion firmware.
+
 ![Chats, the map and packets split in one view as traffic arrives, then finding #hilltop with ctrl+k and switching themes](docs/screenshots/demo.gif)
 
 The recording and screenshots here all come from `--demo`, a simulated mesh with made-up nodes, so you can try the app without a radio. They use the `ice` theme.
