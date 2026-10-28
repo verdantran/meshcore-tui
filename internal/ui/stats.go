@@ -31,6 +31,25 @@ type radioStatsModel struct {
 	hist    []statSample
 	polling bool
 	err     error
+	scroll  int // rows scrolled, when the screen is too narrow to show both halves side by side
+}
+
+// statsKey scrolls Stats when its halves are stacked and don't fit.
+func (m *Model) statsKey(s string) (tea.Cmd, bool) {
+	rs := &m.rstats
+	switch s {
+	case "j", "down":
+		rs.scroll++
+	case "k", "up":
+		rs.scroll = max(rs.scroll-1, 0)
+	case "g", "home":
+		rs.scroll = 0
+	case "G", "end":
+		rs.scroll = 1 << 20 // clamped when drawn
+	default:
+		return nil, false
+	}
+	return nil, true
 }
 
 type statsMsg struct {
@@ -135,7 +154,13 @@ func (m *Model) renderStats(w, rows int) []string {
 	out := append(left, "")
 	out = append(out, right...)
 	if len(out) > rows {
-		out = out[:rows]
+		rs := &m.rstats
+		rs.scroll = min(rs.scroll, len(out)-rows)
+		more := rs.scroll < len(out)-rows
+		out = out[rs.scroll : rs.scroll+rows]
+		if more {
+			out[rows-1] = th.Fg(th.Dim, false).Render(clip("↓ more · j k scroll", w))
+		}
 	}
 	return out
 }

@@ -542,3 +542,23 @@ func TestFramesPanelHidesSecrets(t *testing.T) {
 		t.Errorf("frames panel:\n%s", scr)
 	}
 }
+
+// At 80 columns Stats stacks its halves; what doesn't fit scrolls into view.
+func TestStatsScrollsWhenStacked(t *testing.T) {
+	t.Parallel()
+	h := busyHarness(t)
+	h.m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	h.advance(2 * time.Minute)
+	h.keys("7")
+	if got := h.screen(); !strings.Contains(got, "↓ more · j k scroll") {
+		t.Fatalf("no scroll hint:\n%s", got)
+	}
+	h.keys("G")
+	if got := h.screen(); !strings.Contains(got, "Channel messages") || strings.Contains(got, "↓ more") {
+		t.Fatalf("G should show the end:\n%s", got)
+	}
+	h.keys("g")
+	if got := h.screen(); !strings.Contains(got, "THIS RADIO") {
+		t.Fatalf("g should go back to the top:\n%s", got)
+	}
+}
