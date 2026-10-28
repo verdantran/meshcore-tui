@@ -39,12 +39,13 @@ func invisible(r rune) bool {
 
 // Skeleton is what a name looks like: two names with the same skeleton are hard to tell apart on screen,
 // whatever their letters. It folds case, drops accents and maps look-alikes from any script to Latin.
-// Capitals are looked up before folding, since "І" looks like "l" where "і" looks like "i". Joiners go too:
-// a terminal that doesn't join emoji draws "👩‍🚀" as "👩🚀".
+// Capitals are looked up before folding, since "І" looks like "l" where "і" looks like "i". Joiners go too,
+// since a terminal that doesn't join emoji draws "👩‍🚀" as "👩🚀", and so do a flag's tags, which take no
+// cell: any run of them after 🏴 is kept, and one that spells no flag is drawn as the 🏴 alone.
 func Skeleton(s string) string {
 	var b strings.Builder
 	for _, r := range norm.NFKD.String(Name(s)) {
-		if unicode.Is(unicode.Mn, r) || r == zwj {
+		if unicode.Is(unicode.Mn, r) || r == zwj || tag(r) {
 			continue
 		}
 		if l, ok := lookalikes[r]; ok {

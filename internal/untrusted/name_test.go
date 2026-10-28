@@ -42,6 +42,12 @@ func TestSkeleton(t *testing.T) {
 	if Skeleton("👩\u200d🚀 Ada") != Skeleton("👩🚀 Ada") {
 		t.Error("an emoji sequence looks like its emoji side by side")
 	}
+	scot := "🏴\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f"
+	for _, s := range []string{"🏴\U000e0078\U000e007f Bob", "🏴\U000e0078 Bob", scot + " Bob"} {
+		if Skeleton(s) != Skeleton("🏴 Bob") {
+			t.Errorf("%q, its tags unseen, should look like 🏴 Bob", s)
+		}
+	}
 	if Skeleton("\u0410lice") != Skeleton("alice") || Skeleton("Bob0") != Skeleton("bobo") || Skeleton("\u0406an") != Skeleton("lan") {
 		t.Error("Cyrillic and digit look-alikes")
 	}

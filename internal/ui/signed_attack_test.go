@@ -59,6 +59,14 @@ func TestLookalikeSenders(t *testing.T) {
 		t.Errorf("shown:\n%s", h.screen())
 	}
 
+	// A flag's tags take no cell, so tags hung on a pinned 🏴 name don't hide that it looks like the name.
+	h.m.pin("🏴 Zed", zed.pub)
+	h.clk.t = h.clk.t.Add(time.Minute)
+	h.say(1, "🏴\U000e0078\U000e007f Zed", "trust me")
+	if v := h.verdict(); v != "⚠ looks like 🏴 Zed" {
+		t.Errorf("tags after the flag: %q", v)
+	}
+
 	// Even signed, a look-alike is flagged; K asks before pinning one.
 	mallory := newSigner("mallory")
 	h.m.contacts.heard = append(h.m.contacts.heard, heardNode{radio.Contact{Key: mallory.pub, Name: "Zеd"}, h.clk.t})
