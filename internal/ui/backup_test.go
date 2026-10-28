@@ -72,6 +72,8 @@ func TestBackupAndRestore(t *testing.T) {
 		}
 	}
 	a.key(tea.KeyEscape)
+	// A long folder, as temporary and profile folders are on macOS and Windows, still leaves the name in view.
+	a.m.opt.ExportDir = filepath.Join(a.m.opt.ExportDir, strings.Repeat("a-long-folder-name", 4), "exports")
 	path, b := a.makeBackup(false)
 	if !strings.Contains(a.screen(), filepath.Base(path)) {
 		t.Errorf("the backup row shows where it went:\n%s", a.screen())

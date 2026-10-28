@@ -353,6 +353,8 @@ func TestConnectFailures(t *testing.T) {
 	}
 
 	// A write the link refused says why, not that the firmware might be wrong.
+	defer func(os string) { bleOS = os }(bleOS)
+	bleOS = "linux" // the hint's wording depends on the system
 	f4 := newFakeDevice()
 	f4.sendErr = writeError{bleHint(errors.New("Bluetooth ATT error (code 0x0005)"))}
 	l4 := startLink(t, f4)

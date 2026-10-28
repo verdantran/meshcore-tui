@@ -466,7 +466,7 @@ func (m *Model) deviceRows() []devRow {
 					op: func(ctx context.Context, d radio.Device) error { return d.FactoryReset(ctx) }}
 				return nil
 			}},
-		devRow{id: "backup", group: "Backup", label: "Back up this radio", value: m.device.saved, kind: rowAction,
+		devRow{id: "backup", group: "Backup", label: "Back up this radio", value: savedName(m.device.saved), kind: rowAction,
 			hint: "Settings, channels and contacts to a file in " + m.exportDir() + "; you choose what goes in, and the private key only if you ask.",
 			press: func(m *Model) tea.Cmd {
 				if err := m.startBackup(); err != nil {

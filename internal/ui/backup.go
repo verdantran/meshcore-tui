@@ -50,6 +50,15 @@ type restoredMsg struct {
 	key          bool
 }
 
+// savedName is the file a backup went to, without the folder the row's hint already names: a whole path is often
+// too long for the row, and the name is the part that tells backups apart.
+func savedName(path string) string {
+	if path == "" {
+		return ""
+	}
+	return "saved as " + filepath.Base(path)
+}
+
 func (m *Model) exportDir() string {
 	if m.opt.ExportDir != "" {
 		return m.opt.ExportDir
