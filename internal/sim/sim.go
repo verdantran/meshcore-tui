@@ -436,7 +436,7 @@ func (s *Sim) packet(now time.Time) ([]byte, string, bool) {
 // groupText encrypts a channel message the way the sender's radio would.
 func (s *Sim) groupText(now time.Time, hops [][]byte, ch radio.Channel, sender, text string) []byte {
 	if text == "" {
-		lines := chatter[ch.Name]
+		lines := chatterFor(ch.Name)
 		text = lines[s.intn(len(lines))]
 	}
 	psk := ch.Secret
@@ -446,6 +446,14 @@ func (s *Sim) groupText(now time.Time, hops [][]byte, ch radio.Channel, sender, 
 	}
 	payload, _ := gt.ToBytes()
 	return build(meshcore.RouteTypeFlood, meshcore.PayloadTypeGrpTxt, hops, payload)
+}
+
+// chatterFor is what people say on a channel, with generic lines for one the sim has no script for.
+func chatterFor(channel string) []string {
+	if lines, ok := chatter[channel]; ok {
+		return lines
+	}
+	return []string{"hello from " + channel, "anyone else on here?", "testing the new channel"}
 }
 
 // chatter is a channel message from someone on the mesh, or a reply someone owes you.
@@ -475,10 +483,7 @@ func (s *Sim) chatter(now time.Time) {
 		return
 	}
 	ch := cs[s.intn(len(cs))]
-	lines, ok := chatter[ch.Name]
-	if !ok {
-		lines = []string{"hello from " + ch.Name, "anyone else on here?", "testing the new channel"}
-	}
+	lines := chatterFor(ch.Name)
 	who := []string{"Alice", "Bob", "Carol", "Dan", "Eve 🦊", "Hilltop Ops", "Priya 🌸", "🇬🇧 Siân", "👩‍🚀 Ada", "健二 Kenji", "سلام Salam"}[s.intn(11)]
 	text := lines[s.intn(len(lines))]
 	hops := s.hops(s.intn(4) + 1)

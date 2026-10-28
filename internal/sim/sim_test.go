@@ -204,6 +204,19 @@ func TestPacketsAreReal(t *testing.T) {
 	}
 }
 
+// A channel the sim has no script for still gets traffic, rather than crashing it.
+func TestUnscriptedChannel(t *testing.T) {
+	s := New(9).Fast()
+	if err := s.SetChannel(context.Background(), radio.Channel{Idx: 3, Name: "#bath", Secret: channelSecret("#bath")}); err != nil {
+		t.Fatal(err)
+	}
+	for range 50 {
+		if raw := s.groupText(time.Now(), nil, s.channelList()[3], "Bob", ""); raw == nil {
+			t.Fatal("no packet")
+		}
+	}
+}
+
 func TestMessagingCalls(t *testing.T) {
 	s := New(4).Fast().Lossless()
 	ctx := context.Background()
