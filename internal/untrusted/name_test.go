@@ -20,6 +20,11 @@ func TestName(t *testing.T) {
 		"Zed\u2800\u3164":                 "Zed",
 		"Zed" + "          " + "✓ signed": "Zed ✓ signed",
 		"Zoë 👋":                           "Zoë 👋",
+		"👩\u200d🚀 Ada":                    "👩\u200d🚀 Ada",
+		"#👩\u200d🚀crew":                   "#👩\u200d🚀crew",
+		"🏴\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f scot": "🏴\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f scot",
+		"a\u200d🚀 x":    "a🚀 x",
+		"Zed\U000e0067": "Zed",
 	} {
 		if got := Name(in); got != want {
 			t.Errorf("Name(%q) = %q, want %q", in, got, want)
@@ -33,6 +38,9 @@ func TestSkeleton(t *testing.T) {
 		if got := Skeleton(s); got != zed {
 			t.Errorf("Skeleton(%q) = %q, want %q", s, got, zed)
 		}
+	}
+	if Skeleton("👩\u200d🚀 Ada") != Skeleton("👩🚀 Ada") {
+		t.Error("an emoji sequence looks like its emoji side by side")
 	}
 	if Skeleton("\u0410lice") != Skeleton("alice") || Skeleton("Bob0") != Skeleton("bobo") || Skeleton("\u0406an") != Skeleton("lan") {
 		t.Error("Cyrillic and digit look-alikes")
