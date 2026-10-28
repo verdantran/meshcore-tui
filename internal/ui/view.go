@@ -230,7 +230,7 @@ func (m *Model) panel(title string, body []string, w, h int, accent theme.RGB, f
 		edge = accent
 	}
 	paint := func(s string) string { return th.Paint(edge, false, s) }
-	head := th.Paint(accent, true, "▌") + th.Paint(th.Muted, true, title+" ")
+	head := th.Paint(accent, true, "▌") + th.Paint(th.Muted, true, truncate(title, w-6)+" ")
 	top := paint(tl+hz) + head + paint(strings.Repeat(hz, max(w-4-visibleWidth(head), 0))+hz+tr)
 	out := []string{top}
 	inner := w - 4

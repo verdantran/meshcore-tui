@@ -221,3 +221,23 @@ func TestNotificationsCanKeepTheTextBack(t *testing.T) {
 		t.Error("an unknown level is refused")
 	}
 }
+
+// A message header too narrow for its detail keeps the sender's name and cuts the detail with …,
+// dropping the keys on a picked message first.
+func TestNarrowMessageHeaderKeepsTheSender(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	h.openConvo("Alice")
+	h.key(tea.KeyRight)
+	h.key(tea.KeyUp) // picks the newest message, the one queued at boot
+	h.advance(time.Second)
+	for _, l := range strings.Split(h.screen(), "\n") {
+		if strings.Contains(l, "Ali") && strings.Contains(l, ":") && !strings.Contains(l, "Alice") {
+			t.Errorf("the sender is cut: %q", l)
+		}
+		if strings.Contains(l, "Alice") && strings.Contains(l, "SNR") && !strings.HasSuffix(strings.TrimRight(l, " ┃│|"), "…") && !strings.Contains(l, "SNR +9.50") {
+			t.Errorf("the detail is cut without …: %q", l)
+		}
+	}
+}

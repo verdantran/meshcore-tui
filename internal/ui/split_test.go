@@ -305,3 +305,16 @@ func TestClicks(t *testing.T) {
 		t.Error(":mouse off leaves the mouse to the terminal")
 	}
 }
+
+// A pane too narrow for its title cuts the title, not its corner.
+func TestNarrowPaneKeepsItsCorner(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	h.keys(":")
+	h.typeLine("split right contacts")
+	top := strings.Split(h.screen(), "\n")[2]
+	if n := strings.Count(top, "┐") + strings.Count(top, "┓"); n != 2 {
+		t.Errorf("the top row has %d corners on the right, want 2: %q", n, top)
+	}
+}
