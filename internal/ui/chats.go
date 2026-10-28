@@ -234,7 +234,7 @@ func (m *Model) chatEvent(e radio.Event) tea.Cmd {
 		if m.chat.Mentions(msg.Text) {
 			tone = radio.ToneWarn
 		}
-		m.addLog(m.now, fmt.Sprintf("MSG  %s · %s: %s", title, msg.Sender, truncate(msg.Text, 60)), tone)
+		m.addLog(m.now, fmt.Sprintf("MSG  %s · %s: %s", title, msg.Sender, truncate(noteText(msg), 60)), tone)
 		m.chatsChanged(msg.Convo)
 		return m.considerNote(msg, title)
 	case radio.ChannelData:
@@ -972,15 +972,15 @@ func (m *Model) messageHeight(msg store.Message, w int) int {
 	if at, ok := c.failed[msg.ID]; ok && motion.Running(at, glitchDur*3, m.now) {
 		return len(m.messageLines(msg, w))
 	}
-	k := heightKey{msg.ID, w}
-	if h, ok := c.heights[k]; ok && h.text == msg.Text {
+	k, shown := heightKey{msg.ID, w}, m.shownText(msg)
+	if h, ok := c.heights[k]; ok && h.text == shown {
 		return h.rows
 	}
 	if c.heights == nil || len(c.heights) > 4*historyLen {
 		c.heights = map[heightKey]msgHeight{}
 	}
 	rows := len(m.messageLines(msg, w))
-	c.heights[k] = msgHeight{msg.Text, rows}
+	c.heights[k] = msgHeight{shown, rows}
 	return rows
 }
 
@@ -1022,7 +1022,7 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 	}
 	meta = clip(meta, metaRoom)
 
-	text, marks := emphasis(msg.Text)
+	text, marks := emphasis(m.shownText(msg))
 	if at, ok := m.chats.arrived[msg.ID]; ok && m.level.Allows(motion.Decode) && motion.Running(at, decodeDur, now) {
 		text, marks = motion.DecodeText(text, msg.ID, motion.Progress(at, decodeDur, now)), nil
 	}

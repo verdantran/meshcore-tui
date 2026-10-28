@@ -76,7 +76,7 @@ func (m *Model) considerNote(msg store.Message, title string) tea.Cmd {
 	if channel {
 		head = msg.Sender + " in " + title
 	}
-	n.pending = append(n.pending, note{title: head, body: msg.Text})
+	n.pending = append(n.pending, note{title: head, body: noteText(msg)})
 	if n.waiting {
 		return nil
 	}
