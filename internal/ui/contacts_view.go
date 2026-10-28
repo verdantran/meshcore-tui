@@ -69,7 +69,7 @@ func (m *Model) contactTable(w, rows int) []string {
 	}
 	nameW := min(max(w/4, 14), 26)
 	routeW := max(w-nameW-48, 10)
-	head := fmt.Sprintf("  %-*s %-9s %-9s %-*s %-4s %s", nameW, "NAME", "TYPE", "HEARD", routeW, "ROUTE", "LOC", "KEY")
+	head := fmt.Sprintf("   %-*s %-9s %-9s %-*s %-4s %s", nameW, "NAME", "TYPE", "HEARD", routeW, "ROUTE", "LOC", "KEY")
 	out = append(out, th.Paint(th.Muted, true, head))
 	list := m.contactRows()
 	if len(list) == 0 {
@@ -368,7 +368,7 @@ func (m *Model) placeLines(w int) []string {
 		shared = fmt.Sprintf("it shares %.4f, %.4f; yours is used instead", ct.Lat, ct.Lon)
 	}
 	return []string{
-		th.Fg(th.Muted, true).Render("PLACE "+strings.ToUpper(ct.Name)) + th.Fg(th.Dim, false).Render(truncate("  ·  latitude, longitude · enter place · empty clears it · esc cancel", w-len(ct.Name)-6)), "",
+		th.Fg(th.Muted, true).Render("PLACE "+strings.ToUpper(ct.Name)) + th.Fg(th.Dim, false).Render(truncate("  ·  latitude, longitude · enter place · empty clears it · esc cancel", w-visibleWidth(ct.Name)-6)), "",
 		th.Fg(th.Magenta, true).Render("▸ ") + m.contacts.placeIn.render(th, w-2, false), "",
 		th.Fg(th.Dim, false).Render(truncate("Only this app uses it, for the map and its routes; "+shared+".", w)),
 	}

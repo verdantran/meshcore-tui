@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -75,5 +76,15 @@ func TestFoldMatchesAccents(t *testing.T) {
 	}
 	if strings.Contains(fold("Zed"), fold("zoe")) {
 		t.Error("zoe finds Zed")
+	}
+}
+
+// Names that lead with an emoji sort among the letters they start with.
+func TestSortNameSkipsLeadingSymbols(t *testing.T) {
+	names := []string{"🗼 Weston Relay", "Zoe\u0308", "Aust 🌉", "🍺 Harbourside Room", "健二 Kenji", "⛰️ Mendip Mast", "bob"}
+	slices.SortFunc(names, func(a, b string) int { return strings.Compare(sortName(a), sortName(b)) })
+	want := []string{"Aust 🌉", "bob", "🍺 Harbourside Room", "⛰️ Mendip Mast", "🗼 Weston Relay", "Zoe\u0308", "健二 Kenji"}
+	if !slices.Equal(names, want) {
+		t.Errorf("sorted %q", names)
 	}
 }

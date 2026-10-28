@@ -242,7 +242,7 @@ func (m *Model) contactRows() []radio.Contact {
 		}
 		switch c.sortBy {
 		case 1:
-			return strings.ToLower(a.Name) < strings.ToLower(b.Name)
+			return sortName(a.Name) < sortName(b.Name)
 		case 2:
 			ha, hb := a.PathLen, b.PathLen
 			if ha < 0 {
@@ -254,7 +254,7 @@ func (m *Model) contactRows() []radio.Contact {
 			if ha != hb {
 				return ha < hb
 			}
-			return strings.ToLower(a.Name) < strings.ToLower(b.Name)
+			return sortName(a.Name) < sortName(b.Name)
 		}
 		return a.LastAdvert.After(b.LastAdvert)
 	})

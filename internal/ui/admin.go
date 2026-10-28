@@ -203,7 +203,7 @@ func (m *Model) adminNodes() []radio.Contact {
 	var list []node
 	for _, c := range m.allNodes() {
 		if !m.adm.favOnly || favourite(c) {
-			list = append(list, node{c, favourite(c), strings.ToLower(c.Name)})
+			list = append(list, node{c, favourite(c), sortName(c.Name)})
 		}
 	}
 	sort.Slice(list, func(i, j int) bool {
@@ -1289,7 +1289,7 @@ func (m *Model) aclCandidates(sess *admin.Session) []radio.Contact {
 			out = append(out, c)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name) })
+	sort.Slice(out, func(i, j int) bool { return sortName(out[i].Name) < sortName(out[j].Name) })
 	return out
 }
 

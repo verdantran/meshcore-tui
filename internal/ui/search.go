@@ -33,6 +33,15 @@ func fold(s string) string {
 	return b.String()
 }
 
+// sortName is what a name sorts by: folded, and without the emoji or symbols some lead with, so
+// "🍺 Harbourside" sorts among the H's rather than after every letter.
+func sortName(s string) string {
+	if t := strings.TrimLeftFunc(s, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }); t != "" {
+		s = t
+	}
+	return fold(s)
+}
+
 // searchModel is the ctrl+f overlay that searches every conversation.
 type searchModel struct {
 	open    bool

@@ -507,3 +507,25 @@ func TestHeardFloodKeepsNamesakes(t *testing.T) {
 		t.Error("a node gone quiet for days makes room first")
 	}
 }
+
+// The column headings sit over their columns.
+func TestContactHeadingsOverColumns(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.keys("2")
+	at := func(marker string) int {
+		for _, l := range strings.Split(h.screen(), "\n") {
+			if i := strings.Index(l, marker); i >= 0 {
+				return ansi.StringWidth(l[:i])
+			}
+		}
+		t.Fatalf("no %q:\n%s", marker, h.screen())
+		return 0
+	}
+	if name, row := at("NAME"), at("Cabot Tower"); name != row {
+		t.Errorf("NAME is at cell %d, names at %d", name, row)
+	}
+	if typ, row := at("TYPE"), at("Repeater"); typ != row {
+		t.Errorf("TYPE is at cell %d, types at %d", typ, row)
+	}
+}
