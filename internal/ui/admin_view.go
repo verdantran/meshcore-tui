@@ -806,7 +806,7 @@ func (m *Model) consoleLines(sess *admin.Session, w, rows int) []string {
 }
 
 // clip shortens styled text to w cells, keeping its colours.
-func clip(s string, w int) string { return renderWidth.Truncate(s, max(w, 0), "…") }
+func clip(s string, w int) string { return truncate(s, w) }
 
 // roomLine says whether you're logged in to the room whose conversation is open.
 func (m *Model) roomLine(w int) string {
