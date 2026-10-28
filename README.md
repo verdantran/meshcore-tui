@@ -4,6 +4,8 @@
 
 A terminal client for [MeshCore](https://meshcore.io) radios: chats, contacts, a map of the mesh drawn in braille, a live packet inspector, and remote administration of repeaters and room servers. It connects over USB serial, Bluetooth or WiFi, runs happily over SSH and in tmux, and ships as a single binary.
 
+meshcore-tui is an independent project. It isn't affiliated with, or endorsed by, the MeshCore project or its developers; it talks to radios running MeshCore's companion firmware.
+
 ![Chats, the map and packets split in one view as traffic arrives, then finding #hilltop with ctrl+k and switching themes](docs/screenshots/demo.gif)
 
 The recording and screenshots here all come from `--demo`, a simulated mesh with made-up nodes, so you can try the app without a radio. They use the `ice` theme.
@@ -109,7 +111,7 @@ meshcore-tui --demo                           # a simulated mesh
 
 Heltec V4 radios ship separate firmware for USB, Bluetooth and WiFi companions. If a connection fails in a way that suggests the wrong build, the app says so.
 
-Over Bluetooth, the first connection may ask for the radio's PIN (`123456` on a Heltec unless you've changed it). On Linux, BlueZ has no agent to ask for it, so pair once with `bluetoothctl` first; on Windows, pair once in Settings → Bluetooth.
+Over Bluetooth, the radio must be paired before it takes commands, with the PIN on its screen, or `123456` if it has no screen, unless you've set your own. On Linux, BlueZ has no agent to ask for it, so pair once with `bluetoothctl` first; on Windows, pair once in Windows Settings (Win+I) → Bluetooth & devices → Add device.
 
 ## Getting around
 
@@ -167,7 +169,7 @@ The file is optional; everything has a default. [docs/configuration.md](docs/con
 
 ## Built with AI
 
-Most of meshcore-tui was written with Claude, Anthropic's AI model. It's had security and performance reviews, but not an independent audit, so do your own due diligence before relying on it; [AI_DISCLOSURE.md](AI_DISCLOSURE.md) says what was checked and what wasn't.
+Nearly all of meshcore-tui was written with Claude, Anthropic's AI model. It's had security and performance reviews, but not an independent audit, so do your own due diligence before relying on it; [AI_DISCLOSURE.md](AI_DISCLOSURE.md) says what was checked and what wasn't.
 
 ## Thanks
 

@@ -43,10 +43,10 @@ type systemAdapter struct {
 	scanMu  sync.Mutex
 
 	mu    sync.Mutex
-	drops map[string]func() // by upper-case address
+	peers map[string]*systemPeer // by upper-case address
 }
 
-var theAdapter = &systemAdapter{drops: map[string]func(){}}
+var theAdapter = &systemAdapter{peers: map[string]*systemPeer{}}
 
 func systemBLE() bleAdapter { return theAdapter }
 
@@ -61,10 +61,10 @@ func (s *systemAdapter) enable() error {
 				return
 			}
 			s.mu.Lock()
-			f := s.drops[strings.ToUpper(d.Address.String())]
+			p := s.peers[strings.ToUpper(d.Address.String())]
 			s.mu.Unlock()
-			if f != nil {
-				f()
+			if p != nil {
+				p.lost()
 			}
 		})
 	})
@@ -91,9 +91,9 @@ func (s *systemAdapter) connect(ctx context.Context, addr string, notify func([]
 		return nil, err
 	}
 	key := strings.ToUpper(addr)
-	p := &systemPeer{dev: dev, forget: func() { s.mu.Lock(); delete(s.drops, key); s.mu.Unlock() }}
+	p := &systemPeer{dev: dev, dropped: dropped, forget: func() { s.mu.Lock(); delete(s.peers, key); s.mu.Unlock() }}
 	s.mu.Lock()
-	s.drops[key] = dropped
+	s.peers[key] = p
 	s.mu.Unlock()
 	if err := p.open(notify); err != nil {
 		p.close()
@@ -167,10 +167,11 @@ func (s *systemAdapter) find(ctx context.Context, addr string) (bluetooth.Addres
 }
 
 type systemPeer struct {
-	dev    bluetooth.Device
-	rx, tx bluetooth.DeviceCharacteristic
-	max    int // the most one write carries, once the link has said
-	forget func()
+	dev     bluetooth.Device
+	rx, tx  bluetooth.DeviceCharacteristic
+	dropped func()
+	forget  func()
+	closed  sync.Once
 }
 
 func (p *systemPeer) open(notify func([]byte)) error {
@@ -194,21 +195,39 @@ func (p *systemPeer) open(notify func([]byte)) error {
 	if !haveRx || !haveTx {
 		return errors.New("the radio's companion service is missing a characteristic")
 	}
-	if mtu, err := p.rx.GetMTU(); err == nil && mtu > 3 {
-		p.max = int(mtu) - 3 // less the ATT header
-	}
 	return p.tx.EnableNotifications(notify)
 }
 
 func (p *systemPeer) write(frame []byte) error {
-	if p.max > 0 && len(frame) > p.max {
-		return fmt.Errorf("a %d-byte frame is more than this Bluetooth link carries in one write (%d)", len(frame), p.max)
+	if most, ok := bleRoomFor(len(frame), p.carries, time.Sleep); !ok {
+		return fmt.Errorf("a %d-byte frame is more than this Bluetooth link carries in one write (%d)", len(frame), most)
 	}
 	_, err := p.rx.Write(frame)
 	return err
 }
 
-func (p *systemPeer) close() error {
-	p.forget()
-	return p.dev.Disconnect()
+// carries is the most one write takes now, or 0 if the link doesn't say. It's asked each time
+// because the MTU grows after connecting: Windows starts at the minimum and agrees more later.
+func (p *systemPeer) carries() int {
+	if mtu, err := p.rx.GetMTU(); err == nil && mtu > 3 {
+		return int(mtu) - 3 // less the ATT header
+	}
+	return 0
+}
+
+// lost is the system saying the radio went. Windows has already disconnected and released the
+// device by then, so disconnecting it again would free it twice and crash the app.
+func (p *systemPeer) lost() {
+	if bleOS == "windows" {
+		p.closed.Do(p.forget)
+	}
+	p.dropped()
+}
+
+func (p *systemPeer) close() (err error) {
+	p.closed.Do(func() {
+		p.forget()
+		err = p.dev.Disconnect()
+	})
+	return err
 }

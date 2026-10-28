@@ -25,6 +25,12 @@ var redialFirst = time.Second
 
 var errNotConnected = errors.New("not connected to the radio")
 
+// writeError is a command that never reached the radio, as opposed to one it didn't answer.
+type writeError struct{ err error }
+
+func (e writeError) Error() string { return e.err.Error() }
+func (e writeError) Unwrap() error { return e.err }
+
 // stream is the companion link over a serial port or TCP. It replaces the SDK's transports because their
 // frame reader trusts any length, so a few dropped bytes can leave it waiting for 64 KB that never come.
 type stream struct {
@@ -151,7 +157,7 @@ func (s *stream) Send(cmd []byte) error {
 	defer s.write.Unlock()
 	if _, err := c.Write(frame); err != nil {
 		c.Close() // the read loop sees it and redials
-		return err
+		return writeError{err}
 	}
 	return nil
 }

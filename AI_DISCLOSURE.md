@@ -1,6 +1,8 @@
 # AI disclosure
 
-meshcore-tui was written with a lot of help from AI. Most of the code, tests and documentation were written by Claude, Anthropic's AI model, working in Claude Code under my direction: I decided what to build and how it should behave, tried it out, and asked for changes. Commits it helped with carry a `Co-Authored-By: Claude` line.
+Meshcore-tui was created with AI. Nearly all of the code, tests and documentation were written by Claude, Anthropic's AI model, in Claude Code under my direction. It wasn't a one-shot: I decided what to build and how it should behave, tried it out, and asked for changes over many commits.
+
+Building software this way is still new. Code written like this can look right and pass its tests while being wrong in ways that only show in use: the Bluetooth support passed its tests, but until it was tried on a radio it couldn't send contacts because of a packet-size check that only failed on real hardware. Decide whether you're comfortable with that before using the app; the next section says what's been checked and what hasn't.
 
 ## What's been checked
 

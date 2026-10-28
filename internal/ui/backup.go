@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -47,6 +48,15 @@ type backupDoneMsg struct {
 type restoredMsg struct {
 	done, failed []string
 	key          bool
+}
+
+// savedName is the file a backup went to, without the folder the row's hint already names: a whole path is often
+// too long for the row, and the name is the part that tells backups apart.
+func savedName(path string) string {
+	if path == "" {
+		return ""
+	}
+	return "saved as " + filepath.Base(path)
 }
 
 func (m *Model) exportDir() string {
@@ -121,6 +131,9 @@ func (m *Model) startRestore(path string) error {
 }
 
 func (m *Model) openBackup(path string) error {
+	if len(path) > 1 && path[0] == '"' && path[len(path)-1] == '"' {
+		path = path[1 : len(path)-1] // as Windows' Copy as path gives it
+	}
 	if rest, ok := strings.CutPrefix(path, "~/"); ok {
 		if home, err := os.UserHomeDir(); err == nil {
 			path = filepath.Join(home, rest)
@@ -355,7 +368,8 @@ func (m *Model) applyRestore() tea.Cmd {
 	b, chosen, plan := dm.bak.file, dm.bak.chosen, dm.bak.plan
 	d, r, s := m.dev(), m.radio, dm.s
 	dm.busy["restore"] = m.now
-	return m.radioCall(func(ctx context.Context) tea.Msg {
+	limit := opTimeout + time.Duration(len(plan.channels)+len(plan.contacts))*restoreEach
+	return m.radioCallFor(limit, func(ctx context.Context) tea.Msg {
 		var msg restoredMsg
 		step := func(what string, err error) {
 			if err != nil {
@@ -448,7 +462,7 @@ func (m *Model) backupMsg(msg tea.Msg) tea.Cmd {
 			m.fail("BACKUP  " + radio.Explain(msg.err))
 			return nil
 		}
-		dm.doneAt["backup"] = m.now
+		dm.doneAt["backup"], dm.saved = m.now, msg.path
 		line := "BACKED UP  to " + msg.path
 		if msg.what != "" {
 			line = "BACKED UP  " + msg.what + ", to " + msg.path
@@ -460,7 +474,7 @@ func (m *Model) backupMsg(msg tea.Msg) tea.Cmd {
 	case restoredMsg:
 		delete(dm.busy, "restore")
 		if msg.key {
-			m.renewKey = true // the radio has a new identity, so its next proof is saved as the new one
+			m.expectNewKey()
 		}
 		if len(msg.done) > 0 {
 			dm.doneAt["restore"] = m.now
@@ -595,9 +609,9 @@ func (m *Model) backupLines(w int) []string {
 func (m *Model) restorePathLines(w int) []string {
 	th, dm := m.th, &m.device
 	out := []string{th.Fg(th.Muted, true).Render("RESTORE A BACKUP"), "", th.Fg(th.Magenta, true).Render("▸ ") + dm.input.render(th, w-2, false), ""}
-	hint := "The path of a backup file. The newest in your exports folder is filled in; nothing changes until you've chosen what to restore."
+	hint := "The path of a backup file. The newest in your exports folder is filled in, and pasting a path replaces it; nothing changes until you've chosen what to restore."
 	for _, l := range strings.Split(renderWidth.Wrap(hint, w, " "), "\n") {
 		out = append(out, th.Fg(th.Dim, false).Render(l))
 	}
-	return append(out, "", th.Fg(th.Dim, false).Render("enter open it · esc cancel"))
+	return append(out, "", th.Fg(th.Dim, false).Render("enter open it · ctrl+u clear · esc cancel"))
 }

@@ -45,7 +45,7 @@ func (m *Model) checkRadio() tea.Cmd {
 	}
 	signer, ok := m.radio.(radio.Signer)
 	if !ok || m.canSign() != nil {
-		m.radioUnproven()
+		m.radioUnproven("it can't sign")
 		return nil
 	}
 	nonce := make([]byte, 32)
@@ -79,11 +79,14 @@ func (m *Model) radioChecked(msg radioCheckedMsg) {
 		m.trust = trustVerified
 		m.addLog(m.now, "RADIO VERIFIED  "+dev.Name+", key "+key[:8], radio.ToneOK)
 	case proved:
-		m.radioChanged(fmt.Sprintf("its key is %s, not the %s saved for %s", key[:8], dev.Key[:min(8, len(dev.Key))], dev.Name))
+		m.radioChanged(fmt.Sprintf("it proved key %s, but %s was saved with key %s", key[:8], dev.Name, dev.Key[:min(8, len(dev.Key))]))
+	case msg.err != nil:
+		// The check didn't get through, which says nothing about which radio this is: it's tried again on reconnecting.
+		m.radioUnproven("the check didn't go through: " + radio.Explain(msg.err))
 	case saved && dev.Key != "":
-		m.radioChanged("it couldn't prove it's " + dev.Name)
+		m.radioChanged("its signature doesn't match the key it claims, " + dev.Name + "'s")
 	default:
-		m.radioUnproven()
+		m.radioUnproven("it can't sign")
 	}
 }
 
@@ -96,9 +99,9 @@ func (m *Model) wifiNote() {
 	m.addLog(m.now, "UNENCRYPTED  WiFi links aren't encrypted: anyone on this network can read and change what passes, channel secrets and passwords included", radio.ToneWarn)
 }
 
-func (m *Model) radioUnproven() {
-	m.trust = trustUnproven
-	m.addLog(m.now, "RADIO NOT VERIFIED  it can't sign, so saved passwords are asked for", radio.ToneWarn)
+func (m *Model) radioUnproven(why string) {
+	m.trust, m.trustWhy = trustUnproven, why
+	m.addLog(m.now, "RADIO NOT VERIFIED  "+why+", so saved passwords are asked for", radio.ToneWarn)
 }
 
 // keySavedElsewhere finds a Bluetooth device saved at another address that proved this key. A radio has one
@@ -115,10 +118,11 @@ func (m *Model) keySavedElsewhere(key string) (string, bool) {
 	return "", false
 }
 
+// radioChanged is a radio that answered as a different one from the radio this connection was saved with.
 func (m *Model) radioChanged(why string) {
 	m.trust = trustChanged
-	m.fail("DIFFERENT RADIO  " + why + ". Saved passwords won't be sent to it; :radio trust accepts it if it's yours")
-	m.pushToast("⚠ Different radio", why)
+	m.fail("DIFFERENT RADIO  " + why + ". Saved repeater passwords won't be sent to it unasked. If it's yours with a new or restored key, :radio trust accepts it")
+	m.pushToast("⚠ Not the radio saved here", why+". If it's yours with a new key, :radio trust accepts it.")
 }
 
 // savedDevice is the saved device this connection was made to.
@@ -132,6 +136,16 @@ func (m *Model) savedDevice() (config.Device, bool) {
 		}
 	}
 	return config.Device{}, false
+}
+
+// expectNewKey is for when the radio's identity has just changed, by a reset, an import or a restore: its next proof
+// is saved as the new one. The saved key is forgotten too, so that holds after the app is closed, as the radio may
+// not prove itself again until it's next connected.
+func (m *Model) expectNewKey() {
+	m.renewKey = true
+	if _, saved := m.savedDevice(); saved {
+		m.pinRadio("")
+	}
 }
 
 func (m *Model) pinRadio(key string) {
@@ -152,8 +166,6 @@ func (m *Model) savedPasswordsOK() (bool, string) {
 		return false, "this radio hasn't proved which radio it is"
 	case m.target.Kind == "TCP":
 		return false, "the WiFi link to the radio isn't encrypted"
-	case m.target.Kind == "BLE" && !m.ready.Device.PinSet:
-		return false, "the radio has no Bluetooth PIN, so the link may not be encrypted"
 	}
 	return true, ""
 }
@@ -163,9 +175,9 @@ func (m *Model) trustText() string {
 	case trustVerified:
 		return "verified · key " + radio.KeyHex(m.ready.Self.PubKey[:4])
 	case trustUnproven:
-		return "not verified: it can't sign"
+		return "not verified: " + m.trustWhy
 	case trustChanged:
-		return "⚠ not the radio saved for this connection"
+		return "⚠ not the radio saved for this connection · :radio trust if it's yours"
 	}
 	return "checking…"
 }

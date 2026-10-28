@@ -352,6 +352,16 @@ func TestConnectFailures(t *testing.T) {
 		t.Errorf("no APP_START answer = %v", fatal.Err)
 	}
 
+	// A write the link refused says why, not that the firmware might be wrong.
+	defer func(os string) { bleOS = os }(bleOS)
+	bleOS = "linux" // the hint's wording depends on the system
+	f4 := newFakeDevice()
+	f4.sendErr = writeError{bleHint(errors.New("Bluetooth ATT error (code 0x0005)"))}
+	l4 := startLink(t, f4)
+	if fatal := next[Fatal](t, l4, nil); !strings.Contains(fatal.Err.Error(), "pair it once") || strings.Contains(fatal.Err.Error(), "firmware") {
+		t.Errorf("a refused APP_START = %v", fatal.Err)
+	}
+
 	// In-sync clocks are left alone; a missing battery reading doesn't stop the sequence.
 	f3 := newFakeDevice()
 	f3.drift = time.Second
@@ -751,5 +761,36 @@ func TestSaveContactKeepsPathHashSize(t *testing.T) {
 	cmds := f.commands()
 	if u := cmds[len(cmds)-1].(companion.AddUpdateContactCommand); u.OutPathLen != meshcore.MakePathLen(1, 2) {
 		t.Fatalf("an edited 1-byte route was written with path_len %#x", u.OutPathLen)
+	}
+}
+
+func TestSlowContactListArrivesWhole(t *testing.T) {
+	saved := stepTimeout
+	stepTimeout = 150 * time.Millisecond
+	t.Cleanup(func() { stepTimeout = saved })
+
+	// Over Bluetooth a long list takes longer than any one step may, but never goes quiet for long.
+	f := newFakeDevice()
+	f.contactGap = 40 * time.Millisecond
+	for i := range 10 {
+		f.contacts = append(f.contacts, companion.ContactResponse{PublicKey: [32]byte{0x50, byte(i)}, Type: 1, OutPathLen: 0xFF, AdvertName: fmt.Sprint("n", i)})
+	}
+	if ready := next[Ready](t, startLink(t, f), nil); ready.Contacts != 12 {
+		t.Errorf("a slow list arrives whole: %d of 12", ready.Contacts)
+	}
+
+	// A radio that stops partway still times out.
+	f2 := newFakeDevice()
+	f2.contactGap = 400 * time.Millisecond
+	var steps []Event
+	ready := next[Ready](t, startLink(t, f2), &steps)
+	failed := false
+	for _, e := range steps {
+		if s, ok := e.(BootStep); ok && s.Key == "contacts" && s.State == StepFail {
+			failed = true
+		}
+	}
+	if !failed || ready.Contacts != 0 {
+		t.Errorf("a list that stalls fails: failed %v, %d contacts", failed, ready.Contacts)
 	}
 }

@@ -299,13 +299,15 @@ func TestConnectScreenKeys(t *testing.T) {
 	var dialled []Target
 	m := New(Options{Theme: theme.Neon, Motion: motion.Full, Clock: c.now,
 		Ports: func() []Target { return []Target{{Kind: "USB", Addr: "/dev/cu.a", Detail: "Espressif"}} },
+		Scan:  func(ctx context.Context, found func(Target)) error { <-ctx.Done(); return nil },
 		Dial: func(t Target) radio.Radio {
 			dialled = append(dialled, t)
 			return &stubRadio{ch: make(chan radio.Event)}
 		}})
 	m.Init()
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	has(t, plain(screen(t, m)), "SELECT LINK", "/dev/cu.a", "TCP", "SIM")
+	// Every key shows, wrapping to a second line rather than cutting the last ones off.
+	has(t, plain(screen(t, m)), "SELECT LINK", "/dev/cu.a", "TCP", "SIM", "T theme", "q quit")
 	typeKeys(m, "jkjr") // down, up, down, rescan
 	if m.connect.items[m.connect.sel].Kind != "TCP" {
 		t.Fatalf("selection = %+v", m.connect.items[m.connect.sel])

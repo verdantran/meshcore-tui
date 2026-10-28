@@ -40,7 +40,7 @@ func (m *Model) typing() bool {
 		}
 		return a.opened && a.pane == paneConsole
 	case 5:
-		return m.device.prompt == devEdit || m.device.prompt == devConfirm
+		return m.device.prompt == devEdit || m.device.prompt == devConfirm || m.device.prompt == devRestorePath
 	}
 	return false
 }
@@ -121,6 +121,9 @@ func (m *Model) paste(text string) tea.Cmd {
 	if !m.typing() {
 		m.addLog(m.now, "PASTE  there's nowhere to type here", radio.ToneInfo)
 		return nil
+	}
+	if m.phase == phaseMain && m.tab == deviceTab && m.device.prompt == devRestorePath {
+		m.device.input.set("") // a pasted path is the whole path, not more of the one filled in
 	}
 	return m.typeText(text)
 }

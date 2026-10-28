@@ -23,6 +23,8 @@ type fakeDevice struct {
 	connectErr  error
 	fail        map[byte]bool // command codes that get RESP_CODE_ERR
 	mute        map[byte]bool // command codes that get no answer at all
+	sendErr     error         // what every send fails with, as a link that refuses writes
+	contactGap  time.Duration // between contacts in a list, as Bluetooth sends them one at a time
 	resets      int
 	self        companion.SelfInfoResponse
 	contacts    []companion.ContactResponse
@@ -106,8 +108,11 @@ func (f *fakeDevice) Send(cmd []byte) error {
 	}
 	f.mu.Lock()
 	f.sent = append(f.sent, parsed)
-	fail, mute := f.fail[cmd[0]], f.mute[cmd[0]]
+	fail, mute, sendErr := f.fail[cmd[0]], f.mute[cmd[0]], f.sendErr
 	f.mu.Unlock()
+	if sendErr != nil {
+		return sendErr
+	}
 	if mute {
 		return nil
 	}
@@ -134,10 +139,13 @@ func (f *fakeDevice) Send(cmd []byte) error {
 		list := append([]companion.ContactResponse(nil), f.contacts...)
 		f.mu.Unlock()
 		f.push(companion.ContactsStartResponse{Count: uint32(len(list)), HasCount: true}.ToBytes())
-		for _, ct := range list {
-			f.push(ct.ToBytes())
-		}
-		f.push(companion.EndOfContactsResponse{MostRecentLastmod: 1760000000}.ToBytes())
+		go func(gap time.Duration) {
+			for _, ct := range list {
+				time.Sleep(gap)
+				f.push(ct.ToBytes())
+			}
+			f.push(companion.EndOfContactsResponse{MostRecentLastmod: 1760000000}.ToBytes())
+		}(f.contactGap)
 	case companion.GetChannelCommand:
 		f.mu.Lock()
 		var ch companion.ChannelInfoResponse

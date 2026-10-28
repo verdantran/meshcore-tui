@@ -135,6 +135,7 @@ type Model struct {
 	mouseOn       bool
 	extraCommands []command
 	trust         radioTrust // whether the radio has proved it's the one saved, which saved passwords need
+	trustWhy      string     // why it isn't verified, when it isn't
 	renewKey      bool       // the radio's key is expected to change: a factory reset, a new key, or :radio trust
 }
 
@@ -154,6 +155,24 @@ func hintLine(hs []hint) string {
 		parts[i] = strings.TrimSpace(h.k + " " + h.v)
 	}
 	return strings.Join(parts, " · ")
+}
+
+// hintLines wraps hints to lines no wider than w, breaking between hints rather than inside one.
+func hintLines(hs []hint, w int) []string {
+	var lines []string
+	cur := ""
+	for _, h := range hs {
+		part := strings.TrimSpace(h.k + " " + h.v)
+		switch {
+		case cur == "":
+			cur = part
+		case visibleWidth(cur+" · "+part) <= w:
+			cur += " · " + part
+		default:
+			lines, cur = append(lines, cur), part
+		}
+	}
+	return append(lines, cur)
 }
 
 // fitHints joins as many hints as fit in w, dropping whole ones from the end rather than cutting one short.

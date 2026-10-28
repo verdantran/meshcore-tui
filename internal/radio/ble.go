@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -116,6 +117,35 @@ func (c *bleConn) Close() error {
 
 var bleOS = runtime.GOOS
 
+// bleMTUWait is how long a write waits for the system to agree a larger MTU, as Windows does soon after connecting.
+var bleMTUWait = 2 * time.Second
+
+// bleRoomFor is whether an n-byte frame fits one write, waiting up to bleMTUWait for the link to
+// carry more. It returns the most a write carries, for saying why when it doesn't.
+func bleRoomFor(n int, carries func() int, sleep func(time.Duration)) (int, bool) {
+	const step = 100 * time.Millisecond
+	most := 0
+	for waited := time.Duration(0); ; waited += step {
+		if most = carries(); most == 0 || n <= most {
+			return most, true
+		}
+		if waited >= bleMTUWait {
+			return most, false
+		}
+		sleep(step)
+	}
+}
+
+// attCode finds the ATT error code Windows gives on its own, as in "Bluetooth ATT error (code 0x0005)".
+var attCode = regexp.MustCompile(`att error \(code 0x([0-9a-f]{4})\)`)
+
+// attPairing is whether msg is an ATT error that means the link isn't paired: insufficient
+// authentication, authorization, key size or encryption.
+func attPairing(msg string) bool {
+	m := attCode.FindStringSubmatch(msg)
+	return m != nil && (m[1] == "0005" || m[1] == "0008" || m[1] == "000c" || m[1] == "000f")
+}
+
 // bleHint says what to do about the errors a first connection usually meets.
 func bleHint(err error) error {
 	if err == nil {
@@ -135,13 +165,13 @@ func bleHint(err error) error {
 		return fmt.Errorf("%w: allow your terminal to use Bluetooth in System Settings → Privacy & Security → Bluetooth", err)
 	case has("powered off", "not powered", "adapter not found", "no bluetooth adapter"):
 		return fmt.Errorf("%w: turn Bluetooth on and try again", err)
-	case has("auth", "encrypt", "notpermitted", "not permitted", "insufficient", "not paired", "accessdenied", "access denied"):
+	case has("auth", "encrypt", "notpermitted", "not permitted", "insufficient", "not paired", "accessdenied", "access denied") || attPairing(msg):
 		pin := "the PIN on the radio's screen, or 123456 if it has none"
 		switch bleOS {
 		case "linux":
 			return fmt.Errorf("%w: pair it once first: run bluetoothctl, then pair and trust its address, with %s", err, pin)
 		case "windows":
-			return fmt.Errorf("%w: pair it once first in Settings → Bluetooth & devices → Add device, with %s", err, pin)
+			return fmt.Errorf("%w: pair it once first in Windows Settings (Win+I) → Bluetooth & devices → Add device, with %s", err, pin)
 		}
 		return fmt.Errorf("%w: macOS asks for %s when it first connects; if it didn't, remove the radio in System Settings → Bluetooth and connect again", err, pin)
 	}

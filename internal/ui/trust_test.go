@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"crypto/ed25519"
+	"errors"
 	"strings"
 	"testing"
 
@@ -75,8 +76,22 @@ func TestAnImpostorGetsNoPasswords(t *testing.T) {
 	h.keys("5")
 	h.choose("Dundry")
 	h.key(tea.KeyEnter)
-	if h.m.adm.prompt != promptPassword || !strings.Contains(h.screen(), "This may not be your radio") {
+	if h.m.adm.prompt != promptPassword || !strings.Contains(h.screen(), "didn't prove it's the one saved") {
 		t.Fatalf("the login is typed, with a warning:\n%s", h.screen())
+	}
+}
+
+func TestACheckThatFailsIsntADifferentRadio(t *testing.T) {
+	h := newHarness(t)
+	h.until("checked", func() bool { return h.m.trust != trustChecking })
+	h.onDevice("BLE", "AA:BB", radio.KeyHex(h.m.ready.Self.PubKey[:]))
+	h.m.Update(radioCheckedMsg{key: h.m.ready.Self.PubKey, err: errors.New("a 61-byte frame is more than this Bluetooth link carries")})
+	h.settle()
+	if h.m.trust != trustUnproven || strings.Contains(plainLog(h), "DIFFERENT RADIO") || !strings.Contains(h.m.trustText(), "didn't go through") {
+		t.Errorf("a check that couldn't run leaves it unverified, saying why: %v %q", h.m.trust, h.m.trustText())
+	}
+	if safe, _ := h.m.savedPasswordsOK(); safe {
+		t.Error("an unverified radio still gets no saved passwords unasked")
 	}
 }
 
@@ -128,15 +143,12 @@ func TestLinksThatMayNotBeEncrypted(t *testing.T) {
 	}
 	h.key(tea.KeyEscape)
 
+	// A PIN setting of 0 means the radio makes one up, not that it pairs without one: companion
+	// firmware won't talk over Bluetooth until it's paired, so the link is encrypted.
 	h.onDevice("BLE", "AA:BB", key)
-	h.m.ready.Device.PinSet = false
 	h.prove(true)
-	if safe, _ := h.m.savedPasswordsOK(); safe {
-		t.Error("Bluetooth without a PIN may not be encrypted")
-	}
-	h.m.ready.Device.PinSet = true
-	if safe, _ := h.m.savedPasswordsOK(); !safe {
-		t.Error("Bluetooth paired with its PIN is fine")
+	if safe, why := h.m.savedPasswordsOK(); !safe {
+		t.Errorf("a verified radio over Bluetooth gets its saved passwords: %q", why)
 	}
 }
 

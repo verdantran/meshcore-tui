@@ -23,6 +23,8 @@ import (
 
 const (
 	opTimeout    = 15 * time.Second
+	syncTimeout  = 2 * time.Minute
+	restoreEach  = 2 * time.Second // more for each channel and contact a restore writes, one round trip apiece
 	traceTimeout = 20 * time.Second
 	traceReveal  = 900 * time.Millisecond
 	detailRows   = 11
@@ -140,20 +142,27 @@ type opDoneMsg struct {
 }
 
 func (m *Model) radioCall(f func(ctx context.Context) tea.Msg) tea.Cmd {
+	return m.radioCallFor(opTimeout, f)
+}
+
+// radioCallFor is radioCall for work that takes longer than one operation, as a list or a restore does.
+func (m *Model) radioCallFor(limit time.Duration, f func(ctx context.Context) tea.Msg) tea.Cmd {
 	r := m.radio
 	if r == nil {
 		return nil
 	}
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), limit)
 		defer cancel()
 		return f(ctx)
 	}
 }
 
+// syncContacts allows longer than opTimeout: a long list over Bluetooth arrives a contact at a time, and
+// the radio link gives up on it by itself once it goes quiet.
 func (m *Model) syncContacts() tea.Cmd {
 	r := m.radio
-	return m.radioCall(func(ctx context.Context) tea.Msg {
+	return m.radioCallFor(syncTimeout, func(ctx context.Context) tea.Msg {
 		list, err := r.SyncContacts(ctx)
 		return contactsSyncedMsg{list, err}
 	})
