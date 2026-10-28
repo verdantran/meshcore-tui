@@ -15,6 +15,7 @@ import (
 
 	meshcore "github.com/OwlShack/meshcore-go"
 
+	"github.com/verdantran/meshcore-tui/internal/chess"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/signing"
 )
@@ -127,6 +128,7 @@ type Sim struct {
 	tag      uint32
 	dev      devSettings
 	chans    []radio.Channel
+	chessLog map[string][]chess.Entry // each person's chess messages with you, as they'd see them
 }
 
 func New(seed int64) *Sim {
@@ -134,7 +136,7 @@ func New(seed int64) *Sim {
 		ack: uint32(seed), pending: map[string]int{}, loss: 0.15, book: contacts(),
 		auto: radio.AutoAdd{Repeater: true, MaxHops: 0}, servers: map[[32]byte]*server{}, sessions: map[[32]byte]byte{},
 		posts: seededPosts(time.Now()), born: time.Now(), dev: newDevSettings(),
-		chans: append([]radio.Channel(nil), channels...)}
+		chans: append([]radio.Channel(nil), channels...), chessLog: map[string][]chess.Entry{}}
 }
 
 // Fast makes every delay negligible, for tests.
@@ -259,6 +261,7 @@ func (s *Sim) run(ctx context.Context) {
 		s.emit(m)
 	}
 	if !s.quiet {
+		s.openingGame(time.Now())
 		s.traffic(ctx)
 	}
 }
@@ -561,9 +564,13 @@ func (s *Sim) SendText(ctx context.Context, to [32]byte, text string) (radio.Sen
 	s.emit(radio.Transmit{At: time.Now(), What: "SEND_TXT_MSG"})
 	s.mu.Lock()
 	isRoom := s.book[s.known(to)].Type == radio.TypeRoom
+	isPerson := s.book[s.known(to)].Type == radio.TypeChat
 	s.mu.Unlock()
 	if isRoom {
 		s.postToRoom(to, text)
+	}
+	if isPerson && !lost {
+		s.chessHeard(name, text) // a message whose receipt was lost never arrived either, so it's sent again
 	}
 	if !lost {
 		go func() {
