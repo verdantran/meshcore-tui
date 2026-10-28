@@ -35,6 +35,7 @@ func heldMatchesStore(t *testing.T, s *chat.Service) []chat.Info {
 }
 
 func TestHistoryKeepAsksThenPrunes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	cfg, _ := config.Load(filepath.Join(t.TempDir(), "config.toml"))
 	h.m.opt.Config = cfg
@@ -109,6 +110,7 @@ func TestHistoryKeepAsksThenPrunes(t *testing.T) {
 }
 
 func TestPruneRunsOnceADay(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.m.adminConfig().Messages.KeepDays = 7
 	advance := func(d time.Duration) {

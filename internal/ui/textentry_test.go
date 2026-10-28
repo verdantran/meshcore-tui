@@ -12,6 +12,7 @@ import (
 )
 
 func TestPasteAndEmoji(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openConvo("Public")
 	c := &h.m.chats
@@ -58,6 +59,7 @@ func TestPasteAndEmoji(t *testing.T) {
 }
 
 func TestMentionsAndColours(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, typed string
 		ok          bool
@@ -91,6 +93,7 @@ func TestMentionsAndColours(t *testing.T) {
 }
 
 func TestPickedRowAndCopy(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.hear(channelPacket(t, h, "Public", "Bob", "four hops", []byte{0x77, 0x5F, 0xA3, 0x44}), 3)
 	h.incoming(radio.Incoming{Channel: true, ChannelIdx: 0, Hops: 4, Text: "Bob: four hops"})
@@ -128,6 +131,7 @@ func TestPickedRowAndCopy(t *testing.T) {
 }
 
 func TestLineEditCursor(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openConvo("Public")
 	c := &h.m.chats

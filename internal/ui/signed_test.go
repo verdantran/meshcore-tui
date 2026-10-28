@@ -53,6 +53,7 @@ func (h *harness) lastMessage() store.Message {
 }
 
 func TestSignedMessages(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	zed, other := newSigner("zed"), newSigner("mallory")
 	h.m.contacts.heard = append(h.m.contacts.heard, heardNode{radio.Contact{Key: zed.pub, Name: "Zed"}, h.clk.t},
@@ -168,6 +169,7 @@ func TestSignedMessages(t *testing.T) {
 }
 
 func TestSendingSigned(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	cfg, _ := config.Load(t.TempDir() + "/config.toml")
 	h.m.opt.Config = cfg
@@ -230,6 +232,7 @@ func TestSendingSigned(t *testing.T) {
 }
 
 func TestPinsFromContactsAndDevice(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	alice := h.contact("Alice")
 	h.m.pin("Alice", newSigner("other").pub)
@@ -264,6 +267,7 @@ func (failingSigner) Sign(context.Context, []byte) ([64]byte, error) {
 }
 
 func TestSignatureFailsAfterSending(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	cfg, _ := config.Load(t.TempDir() + "/config.toml")
 	cfg.Messages.SignChannels = []string{"#bristol"}
@@ -305,6 +309,7 @@ func channelDataPacket(t *testing.T, h *harness, channel string, dataType uint16
 }
 
 func TestSignaturesOnPackets(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	zed := newSigner("zed")
 	h.m.contacts.heard = append(h.m.contacts.heard, heardNode{radio.Contact{Key: zed.pub, Name: "Zed"}, h.clk.t})

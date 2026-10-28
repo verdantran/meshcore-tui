@@ -23,6 +23,7 @@ func (h *harness) paste(text string) {
 }
 
 func TestPasteNeverAnswersAQuestion(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	dropped := func(what string) {
 		t.Helper()
@@ -112,6 +113,7 @@ func TestPasteNeverAnswersAQuestion(t *testing.T) {
 }
 
 func TestConsoleKeepsSecretsOut(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	_, sess := h.login("Dundry", "password")
@@ -139,6 +141,7 @@ func TestConsoleKeepsSecretsOut(t *testing.T) {
 }
 
 func TestPasswordSettingsAreMasked(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	_, sess := h.login("Dundry", "password")
@@ -179,6 +182,7 @@ func TestPasswordSettingsAreMasked(t *testing.T) {
 }
 
 func TestRebootFromTheReviewNeedsTheName(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	_, sess := h.login("Dundry", "password")
@@ -209,6 +213,7 @@ func TestRebootFromTheReviewNeedsTheName(t *testing.T) {
 }
 
 func TestRememberIsOffWheneverTheLoginOpens(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	a := &h.m.adm
@@ -239,6 +244,7 @@ type tcpSim struct{ *sim.Sim }
 func (tcpSim) Transport() string { return "TCP" }
 
 func TestPrivateKeyCopyAndPin(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("6")
 	h.until("settings", func() bool { return h.m.device.loaded })
@@ -290,6 +296,7 @@ func TestPrivateKeyCopyAndPin(t *testing.T) {
 }
 
 func TestImportShowsWhoTheLinkIsFor(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	link := radio.LinkPrefix + hex.EncodeToString(advertPacket(t, "Carol", nil))
@@ -320,6 +327,7 @@ func TestImportShowsWhoTheLinkIsFor(t *testing.T) {
 }
 
 func TestSmallTablesAreTrimmed(t *testing.T) {
+	t.Parallel()
 	marks := map[int64]time.Time{}
 	t0 := time.Date(2026, 10, 14, 10, 0, 0, 0, time.UTC)
 	for i := range 100 {
@@ -359,6 +367,7 @@ func TestSmallTablesAreTrimmed(t *testing.T) {
 }
 
 func TestTraceWithFewerHashesThanHops(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	ct := h.contact("Carol")

@@ -126,6 +126,7 @@ func boot(m *Model, c *clock) {
 }
 
 func TestBootThenMainScreen(t *testing.T) {
+	t.Parallel()
 	for _, size := range [][2]int{{80, 24}, {120, 40}, {200, 60}} {
 		m, c := newTestModel(t, motion.Full, size[0], size[1])
 		boot(m, c)
@@ -154,6 +155,7 @@ func TestBootThenMainScreen(t *testing.T) {
 }
 
 func TestTabsDebugAndMotionOff(t *testing.T) {
+	t.Parallel()
 	m, c := newTestModel(t, motion.Off, 100, 30)
 	boot(m, c)
 	if m.phase != phaseMain {
@@ -174,6 +176,7 @@ func TestTabsDebugAndMotionOff(t *testing.T) {
 }
 
 func TestFailedBootStopsTicking(t *testing.T) {
+	t.Parallel()
 	m, c := newTestModel(t, motion.Full, 100, 30)
 	send(m, c, 0, radio.BootStep{Key: "link", Label: "LINK", State: radio.StepWait})
 	send(m, c, 100*time.Millisecond, radio.BootStep{Key: "link", Label: "LINK", Detail: "no such port", State: radio.StepFail})
@@ -188,6 +191,7 @@ func TestFailedBootStopsTicking(t *testing.T) {
 }
 
 func TestIdleMainScreenStopsTicking(t *testing.T) {
+	t.Parallel()
 	m, c := newTestModel(t, motion.Full, 100, 30)
 	boot(m, c)
 	bootDone(t, m, c)
@@ -198,6 +202,7 @@ func TestIdleMainScreenStopsTicking(t *testing.T) {
 }
 
 func TestReducedMotionUsesTheSlowClock(t *testing.T) {
+	t.Parallel()
 	for _, level := range []motion.Level{motion.Full, motion.Reduced} {
 		m, c := newTestModel(t, level, 100, 30)
 		boot(m, c)
@@ -216,6 +221,7 @@ func TestReducedMotionUsesTheSlowClock(t *testing.T) {
 }
 
 func TestToastMovesOnlyWhileSliding(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		level           motion.Level
 		in, middle, out time.Duration // 0: the clock stops
@@ -249,6 +255,7 @@ func TestToastMovesOnlyWhileSliding(t *testing.T) {
 }
 
 func TestThemeCycleCrossfades(t *testing.T) {
+	t.Parallel()
 	m, c := newTestModel(t, motion.Full, 100, 30)
 	boot(m, c)
 	bootDone(t, m, c)
@@ -287,6 +294,7 @@ func typeKeys(m *Model, s string) {
 func key(m *Model, code rune) { m.Update(tea.KeyPressMsg{Code: code}) }
 
 func TestPalette(t *testing.T) {
+	t.Parallel()
 	m, c := newTestModel(t, motion.Full, 120, 30)
 	boot(m, c)
 	bootDone(t, m, c)
@@ -349,6 +357,7 @@ func TestPalette(t *testing.T) {
 }
 
 func TestSavedDevices(t *testing.T) {
+	t.Parallel()
 	cfg, err := config.Load(t.TempDir() + "/config.toml")
 	if err != nil {
 		t.Fatal(err)
@@ -394,6 +403,7 @@ func TestSavedDevices(t *testing.T) {
 }
 
 func TestThemeChoicePersists(t *testing.T) {
+	t.Parallel()
 	path := t.TempDir() + "/config.toml"
 	cfg, _ := config.Load(path)
 	c := &clock{t: time.Date(2026, 10, 13, 10, 3, 0, 0, time.UTC)}
@@ -426,6 +436,7 @@ func TestThemeChoicePersists(t *testing.T) {
 }
 
 func TestEnterSkipsTheBootPause(t *testing.T) {
+	t.Parallel()
 	m, c := newTestModel(t, motion.Full, 100, 30)
 	boot(m, c)
 	tick(m, c, 100*time.Millisecond)
@@ -442,6 +453,7 @@ func TestEnterSkipsTheBootPause(t *testing.T) {
 }
 
 func TestHeaderLampsLightUp(t *testing.T) {
+	t.Parallel()
 	for _, level := range []motion.Level{motion.Full, motion.Off} {
 		m, c := newTestModel(t, level, 120, 30)
 		boot(m, c)
@@ -465,6 +477,7 @@ func TestHeaderLampsLightUp(t *testing.T) {
 }
 
 func TestSlowTerminalReducesMotion(t *testing.T) {
+	t.Parallel()
 	for _, chosen := range []bool{false, true} {
 		m := New(Options{Theme: theme.Neon, Motion: motion.Full, MotionChosen: chosen})
 		m.Update(SlowTerminalMsg{})
@@ -475,6 +488,7 @@ func TestSlowTerminalReducesMotion(t *testing.T) {
 }
 
 func TestStartupNotes(t *testing.T) {
+	t.Parallel()
 	m := New(Options{Theme: theme.Neon, Notes: []string{"CONSOLE  try Windows Terminal"}})
 	if len(m.log) != 1 || m.log[0].text != "CONSOLE  try Windows Terminal" {
 		t.Errorf("log = %+v", m.log)
@@ -482,6 +496,7 @@ func TestStartupNotes(t *testing.T) {
 }
 
 func TestBeaconChoicePersists(t *testing.T) {
+	t.Parallel()
 	path := t.TempDir() + "/config.toml"
 	cfg, _ := config.Load(path)
 	if !cfg.UI.Beacon {
@@ -504,6 +519,7 @@ func TestBeaconChoicePersists(t *testing.T) {
 }
 
 func TestVersionShows(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.m.opt.Version = "v1.2.3"
 	h.toMain()

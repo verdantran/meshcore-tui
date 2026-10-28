@@ -18,6 +18,7 @@ func keyCmd(m *Model, r rune) tea.Cmd {
 }
 
 func TestSearchWaitsForTypingAndDropsStaleResults(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 	send(m, c, 0, aliceSays(c, "the route via Purdown works"))
 	send(m, c, 0, radio.Incoming{At: c.t, Channel: true, ChannelIdx: 1, Hops: 2, SentAt: c.t, Text: "Carol: purdown is back"})
@@ -59,6 +60,7 @@ func TestSearchWaitsForTypingAndDropsStaleResults(t *testing.T) {
 }
 
 func TestExportRunsInTheBackground(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 	send(m, c, 0, radio.Incoming{At: c.t, Channel: true, ChannelIdx: 1, Hops: 2, SentAt: c.t, Text: "Carol: purdown is back"})
 	typeKeys(m, ":export all")

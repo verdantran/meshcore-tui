@@ -155,6 +155,7 @@ func selectConvo(t *testing.T, m *Model, title string) {
 }
 
 func TestChatsReceiveSendAndDeliver(t *testing.T) {
+	t.Parallel()
 	m, c, r := newChatModel(t)
 	var from [6]byte
 	copy(from[:], aliceKey[:6])
@@ -203,6 +204,7 @@ func TestChatsReceiveSendAndDeliver(t *testing.T) {
 }
 
 func TestChatsRetryFloodThenFail(t *testing.T) {
+	t.Parallel()
 	m, c, r := newChatModel(t)
 	startConvo(t, m, "Alice")
 	key(m, tea.KeyEnter)
@@ -243,6 +245,7 @@ func TestChatsRetryFloodThenFail(t *testing.T) {
 }
 
 func TestChatsHintKeepsWholeHints(t *testing.T) {
+	t.Parallel()
 	m, _, _ := newChatModel(t)
 	selectConvo(t, m, "Public")
 	got := plain(screen(t, m))
@@ -255,6 +258,7 @@ func TestChatsHintKeepsWholeHints(t *testing.T) {
 }
 
 func TestChatsLimitAndPaletteSend(t *testing.T) {
+	t.Parallel()
 	m, c, r := newChatModel(t)
 	selectConvo(t, m, "Public")
 	key(m, tea.KeyEnter)
@@ -291,6 +295,7 @@ func TestChatsLimitAndPaletteSend(t *testing.T) {
 }
 
 func TestStartingAConversationFromContacts(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("1")
 	titles := func() string {
@@ -335,6 +340,7 @@ func TestStartingAConversationFromContacts(t *testing.T) {
 }
 
 func TestChannelRepeatsAreHeard(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	pub, _ := h.channel("Public")
 	h.m.jumpToConvo(store.ChannelConvo(pub.Idx))
@@ -373,6 +379,7 @@ func TestChannelRepeatsAreHeard(t *testing.T) {
 }
 
 func TestBracketMentionsAreHighlighted(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	pub, _ := h.channel("Public")
 	bristol, _ := h.channel("#bristol")
@@ -402,6 +409,7 @@ func TestBracketMentionsAreHighlighted(t *testing.T) {
 }
 
 func TestMentionCompletion(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	bristol, _ := h.channel("#bristol")
 	h.m.jumpToConvo(store.ChannelConvo(bristol.Idx))
@@ -438,6 +446,7 @@ func TestMentionCompletion(t *testing.T) {
 
 // :msg refuses a name that could mean more than one conversation, rather than guessing which.
 func TestMsgRefusesAnAmbiguousName(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("1")
 	bob := h.contact("Bob")
@@ -473,6 +482,7 @@ func TestMsgRefusesAnAmbiguousName(t *testing.T) {
 // TestChatListKeptInStep: the conversation list, built from what's held rather than read again for every
 // event, keeps its unread counts, mentions, order and filter right, and matches the store on reconnecting.
 func TestChatListKeptInStep(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openConvo("Public")
 	info := func(title string) chat.Info {

@@ -63,6 +63,7 @@ func (h *harness) reloaded() {
 }
 
 func TestDeviceScreen(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("6")
 	h.until("settings", func() bool { return h.m.device.loaded })
@@ -230,6 +231,7 @@ func TestDeviceScreen(t *testing.T) {
 var t0ctx = context.Background()
 
 func TestDeviceSecurity(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("6")
 	h.until("settings", func() bool { return h.m.device.loaded })
@@ -324,6 +326,7 @@ func plainLog(h *harness) string {
 }
 
 func TestDeviceFailures(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("6")
 	h.until("settings", func() bool { return h.m.device.loaded })
@@ -378,6 +381,7 @@ func advertPacket(t *testing.T, name string, path []byte) []byte {
 }
 
 func TestStatsScreen(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("7")
 	if !strings.Contains(h.screen(), "Nothing heard yet") {
@@ -437,6 +441,7 @@ func TestStatsScreen(t *testing.T) {
 }
 
 func TestBatteryIcon(t *testing.T) {
+	t.Parallel()
 	th := theme.Neon
 	colour := map[string]theme.RGB{}
 	paint := func(s string, c theme.RGB, _ bool) string {
@@ -464,6 +469,7 @@ func TestBatteryIcon(t *testing.T) {
 }
 
 func TestBatteryIconsEverywhere(t *testing.T) {
+	t.Parallel()
 	m, c := newTestModel(t, motion.Full, 100, 30)
 	send(m, c, 0, radio.BootStep{Key: "power", Label: "POWER", Detail: "3.61 V · 34%", State: radio.StepOK})
 	send(m, c, 2*time.Second, radio.BootStep{Key: "x", Label: "X", Detail: "no percentage", State: radio.StepOK})
@@ -507,6 +513,7 @@ func TestBatteryIconsEverywhere(t *testing.T) {
 }
 
 func TestDeviceBatteryType(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("6")
 	h.until("settings", func() bool { return h.m.device.loaded })
@@ -525,6 +532,7 @@ func TestDeviceBatteryType(t *testing.T) {
 }
 
 func TestFramesPanelHidesSecrets(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.key(tea.KeyF12)
 	cmd := companion.ImportPrivateKeyCommand{PrivateKey: [64]byte{0xDE, 0xAD, 0xBE, 0xEF}}.ToBytes()

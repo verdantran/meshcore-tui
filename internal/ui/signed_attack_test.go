@@ -35,6 +35,7 @@ func pinnedZed(t *testing.T) (*harness, signer) {
 }
 
 func TestLookalikeSenders(t *testing.T) {
+	t.Parallel()
 	h, zed := pinnedZed(t)
 	for _, name := range []string{"Zed ", "Zed​", " Zed⁠", "Ｚｅｄ"} {
 		h.clk.t = h.clk.t.Add(time.Minute)
@@ -88,6 +89,7 @@ func TestLookalikeSenders(t *testing.T) {
 }
 
 func TestSenderCantPushTheVerdict(t *testing.T) {
+	t.Parallel()
 	h, _ := pinnedZed(t)
 	h.say(1, "Zed"+strings.Repeat("_", 70)+"1 hop · ✓ signed", "trust me")
 	header := ""
@@ -102,6 +104,7 @@ func TestSenderCantPushTheVerdict(t *testing.T) {
 }
 
 func TestReplayedSignatures(t *testing.T) {
+	t.Parallel()
 	h, zed := pinnedZed(t)
 	sent := h.clk.t
 	ts := h.say(1, "Zed", "meet at the hill")
@@ -139,6 +142,7 @@ func TestReplayedSignatures(t *testing.T) {
 }
 
 func TestForgedSignatureFirst(t *testing.T) {
+	t.Parallel()
 	h, zed := pinnedZed(t)
 	ts := uint32(h.clk.t.Unix())
 	forged := signing.Datagram{TS: ts, KeyID: [8]byte(zed.pub[:8])}
@@ -182,6 +186,7 @@ func TestForgedSignatureFirst(t *testing.T) {
 }
 
 func TestUnknownKeyForPinnedName(t *testing.T) {
+	t.Parallel()
 	h, _ := pinnedZed(t)
 	ts := h.say(1, "Zed", "send me your password")
 	h.datagram(1, newSigner("stranger").datagram("#bristol", ts, "send me your password"))
@@ -196,6 +201,7 @@ func TestUnknownKeyForPinnedName(t *testing.T) {
 }
 
 func TestTwoNodesOneName(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	zed, fake := newSigner("zed"), newSigner("fake")
 	h.m.contacts.heard = append(h.m.contacts.heard, heardNode{radio.Contact{Key: zed.pub, Name: "Zed"}, h.clk.t},
@@ -222,6 +228,7 @@ func TestTwoNodesOneName(t *testing.T) {
 
 // A message the radio held while the app was away arrives long after it was sent; its signature still counts.
 func TestQueuedSignedMessage(t *testing.T) {
+	t.Parallel()
 	h, zed := pinnedZed(t)
 	sent := h.clk.t.Add(-9 * time.Hour)
 	ts := uint32(sent.Unix())
@@ -266,6 +273,7 @@ func (h *harness) held(idx int, name, text string, sent time.Time) {
 // A copy of a signed message, sent again while the app is closed, is still a replay when the radio hands
 // it over at the next start: what was signed before is kept with the history, not just in memory.
 func TestReplayAcrossRestart(t *testing.T) {
+	t.Parallel()
 	h, zed := pinnedZed(t)
 	h.clk.t = time.Now().Add(time.Hour).Truncate(time.Second) // after anything the simulator stamped with the real time
 	sent := h.clk.t
@@ -308,6 +316,7 @@ func TestReplayAcrossRestart(t *testing.T) {
 
 // Leaving a channel forgets the signatures held for it, since another channel may take its slot.
 func TestLeavingForgetsSignatures(t *testing.T) {
+	t.Parallel()
 	h, zed := pinnedZed(t)
 	ts := h.say(1, "Zed", "hello")
 	h.datagram(1, zed.datagram("#bristol", ts, "hello"))
@@ -330,6 +339,7 @@ func TestLeavingForgetsSignatures(t *testing.T) {
 
 // Signing a channel goes by its secret: a channel that takes its name and slot later doesn't sign.
 func TestSigningFollowsTheSecret(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	cfg, _ := config.Load(t.TempDir() + "/config.toml")
 	cfg.Messages.SignChannels = []string{"#bristol", "Gone"}
@@ -352,6 +362,7 @@ func TestSigningFollowsTheSecret(t *testing.T) {
 
 // A room post names its writer only by the 4 key bytes the room server gives, so it isn't called signed.
 func TestRoomPostsAreNotSigned(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	room, alice := h.contact("Clifton Room"), h.contact("Alice")
 	h.incoming(radio.Incoming{From: room.Prefix(), Hops: 1, Signed: true, Author: [4]byte(alice.Key[:4]), Text: "hello room"})

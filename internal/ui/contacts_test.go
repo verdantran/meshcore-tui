@@ -171,6 +171,7 @@ func (h *harness) contact(name string) radio.Contact {
 }
 
 func TestContactsBrowseTraceAndRoutes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	got := h.screen()
@@ -216,6 +217,7 @@ func TestContactsBrowseTraceAndRoutes(t *testing.T) {
 }
 
 func TestContactsShareRemoveImport(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	h.pick("Carol")
@@ -245,6 +247,7 @@ func TestContactsShareRemoveImport(t *testing.T) {
 }
 
 func TestContactsHeardAutoAddAndPrune(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	eve := radio.Contact{Key: [32]byte{0xE5, 0x01}, Name: "Eve", Type: radio.TypeChat, PathLen: -1, LastAdvert: h.clk.t}
@@ -286,6 +289,7 @@ func TestContactsHeardAutoAddAndPrune(t *testing.T) {
 // A heard list longer than the viewport must scroll with the selection, as the contact table does:
 // the highlighted row going off the bottom leaves no cursor on screen at all.
 func TestContactsHeardListScrollsWithSelection(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	for i := 0; i < 60; i++ {
@@ -303,6 +307,7 @@ func TestContactsHeardListScrollsWithSelection(t *testing.T) {
 }
 
 func TestContactsMessageJumpsToChat(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	h.pick("Alice")
@@ -324,6 +329,7 @@ func TestContactsMessageJumpsToChat(t *testing.T) {
 
 // Names with emoji or other wide characters take two cells each; the columns after them must still line up.
 func TestColumnsLineUpWithWideNames(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	cs := h.m.chat.Contacts()
 	cs = append(cs,
@@ -359,6 +365,7 @@ func TestColumnsLineUpWithWideNames(t *testing.T) {
 }
 
 func TestContactsPlaceByHand(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	name := h.m.chat.Contacts()[0].Name
@@ -411,6 +418,7 @@ func TestContactsPlaceByHand(t *testing.T) {
 }
 
 func TestRemappedKeys(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.m.opt.Keys = config.Keys{"all": {"ctrl+n": "down"}, "map": {"w": "up", "+": ""}}
 	h.openMap()
@@ -456,6 +464,7 @@ func TestRemappedKeys(t *testing.T) {
 
 // TestHeardFloodKeepsNamesakes: a flood of made-up nodes can't push out the ones the look-alike warnings know.
 func TestHeardFloodKeepsNamesakes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	zed, yan, fake := newSigner("zed"), newSigner("yan"), newSigner("fake")
 	hear := func(key [32]byte, name string) {

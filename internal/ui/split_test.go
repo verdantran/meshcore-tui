@@ -21,6 +21,7 @@ func (h *harness) pane(key string) {
 }
 
 func TestSplitPanes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if !strings.Contains(h.screen(), "ctrl+w panes") {
 		t.Error("the footer mentions panes")
@@ -118,6 +119,7 @@ func TestSplitPanes(t *testing.T) {
 }
 
 func TestSplitLimitsAndCommands(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	run := func(line string) {
 		h.keys(":")
@@ -161,6 +163,7 @@ func TestSplitLimitsAndCommands(t *testing.T) {
 }
 
 func TestHiddenPanesStillWork(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys(":")
 	h.typeLine("split right stats")
@@ -177,6 +180,7 @@ func TestHiddenPanesStillWork(t *testing.T) {
 }
 
 func TestLayoutRemembered(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	cfg, err := config.Load(t.TempDir() + "/config.toml")
 	if err != nil {
@@ -201,6 +205,7 @@ func TestLayoutRemembered(t *testing.T) {
 }
 
 func TestParseLayout(t *testing.T) {
+	t.Parallel()
 	for _, s := range []string{"chats", "right 50 (*chats, packets)", "down 30 (right 60 (chats, *stats), packets)"} {
 		l, ok := parseLayout(s)
 		if !ok || l.String() != s && "*"+s != l.String() {
@@ -226,6 +231,7 @@ func TestParseLayout(t *testing.T) {
 }
 
 func TestNarrowPacketList(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys(":")
 	h.typeLine("split right packets")
@@ -238,6 +244,7 @@ func TestNarrowPacketList(t *testing.T) {
 }
 
 func TestClicks(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if h.m.View().MouseMode != tea.MouseModeCellMotion {
 		t.Fatal("clicks are reported")

@@ -57,6 +57,7 @@ func (h *harness) makeBackup(key bool) (string, *backup.Backup) {
 }
 
 func TestBackupAndRestore(t *testing.T) {
+	t.Parallel()
 	a := newHarness(t)
 	a.keys("1")
 	a.keys("n")
@@ -119,6 +120,7 @@ func TestBackupAndRestore(t *testing.T) {
 }
 
 func TestBackupWithTheKey(t *testing.T) {
+	t.Parallel()
 	a := newHarness(t)
 	path, b := a.makeBackup(true)
 	want, _ := a.s.ExportKey(t0ctx)
@@ -153,6 +155,7 @@ func TestBackupWithTheKey(t *testing.T) {
 }
 
 func TestARestoredKeyIsAcceptedAfterARestart(t *testing.T) {
+	t.Parallel()
 	a := newHarness(t)
 	path, _ := a.makeBackup(true)
 
@@ -185,6 +188,7 @@ func TestARestoredKeyIsAcceptedAfterARestart(t *testing.T) {
 }
 
 func TestRestoreRefusesWhatWouldMislead(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openDevice()
 	b := backup.Backup{Made: time.Now(), RadioName: "Mallory",
@@ -215,6 +219,7 @@ func TestRestoreRefusesWhatWouldMislead(t *testing.T) {
 }
 
 func TestRestorePathTakesAPaste(t *testing.T) {
+	t.Parallel()
 	a := newHarness(t)
 	path, _ := a.makeBackup(false)
 	a.moveTo("restore")
@@ -235,6 +240,7 @@ func hasContact(h *harness, key [32]byte) bool {
 }
 
 func TestRestoreBringsBackAContact(t *testing.T) {
+	t.Parallel()
 	a := newHarness(t)
 	path, b := a.makeBackup(false)
 	gone := a.m.chat.Contacts()[0]

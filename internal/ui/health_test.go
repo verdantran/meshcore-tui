@@ -23,6 +23,7 @@ func (h *harness) watchTick() {
 }
 
 func TestWatchOverTheAir(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	dundry := h.choose("Dundry")
@@ -143,6 +144,7 @@ func TestWatchOverTheAir(t *testing.T) {
 }
 
 func TestWatchWaitsItsTurn(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	_, sess := h.login("Dundry", "password")
@@ -166,6 +168,7 @@ func TestWatchWaitsItsTurn(t *testing.T) {
 }
 
 func TestHealthRangesAndCharts(t *testing.T) {
+	t.Parallel()
 	if got := axis(30, false); !strings.HasPrefix(got, "-24h") || !strings.HasSuffix(got, "now") || len([]rune(got)) != 30 {
 		t.Errorf("day axis %q", got)
 	}
@@ -200,6 +203,7 @@ func TestHealthRangesAndCharts(t *testing.T) {
 }
 
 func TestHealthGradesAndLines(t *testing.T) {
+	t.Parallel()
 	m, _ := newTestModel(t, motion.Full, 100, 30)
 	node := [32]byte{7}
 	for _, c := range []struct {
@@ -239,6 +243,7 @@ func TestHealthGradesAndLines(t *testing.T) {
 }
 
 func TestEmptyPacketLog(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	sess := &admin.Session{PacketLog: &admin.PacketLog{}, PacketLogAt: h.m.now}
 	if out := plain(h.m.packetLogLines(sess, 100, 30)); !strings.Contains(out, "The log is empty") {
@@ -247,6 +252,7 @@ func TestEmptyPacketLog(t *testing.T) {
 }
 
 func TestConnectModes(t *testing.T) {
+	t.Parallel()
 	cfg, err := config.Load(t.TempDir() + "/config.toml")
 	if err != nil {
 		t.Fatal(err)
@@ -297,6 +303,7 @@ func TestConnectModes(t *testing.T) {
 }
 
 func TestRepeaterModeIsRemembered(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	cfg, _ := config.Load(t.TempDir() + "/config.toml")
 	h.m.opt.Config = cfg
@@ -321,6 +328,7 @@ func TestRepeaterModeIsRemembered(t *testing.T) {
 }
 
 func TestHistoryStoreFailures(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	ct := h.contact("Dundry")
 	sess := h.m.admin.Session(ct)

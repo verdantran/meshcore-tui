@@ -35,6 +35,7 @@ func terminalBytes(h *harness) string {
 }
 
 func TestTextFromTheMeshCantDriveTheTerminal(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openConvo("Public")
 	h.incoming(radio.Incoming{Channel: true, ChannelIdx: 0, Hops: 1, Text: "Mallory: hi " + hostile})
@@ -60,6 +61,7 @@ func TestTextFromTheMeshCantDriveTheTerminal(t *testing.T) {
 }
 
 func TestDrawableKeepsOnlyTextAndColour(t *testing.T) {
+	t.Parallel()
 	plain := "\x1b[1;38;2;1;2;3mbold\x1b[m and plain\nnext"
 	if drawable(plain) != plain {
 		t.Error("a frame of text and colour is left alone")
@@ -70,6 +72,7 @@ func TestDrawableKeepsOnlyTextAndColour(t *testing.T) {
 }
 
 func TestExportsStayInTheirFolder(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string]string{"../../.ssh/x": "_______ssh_x", "bristol": "bristol", "café_crew": "café_crew", "..": "conversation", `a\b:c`: "a_b_c"} {
 		if got := fileName(in); got != want {
 			t.Errorf("fileName(%q) = %q, want %q", in, got, want)
@@ -90,6 +93,7 @@ func TestExportsStayInTheirFolder(t *testing.T) {
 }
 
 func TestSurprisesFromTheRadioAreSkipped(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if cmd := h.m.safely("a test packet", func() tea.Cmd { panic("unexpected") }); cmd != nil || !strings.Contains(h.lastLog(), "SKIPPED  a test packet that couldn't be read") {
 		t.Errorf("a panic is logged and skipped: %s", h.lastLog())
@@ -140,6 +144,7 @@ func undrawable(out string) string {
 }
 
 func TestDrawableDropsEveryControl(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string]string{
 		"a\u009b2Jb":              "a2Jb",
 		"a\u0085b":                "ab",
@@ -163,6 +168,7 @@ func rendered(m *Model, method ansi.Method) uv.ScreenBuffer {
 }
 
 func TestEveryFrameFillsTheTerminal(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	forged := "Eve\n10:00:00  SIGNED ✓ Alice verified"
 	cs := append(h.m.chat.Contacts(), radio.Contact{Key: [32]byte{0xEF}, Name: forged, Type: radio.TypeChat, PathLen: -1})
@@ -190,6 +196,7 @@ func TestEveryFrameFillsTheTerminal(t *testing.T) {
 }
 
 func TestBluetoothNamesCantDriveTheTerminal(t *testing.T) {
+	t.Parallel()
 	c := &clock{t: time.Date(2026, 10, 14, 10, 0, 0, 0, time.UTC)}
 	m := New(Options{Theme: theme.Neon, Motion: motion.Full, Clock: c.now,
 		Scan: func(ctx context.Context, found func(Target)) error {

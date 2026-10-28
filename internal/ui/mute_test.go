@@ -30,6 +30,7 @@ func convoRow(t *testing.T, m *Model, title string) string {
 }
 
 func TestMutedConversationsKeepQuiet(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 	path := filepath.Join(t.TempDir(), "config.toml")
 	m.opt.Config, _ = config.Load(path)
@@ -93,6 +94,7 @@ func TestMutedConversationsKeepQuiet(t *testing.T) {
 }
 
 func TestMuteCommandMistakes(t *testing.T) {
+	t.Parallel()
 	m, _, _ := newChatModel(t)
 	for _, line := range []string{"mute nobody", "mute alice bristol", "unmute bristol"} {
 		runPalette(m, line)
@@ -113,6 +115,7 @@ func TestMuteCommandMistakes(t *testing.T) {
 }
 
 func TestMuteMatchesASenderKnownByPrefix(t *testing.T) {
+	t.Parallel()
 	key := radio.KeyHex(aliceKey[:])
 	var p [6]byte
 	copy(p[:], aliceKey[:6])
@@ -146,6 +149,7 @@ func rawFrom(cmd tea.Cmd) string {
 }
 
 func TestNotificationsAreLimitedThenSummed(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 	m.notes.limit = 2
 	for i, text := range []string{"one", "two", "three", "four"} {

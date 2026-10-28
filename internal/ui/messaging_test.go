@@ -42,6 +42,7 @@ func aliceSays(c *clock, text string) radio.Incoming {
 }
 
 func TestNotifications(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 
 	// Looking at Public: a DM from Alice notifies.
@@ -86,6 +87,7 @@ func TestNotifications(t *testing.T) {
 }
 
 func TestFilterSearchAndExport(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 	m.chat.App = "meshcore-tui v1.2.3"
 	send(m, c, 0, aliceSays(c, "the route via Purdown works"))
@@ -168,6 +170,7 @@ func finish(m *Model, cmd tea.Cmd) {
 }
 
 func TestNotifyCommand(t *testing.T) {
+	t.Parallel()
 	m, _, _ := newChatModel(t)
 	typeKeys(m, ":notify")
 	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -196,6 +199,7 @@ func TestNotifyCommand(t *testing.T) {
 }
 
 func TestNotificationsCanKeepTheTextBack(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 	typeKeys(m, ":notify show sender")
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})

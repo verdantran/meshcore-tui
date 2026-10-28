@@ -47,6 +47,7 @@ func (h *harness) openMap() {
 }
 
 func TestMapScreen(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openMap()
 	scr := h.screen()
@@ -167,6 +168,7 @@ func TestMapScreen(t *testing.T) {
 }
 
 func TestMapIgnoresPrivateTraffic(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openMap()
 	h.hear(rawPacket(t, meshcore.RouteTypeFlood, meshcore.PayloadTypeTxtMsg, []byte{0xA3}, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}), 4)
@@ -176,6 +178,7 @@ func TestMapIgnoresPrivateTraffic(t *testing.T) {
 }
 
 func TestPathFromPackets(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.hear(channelPacket(t, h, "Public", "Carol", "busy", []byte{0x4D, 0x1E}), 4)
 	h.hear(channelPacket(t, h, "Public", "Bob", "hello all", []byte{0x5F, 0x77}), 6)
@@ -258,6 +261,7 @@ func (h *harness) incoming(in radio.Incoming) {
 
 // TestMessagePathsNameForms: a name NFKC changes, or with extra spaces, still gets its path, both ways round.
 func TestMessagePathsNameForms(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	odd := "Ｚed  Lee"
 	h.hear(channelPacket(t, h, "Public", odd, "hi", []byte{0x5F, 0x77}), 6)
@@ -278,6 +282,7 @@ func TestMessagePathsNameForms(t *testing.T) {
 }
 
 func TestMessagePaths(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	// The packet first, then the message: the message is given the packet's path.
 	h.hear(channelPacket(t, h, "Public", "Bob", "where are you", []byte{0x5F, 0x77}), 6)
@@ -390,6 +395,7 @@ func TestMessagePaths(t *testing.T) {
 }
 
 func TestPathFromContacts(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openMap()
 	dundry := h.contact("Dundry")
@@ -457,6 +463,7 @@ func TestPathFromContacts(t *testing.T) {
 }
 
 func TestMapLinkSignal(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openMap()
 	h.hear(channelPacket(t, h, "Public", "Bob", "hello all", []byte{0xA3, 0x77}), 6)
@@ -515,6 +522,7 @@ func useTileServer(t *testing.T, h *harness, status int, hold chan struct{}) *ht
 }
 
 func TestMapDownload(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	hold := make(chan struct{})
 	useTileServer(t, h, http.StatusOK, hold)
@@ -592,6 +600,7 @@ func TestMapDownload(t *testing.T) {
 }
 
 func TestMapDownloadStopsAndFails(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	hold := make(chan struct{})
 	defer close(hold)
@@ -626,6 +635,7 @@ func TestMapDownloadStopsAndFails(t *testing.T) {
 }
 
 func TestMapWithNoLocations(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.m.ready.Self.Lat, h.m.ready.Self.Lon = 0, 0
 	chat := h.m.chat
@@ -642,6 +652,7 @@ func TestMapWithNoLocations(t *testing.T) {
 }
 
 func TestMapLoadingAndMotionOff(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.m.mapv.loading = true // as if the world map were still being read
 	h.keys("3")
@@ -666,6 +677,7 @@ func TestMapLoadingAndMotionOff(t *testing.T) {
 }
 
 func TestMapFollowsThemeFade(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openMap()
 	h.screen()
@@ -681,6 +693,7 @@ func TestMapFollowsThemeFade(t *testing.T) {
 }
 
 func TestMapBusiestStaysPut(t *testing.T) {
+	t.Parallel()
 	m, _ := newTestModel(t, motion.Full, 100, 30)
 	mv := &m.mapv
 	for _, name := range []string{"Hilltop", "Dundry", "Shed", "Mast"} {
@@ -707,6 +720,7 @@ func TestMapBusiestStaysPut(t *testing.T) {
 }
 
 func TestMapTraffic(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openMap()
 	for range 3 {
@@ -771,6 +785,7 @@ func TestMapTraffic(t *testing.T) {
 // The static map is only redrawn when something on it changes; animation frames reuse it. A cache key that
 // shuffled from frame to frame once made every frame redraw the whole map.
 func TestMapRedrawsOnlyOnChange(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openMap()
 	for i, p := range [][]byte{{0x4D, 0x1E}, {0x5F, 0x77}, {0xB2, 0xA3}, {0xE1, 0xB2, 0xA3}, {0x90, 0x77}, {0x08, 0x90, 0x77}} {
@@ -789,6 +804,7 @@ func TestMapRedrawsOnlyOnChange(t *testing.T) {
 }
 
 func TestReadingScrollsOnlyAsNeeded(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	for i := range 30 {
 		h.incoming(radio.Incoming{Channel: true, ChannelIdx: 0, Hops: 1, Text: fmt.Sprintf("Bob: message %d", i)})
@@ -816,6 +832,7 @@ func TestReadingScrollsOnlyAsNeeded(t *testing.T) {
 }
 
 func TestPathReplays(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.hear(channelPacket(t, h, "Public", "Bob", "hello all", []byte{0x5F, 0x77}), 6)
 	h.hear(channelPacket(t, h, "Public", "Bob", "hello all", []byte{0xA3}), -2)
@@ -852,6 +869,7 @@ func TestPathReplays(t *testing.T) {
 }
 
 func TestMapTrafficKeepsToTheBusiest(t *testing.T) {
+	t.Parallel()
 	m, _ := newTestModel(t, motion.Full, 100, 30)
 	mv := &m.mapv
 	add := func(name string, count float64, unsure bool) {
@@ -890,6 +908,7 @@ func TestMapTrafficKeepsToTheBusiest(t *testing.T) {
 }
 
 func TestMapPicksOutABusyNode(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openMap()
 	for range 3 {
@@ -924,6 +943,7 @@ func TestMapPicksOutABusyNode(t *testing.T) {
 }
 
 func TestMapShowMenu(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openMap()
 	h.screen()

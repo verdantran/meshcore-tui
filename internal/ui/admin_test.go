@@ -64,6 +64,7 @@ func (h *harness) idle(sess *admin.Session) {
 }
 
 func TestAdminLoginAndStatus(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	scr := h.screen()
@@ -149,6 +150,7 @@ func TestAdminLoginAndStatus(t *testing.T) {
 }
 
 func TestAdminSettings(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	_, sess := h.login("Dundry", "password")
@@ -268,6 +270,7 @@ func TestAdminSettings(t *testing.T) {
 }
 
 func TestAdminPanes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	ct, sess := h.login("Dundry", "password")
@@ -451,6 +454,7 @@ func TestAdminPanes(t *testing.T) {
 }
 
 func TestAdminGuestAndRoom(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	_, sess := h.login("Dundry", "")
@@ -494,6 +498,7 @@ func TestAdminGuestAndRoom(t *testing.T) {
 }
 
 func TestAdminTimeoutsAndFailures(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	ct := h.choose("Kelston")
@@ -535,6 +540,7 @@ func TestAdminTimeoutsAndFailures(t *testing.T) {
 }
 
 func TestAdminRendersSmall(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	_, sess := h.login("Dundry", "password")
@@ -564,6 +570,7 @@ func TestAdminRendersSmall(t *testing.T) {
 }
 
 func TestConsoleHelpers(t *testing.T) {
+	t.Parallel()
 	for cmd, risky := range map[string]bool{"reboot": true, "start ota": true, "password x": true, "log erase": false, "set prv.key ab": true,
 		"set radio 1,2,3,4": true, "set tx 20": true, "ver": false, "": false, "erase": true, "poweroff": true,
 		// The firmware matches on prefixes, so near misses are caught too.
@@ -602,6 +609,7 @@ func plainConsole(sess *admin.Session) string {
 }
 
 func TestRoomLoginFromChats(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	room := h.contact("Clifton Room")
 	h.m.jumpToConvo(store.ContactConvo(room.Key))
@@ -641,6 +649,7 @@ func TestRoomLoginFromChats(t *testing.T) {
 }
 
 func TestAdminWaitingAndEmptyStates(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	ct, sess := h.login("Dundry", "password")
@@ -708,6 +717,7 @@ func TestAdminWaitingAndEmptyStates(t *testing.T) {
 }
 
 func TestLocalConsole(t *testing.T) {
+	t.Parallel()
 	st, _ := store.Open(":memory:")
 	t.Cleanup(func() { st.Close() })
 	s := sim.New(6).Fast()
@@ -815,6 +825,7 @@ func TestLocalConsole(t *testing.T) {
 }
 
 func TestLogNeedsUSB(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	_, sess := h.login("Dundry", "password")
@@ -837,6 +848,7 @@ func TestLogNeedsUSB(t *testing.T) {
 }
 
 func TestKeychainAndFleet(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	kc := h.m.opt.Keychain
 	h.keys("5")
@@ -925,6 +937,7 @@ func (k *slowKeychain) Get(node [32]byte) (string, bool) {
 }
 
 func TestDrawingNeverAsksTheKeychain(t *testing.T) {
+	t.Parallel()
 	kc := &slowKeychain{}
 	h := newHarness(t)
 	h.m.keys = admin.NewCached(kc)
@@ -945,6 +958,7 @@ func TestDrawingNeverAsksTheKeychain(t *testing.T) {
 }
 
 func TestFavouriteFilters(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	h.keys("F")

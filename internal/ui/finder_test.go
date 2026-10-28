@@ -25,6 +25,7 @@ func (h *harness) find(q string) {
 func (h *harness) top() *target { return h.m.pal.find.matches[h.m.pal.find.sel].t }
 
 func TestFinderGoesToEachKind(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 
 	h.find("dund")
@@ -75,6 +76,7 @@ func TestFinderGoesToEachKind(t *testing.T) {
 }
 
 func TestFinderFindsPeopleOnContactsThroughFilters(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	h.keys("/alice")
@@ -90,6 +92,7 @@ func TestFinderFindsPeopleOnContactsThroughFilters(t *testing.T) {
 }
 
 func TestFinderCommands(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 
 	h.find("expo")
@@ -139,6 +142,7 @@ func TestFinderCommands(t *testing.T) {
 }
 
 func TestFinderKeepsHistory(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	for _, line := range []string{"ticker on", "help"} {
 		h.keys(":")
@@ -170,6 +174,7 @@ func TestFinderKeepsHistory(t *testing.T) {
 }
 
 func TestCtrlKOpensThePalette(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	for i := range tabNames {
 		h.keys(fmt.Sprint(i + 1))
@@ -190,6 +195,7 @@ func TestCtrlKOpensThePalette(t *testing.T) {
 }
 
 func TestFinderRecentFirst(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.find("c")
 	first := h.top()
@@ -207,6 +213,7 @@ func TestFinderRecentFirst(t *testing.T) {
 }
 
 func TestFuzzy(t *testing.T) {
+	t.Parallel()
 	var f finder
 	score := func(q, label string) int {
 		t.Helper()
@@ -251,6 +258,7 @@ func TestFuzzy(t *testing.T) {
 
 // TestFinderScoresOnKeys: frames reuse the scoring a keystroke did.
 func TestFinderScoresOnKeys(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	var cs []radio.Contact
 	for i := range 500 {
@@ -269,6 +277,7 @@ func TestFinderScoresOnKeys(t *testing.T) {
 }
 
 func TestGoldenFinder(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 	var frames []golden.Frame
 	for _, w := range []int{100, 40} {
@@ -284,6 +293,7 @@ func TestGoldenFinder(t *testing.T) {
 }
 
 func TestFinderInASCII(t *testing.T) {
+	t.Parallel()
 	h := busyHarness(t)
 	h.m.opt.ASCII = true
 	h.find("a")
