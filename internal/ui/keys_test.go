@@ -107,7 +107,8 @@ func TestEnterActsOnTheRow(t *testing.T) {
 
 func TestChatsListKeys(t *testing.T) {
 	h := newHarness(t)
-	h.keys("1G")
+	h.keys("1") // the list loads before G can go to its end
+	h.keys("G")
 	if h.m.chats.sel != len(h.m.chats.infos)-1 {
 		t.Error("G goes to the last conversation")
 	}

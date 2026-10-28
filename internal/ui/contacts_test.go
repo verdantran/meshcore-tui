@@ -65,11 +65,12 @@ func (h *harness) start(cmd tea.Cmd) {
 	}
 }
 
-// drain handles every result that has arrived so far.
-func (h *harness) drain() {
+// drain handles every result that has arrived so far, and says whether there were any.
+func (h *harness) drain() (handled bool) {
 	for {
 		select {
 		case msg := <-h.results:
+			handled = true
 			switch msg := msg.(type) {
 			case tea.BatchMsg:
 				for _, c := range msg {
@@ -82,15 +83,23 @@ func (h *harness) drain() {
 				h.start(next)
 			}
 		default:
-			return
+			return handled
 		}
 	}
 }
 
-// settle lets quick radio calls finish.
+// settle lets quick radio calls finish: it stops once quietRounds rounds in a row bring nothing, as the
+// simulator answers in well under one, or after settleRounds. It can't wait for nothing to be running instead,
+// as the radio's event listener always is.
 func (h *harness) settle() {
-	for i := 0; i < 15; i++ {
-		h.drain()
+	const settleRounds, quietRounds = 15, 3
+	quiet := 0
+	for i := 0; i < settleRounds && quiet < quietRounds; i++ {
+		if h.drain() {
+			quiet = 0
+		} else {
+			quiet++
+		}
 		time.Sleep(2 * time.Millisecond)
 	}
 }
@@ -120,12 +129,15 @@ func (h *harness) advance(d time.Duration) {
 	h.m.Update(frameMsg(h.clk.t))
 }
 
+// keys types s, handling what each key has already brought back before the next, and settles once at the end:
+// waiting after every character made typing a command cost more than everything it ran.
 func (h *harness) keys(s string) {
 	for _, r := range s {
 		_, cmd := h.m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 		h.start(cmd)
-		h.settle()
+		h.drain()
 	}
+	h.settle()
 }
 
 func (h *harness) key(code rune) {
