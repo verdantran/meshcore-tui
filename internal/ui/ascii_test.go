@@ -10,6 +10,7 @@ import (
 )
 
 func TestToASCII(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string]string{
 		"┏━▌CHATS ━┓":          "+-|CHATS -+",
 		"▸ POWER ✓ 4.02 V":     "> POWER v 4.02 V",
@@ -47,6 +48,7 @@ func TestASCIIKeepsWidth(t *testing.T) {
 }
 
 func TestEveryScreenInASCII(t *testing.T) {
+	t.Parallel()
 	h := busyHarness(t)
 	h.m.opt.ASCII = true
 	for i := range tabNames {

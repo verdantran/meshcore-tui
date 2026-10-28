@@ -44,6 +44,7 @@ func mainScreen(t *testing.T) (*Model, *clock) {
 }
 
 func TestGoldenBoot(t *testing.T) {
+	t.Parallel()
 	m, c := newTestModel(t, motion.Full, 100, 30)
 	t0 := c.t
 	send(m, c, 0, radio.BootStep{Key: "link", Label: "LINK", State: radio.StepWait})
@@ -53,6 +54,7 @@ func TestGoldenBoot(t *testing.T) {
 }
 
 func TestGoldenBootFailure(t *testing.T) {
+	t.Parallel()
 	m, c := newTestModel(t, motion.Full, 100, 30)
 	send(m, c, 0, radio.BootStep{Key: "link", Label: "LINK", State: radio.StepWait})
 	c.t = c.t.Add(time.Second)
@@ -63,6 +65,7 @@ func TestGoldenBootFailure(t *testing.T) {
 }
 
 func TestGoldenScreenWipe(t *testing.T) {
+	t.Parallel()
 	m, c := mainScreen(t)
 	t0 := c.t
 	typeKeys(m, "2")
@@ -70,6 +73,7 @@ func TestGoldenScreenWipe(t *testing.T) {
 }
 
 func TestGoldenPacketHeard(t *testing.T) {
+	t.Parallel()
 	m, c := mainScreen(t)
 	t0 := c.t
 	raw := rawPacket(t, meshcore.RouteTypeFlood, meshcore.PayloadTypeAdvert, []byte{0xA3}, make([]byte, 101))
@@ -81,6 +85,7 @@ func TestGoldenPacketHeard(t *testing.T) {
 }
 
 func TestGoldenThemeFade(t *testing.T) {
+	t.Parallel()
 	m, c := mainScreen(t)
 	t0 := c.t
 	typeKeys(m, "T")
@@ -88,6 +93,7 @@ func TestGoldenThemeFade(t *testing.T) {
 }
 
 func TestGoldenChatArrives(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	selectConvo(t, m, "Public")
@@ -99,6 +105,7 @@ func TestGoldenChatArrives(t *testing.T) {
 }
 
 func TestGoldenChatDelivered(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	selectConvo(t, m, "Public")
@@ -115,6 +122,7 @@ func TestGoldenChatDelivered(t *testing.T) {
 }
 
 func TestGoldenHealthReveal(t *testing.T) {
+	t.Parallel()
 	m, c := newTestModel(t, motion.Full, 100, 30)
 	ct := radio.Contact{Key: [32]byte{7}, Name: "Dundry", Type: radio.TypeRepeater}
 	var hist []admin.StatusPoint
@@ -137,6 +145,7 @@ func TestGoldenHealthReveal(t *testing.T) {
 }
 
 func TestGoldenComposeNearLimit(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	startConvo(t, m, "Alice")
@@ -162,6 +171,7 @@ func pulseStart(t time.Time) time.Time {
 }
 
 func TestGoldenDangerConfirm(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	typeKeys(m, "2x")
@@ -176,6 +186,7 @@ func TestGoldenDangerConfirm(t *testing.T) {
 }
 
 func TestGoldenFailureGlitch(t *testing.T) {
+	t.Parallel()
 	m, c := mainScreen(t)
 	t0 := c.t
 	m.fail("LOGIN FAILED  Dundry: wrong password, or not allowed")
@@ -183,6 +194,7 @@ func TestGoldenFailureGlitch(t *testing.T) {
 }
 
 func TestGoldenUnreadPops(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	selectConvo(t, m, "Public")
@@ -198,6 +210,7 @@ func TestGoldenUnreadPops(t *testing.T) {
 }
 
 func TestGoldenContactArrives(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	typeKeys(m, "2j") // the new row lands above the selection, where it isn't drawn as selected
@@ -211,6 +224,7 @@ func TestGoldenContactArrives(t *testing.T) {
 }
 
 func TestGoldenPacketTypesIn(t *testing.T) {
+	t.Parallel()
 	m, c := mainScreen(t)
 	typeKeys(m, "4")
 	tick(m, c, time.Second)
@@ -224,6 +238,7 @@ func TestGoldenPacketTypesIn(t *testing.T) {
 }
 
 func TestGoldenSettingsApplied(t *testing.T) {
+	t.Parallel()
 	m, c := newTestModel(t, motion.Full, 100, 30)
 	ct := radio.Contact{Key: [32]byte{7}, Name: "Dundry", Type: radio.TypeRepeater}
 	sess := m.admin.Session(ct)
@@ -247,6 +262,7 @@ func TestGoldenSettingsApplied(t *testing.T) {
 }
 
 func TestGoldenTraceDraws(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	h.keys("2")
@@ -281,6 +297,7 @@ func TestGoldenTraceDraws(t *testing.T) {
 }
 
 func TestGoldenToast(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	selectConvo(t, m, "Public")

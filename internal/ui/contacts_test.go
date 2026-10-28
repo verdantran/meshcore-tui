@@ -65,11 +65,12 @@ func (h *harness) start(cmd tea.Cmd) {
 	}
 }
 
-// drain handles every result that has arrived so far.
-func (h *harness) drain() {
+// drain handles every result that has arrived so far, and says whether there were any.
+func (h *harness) drain() (handled bool) {
 	for {
 		select {
 		case msg := <-h.results:
+			handled = true
 			switch msg := msg.(type) {
 			case tea.BatchMsg:
 				for _, c := range msg {
@@ -82,15 +83,23 @@ func (h *harness) drain() {
 				h.start(next)
 			}
 		default:
-			return
+			return handled
 		}
 	}
 }
 
-// settle lets quick radio calls finish.
+// settle lets quick radio calls finish: it stops once quietRounds rounds in a row bring nothing, as the
+// simulator answers in well under one, or after settleRounds. It can't wait for nothing to be running instead,
+// as the radio's event listener always is.
 func (h *harness) settle() {
-	for i := 0; i < 15; i++ {
-		h.drain()
+	const settleRounds, quietRounds = 15, 3
+	quiet := 0
+	for i := 0; i < settleRounds && quiet < quietRounds; i++ {
+		if h.drain() {
+			quiet = 0
+		} else {
+			quiet++
+		}
 		time.Sleep(2 * time.Millisecond)
 	}
 }
@@ -120,12 +129,15 @@ func (h *harness) advance(d time.Duration) {
 	h.m.Update(frameMsg(h.clk.t))
 }
 
+// keys types s, handling what each key has already brought back before the next, and settles once at the end:
+// waiting after every character made typing a command cost more than everything it ran.
 func (h *harness) keys(s string) {
 	for _, r := range s {
 		_, cmd := h.m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 		h.start(cmd)
-		h.settle()
+		h.drain()
 	}
+	h.settle()
 }
 
 func (h *harness) key(code rune) {
@@ -159,6 +171,7 @@ func (h *harness) contact(name string) radio.Contact {
 }
 
 func TestContactsBrowseTraceAndRoutes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	got := h.screen()
@@ -204,6 +217,7 @@ func TestContactsBrowseTraceAndRoutes(t *testing.T) {
 }
 
 func TestContactsShareRemoveImport(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	h.pick("Carol")
@@ -233,6 +247,7 @@ func TestContactsShareRemoveImport(t *testing.T) {
 }
 
 func TestContactsHeardAutoAddAndPrune(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	eve := radio.Contact{Key: [32]byte{0xE5, 0x01}, Name: "Eve", Type: radio.TypeChat, PathLen: -1, LastAdvert: h.clk.t}
@@ -274,6 +289,7 @@ func TestContactsHeardAutoAddAndPrune(t *testing.T) {
 // A heard list longer than the viewport must scroll with the selection, as the contact table does:
 // the highlighted row going off the bottom leaves no cursor on screen at all.
 func TestContactsHeardListScrollsWithSelection(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	for i := 0; i < 60; i++ {
@@ -291,6 +307,7 @@ func TestContactsHeardListScrollsWithSelection(t *testing.T) {
 }
 
 func TestContactsMessageJumpsToChat(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	h.pick("Alice")
@@ -312,6 +329,7 @@ func TestContactsMessageJumpsToChat(t *testing.T) {
 
 // Names with emoji or other wide characters take two cells each; the columns after them must still line up.
 func TestColumnsLineUpWithWideNames(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	cs := h.m.chat.Contacts()
 	cs = append(cs,
@@ -347,6 +365,7 @@ func TestColumnsLineUpWithWideNames(t *testing.T) {
 }
 
 func TestContactsPlaceByHand(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	name := h.m.chat.Contacts()[0].Name
@@ -399,6 +418,7 @@ func TestContactsPlaceByHand(t *testing.T) {
 }
 
 func TestRemappedKeys(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.m.opt.Keys = config.Keys{"all": {"ctrl+n": "down"}, "map": {"w": "up", "+": ""}}
 	h.openMap()
@@ -444,6 +464,7 @@ func TestRemappedKeys(t *testing.T) {
 
 // TestHeardFloodKeepsNamesakes: a flood of made-up nodes can't push out the ones the look-alike warnings know.
 func TestHeardFloodKeepsNamesakes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	zed, yan, fake := newSigner("zed"), newSigner("yan"), newSigner("fake")
 	hear := func(key [32]byte, name string) {

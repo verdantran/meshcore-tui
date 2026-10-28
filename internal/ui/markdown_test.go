@@ -6,6 +6,7 @@ import (
 )
 
 func TestEmphasis(t *testing.T) {
+	t.Parallel()
 	type want struct {
 		clean string
 		at    int
@@ -42,6 +43,7 @@ func TestEmphasis(t *testing.T) {
 }
 
 func TestEmphasisInChats(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openConvo("Public")
 	h.keys("i")

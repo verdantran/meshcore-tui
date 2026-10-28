@@ -29,6 +29,7 @@ func has(t *testing.T, got string, want ...string) {
 }
 
 func TestContactsOverlaysRender(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	h.pick("Alice")
@@ -84,6 +85,7 @@ func TestContactsOverlaysRender(t *testing.T) {
 }
 
 func TestContactsSortFilterAndErrors(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	for i := range sortNames {
@@ -155,6 +157,7 @@ func TestContactsSortFilterAndErrors(t *testing.T) {
 }
 
 func TestChatEdges(t *testing.T) {
+	t.Parallel()
 	m, c, r := newChatModel(t)
 	startConvo(t, m, "Alice")
 	key(m, tea.KeyEnter)
@@ -232,6 +235,7 @@ func TestStoppedScanLeavesNothingRunning(t *testing.T) {
 }
 
 func TestConnectBluetoothScan(t *testing.T) {
+	t.Parallel()
 	c := &clock{t: time.Date(2026, 10, 14, 10, 0, 0, 0, time.UTC)}
 	var dialled []Target
 	scans := 0
@@ -295,6 +299,7 @@ func TestConnectBluetoothScan(t *testing.T) {
 }
 
 func TestConnectScreenKeys(t *testing.T) {
+	t.Parallel()
 	c := &clock{t: time.Date(2026, 10, 14, 10, 0, 0, 0, time.UTC)}
 	var dialled []Target
 	m := New(Options{Theme: theme.Neon, Motion: motion.Full, Clock: c.now,
@@ -341,6 +346,7 @@ func TestConnectScreenKeys(t *testing.T) {
 }
 
 func TestShellEventsAndKeys(t *testing.T) {
+	t.Parallel()
 	m, c := newTestModel(t, motion.Full, 120, 34)
 	boot(m, c)
 	// Before the handover finishes, enter skips it.
@@ -390,6 +396,7 @@ func TestShellEventsAndKeys(t *testing.T) {
 }
 
 func TestConfigSaveFailureIsLogged(t *testing.T) {
+	t.Parallel()
 	file := filepath.Join(t.TempDir(), "file")
 	os.WriteFile(file, nil, 0o644)
 	cfg, _ := config.Load(filepath.Join(file, "config.toml"))
@@ -402,6 +409,7 @@ func TestConfigSaveFailureIsLogged(t *testing.T) {
 }
 
 func TestNotificationsOff(t *testing.T) {
+	t.Parallel()
 	m, c, _ := newChatModel(t)
 	m.notes.method = "off"
 	send(m, c, 0, aliceSays(c, "hi"))
@@ -416,6 +424,7 @@ func TestNotificationsOff(t *testing.T) {
 }
 
 func TestEveryPaletteCommand(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	run := func(line string) logLine {
 		h.keys(":" + line)
@@ -487,6 +496,7 @@ func TestEveryPaletteCommand(t *testing.T) {
 }
 
 func TestInspectorAndSearchKeys(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("4")
 	for i := 0; i < 5; i++ {
@@ -544,6 +554,7 @@ func TestInspectorAndSearchKeys(t *testing.T) {
 }
 
 func TestMonoAndHelpers(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.m.setTheme(theme.Mono)
 	for _, tab := range "12345" {

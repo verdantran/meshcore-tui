@@ -8,6 +8,7 @@ import (
 )
 
 func TestShortcodeAt(t *testing.T) {
+	t.Parallel()
 	for before, want := range map[string]string{":jo": "jo", "hi :jo": "jo", ":j": "", "10:30": "", "http://x": "", "hi:jo": "", "a :+1": "+1", "": ""} {
 		_, got, ok := shortcodeAt(before)
 		if got != want || ok != (want != "") {
@@ -31,6 +32,7 @@ func TestShortcodeAt(t *testing.T) {
 }
 
 func TestEmojiInTheComposeBox(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openConvo("Public")
 	h.keys("i")

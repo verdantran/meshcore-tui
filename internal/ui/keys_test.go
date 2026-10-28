@@ -17,6 +17,7 @@ func (h *harness) ctrl(r rune) {
 }
 
 func TestTextFieldsKeepTheirKeys(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openConvo("Public")
 	h.keys("i")
@@ -50,6 +51,7 @@ func TestTextFieldsKeepTheirKeys(t *testing.T) {
 }
 
 func TestQuitAsksAboutUnsentWork(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openConvo("Public")
 	h.keys("i")
@@ -68,6 +70,7 @@ func TestQuitAsksAboutUnsentWork(t *testing.T) {
 }
 
 func TestEnterActsOnTheRow(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("2")
 	h.m.contacts.typeFilter = 0
@@ -106,8 +109,10 @@ func TestEnterActsOnTheRow(t *testing.T) {
 }
 
 func TestChatsListKeys(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
-	h.keys("1G")
+	h.keys("1") // the list loads before G can go to its end
+	h.keys("G")
 	if h.m.chats.sel != len(h.m.chats.infos)-1 {
 		t.Error("G goes to the last conversation")
 	}
@@ -131,6 +136,7 @@ func TestChatsListKeys(t *testing.T) {
 }
 
 func TestRemovingAsksFirst(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	_, sess := h.login("Dundry", "password")
@@ -182,6 +188,7 @@ func TestRemovingAsksFirst(t *testing.T) {
 }
 
 func TestKeysByView(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.m.opt.Keys = config.Keys{"admin": {"z": "j"}, "admin.list": {"z": "k"}, "panes": {"b": "s"}}
 	h.keys("5")
@@ -199,6 +206,7 @@ func TestKeysByView(t *testing.T) {
 }
 
 func TestMouseWheelAndOverlays(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.openConvo("#bristol")
 	h.m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
@@ -229,6 +237,7 @@ func TestMouseWheelAndOverlays(t *testing.T) {
 }
 
 func TestBindingsCantAnswerYes(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.m.opt.Keys = config.Keys{"all": {"n": "y", "esc": "y", "z": "y"}}
 	h.keys("2")

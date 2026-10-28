@@ -34,6 +34,7 @@ func (h *harness) prove(real bool) {
 }
 
 func TestTheDemoRadioProvesItself(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.until("checked", func() bool { return h.m.trust != trustChecking })
 	if h.m.trust != trustVerified || !strings.Contains(plainLog(h), "RADIO VERIFIED") {
@@ -46,6 +47,7 @@ func TestTheDemoRadioProvesItself(t *testing.T) {
 }
 
 func TestAnImpostorGetsNoPasswords(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.until("checked", func() bool { return h.m.trust != trustChecking })
 	real := radio.KeyHex(h.m.ready.Self.PubKey[:])
@@ -82,6 +84,7 @@ func TestAnImpostorGetsNoPasswords(t *testing.T) {
 }
 
 func TestACheckThatFailsIsntADifferentRadio(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.until("checked", func() bool { return h.m.trust != trustChecking })
 	h.onDevice("BLE", "AA:BB", radio.KeyHex(h.m.ready.Self.PubKey[:]))
@@ -96,6 +99,7 @@ func TestACheckThatFailsIsntADifferentRadio(t *testing.T) {
 }
 
 func TestADifferentKeyIsFlagged(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.until("checked", func() bool { return h.m.trust != trustChecking })
 	h.onDevice("USB", "/dev/cu.test", strings.Repeat("ab", 32))
@@ -114,6 +118,7 @@ func TestADifferentKeyIsFlagged(t *testing.T) {
 }
 
 func TestFirstConnectionSavesTheKey(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.until("checked", func() bool { return h.m.trust != trustChecking })
 	h.onDevice("USB", "/dev/cu.test", "")
@@ -124,6 +129,7 @@ func TestFirstConnectionSavesTheKey(t *testing.T) {
 }
 
 func TestLinksThatMayNotBeEncrypted(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.until("checked", func() bool { return h.m.trust != trustChecking })
 	key := radio.KeyHex(h.m.ready.Self.PubKey[:])
@@ -153,6 +159,7 @@ func TestLinksThatMayNotBeEncrypted(t *testing.T) {
 }
 
 func TestTheSameKeyAtAnotherBluetoothAddress(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.until("checked", func() bool { return h.m.trust != trustChecking })
 	key := radio.KeyHex(h.m.ready.Self.PubKey[:])
@@ -167,6 +174,7 @@ func TestTheSameKeyAtAnotherBluetoothAddress(t *testing.T) {
 }
 
 func TestAutoConnectNeedsAUniqueName(t *testing.T) {
+	t.Parallel()
 	c := &config.Config{Devices: []config.Device{{Name: "Shed", Kind: "BLE", Addr: "AA"}, {Name: "Shed", Kind: "BLE", Addr: "BB"}, {Name: "Desk", Kind: "USB", Addr: "x"}}}
 	if _, ok := c.Device("Shed"); ok {
 		t.Error("two devices with one name: neither is chosen")

@@ -14,6 +14,7 @@ import (
 )
 
 func TestWatchPacesItselfWhileNodesAreDue(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
 	nodes := h.m.adminNodes()
@@ -37,6 +38,7 @@ func TestWatchPacesItselfWhileNodesAreDue(t *testing.T) {
 }
 
 func TestHealthIsMeasuredOnlyWhenItWouldChange(t *testing.T) {
+	t.Parallel()
 	m, c := newTestModel(t, motion.Full, 100, 30)
 	key := [32]byte{7}
 	var hist []admin.StatusPoint

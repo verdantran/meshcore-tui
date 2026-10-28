@@ -59,6 +59,7 @@ func (h *harness) busiest() string {
 // Busiest repeaters counts a 2-byte hop as itself, so Lansdown isn't taken for Kelston, which shares its
 // first byte. A 1-byte 5F is either; where they are makes one the likelier, and it's marked as a guess.
 func TestBusiestRepeatersByWholeHash(t *testing.T) {
+	t.Parallel()
 	h := twoByteHarness(t)
 	kelston, lansdown := h.contact("Kelston").Key, h.contact("Lansdown").Key
 	for i := range 3 {
@@ -83,6 +84,7 @@ func TestBusiestRepeatersByWholeHash(t *testing.T) {
 }
 
 func TestBusiestRepeatersKeepsToABound(t *testing.T) {
+	t.Parallel()
 	tally := newMeshTally()
 	for i := range maxHopHashes + 50 {
 		tally.hop(packets.Hop{Hash: []byte{byte(i >> 8), byte(i)}})
@@ -95,6 +97,7 @@ func TestBusiestRepeatersKeepsToABound(t *testing.T) {
 
 // A trace, the route editor and the contacts table all use the radio's 2-byte hashes.
 func TestTwoByteTraceAndRoutes(t *testing.T) {
+	t.Parallel()
 	h := twoByteHarness(t)
 	dundry := h.contact("Dundry")
 	h.keys("2")
@@ -146,6 +149,7 @@ func TestTwoByteTraceAndRoutes(t *testing.T) {
 }
 
 func TestTracePathSizes(t *testing.T) {
+	t.Parallel()
 	rep := radio.Contact{Key: [32]byte{0xA3, 0x01, 0x02}, Type: radio.TypeRepeater, PathLen: -1}
 	if p, size, _ := tracePath(rep, 3); size != 2 || string(p) != "\xA3\x01" {
 		t.Errorf("3-byte radio traces with %d-byte hops: %X", size, p)
@@ -159,6 +163,7 @@ func TestTracePathSizes(t *testing.T) {
 
 // Link signal is kept by whole hashes: a reading for Kelston isn't Lansdown's.
 func TestLinkSignalByWholeHash(t *testing.T) {
+	t.Parallel()
 	h := twoByteHarness(t)
 	self := h.m.ready.Self.PubKey[:]
 	kelston, lansdown := h.contact("Kelston").Key, h.contact("Lansdown").Key

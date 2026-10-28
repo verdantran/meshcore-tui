@@ -53,6 +53,7 @@ func secretPacket(t *testing.T, secret [16]byte, sender, text string, path []byt
 // A private channel named like an open one is still private: what it carries never reaches Packets, the
 // ticker, the map, Stats or an export.
 func TestPrivateChannelsNamedLikeOpenOnesStayHidden(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	fakePublic := radio.Channel{Idx: 5, Name: "Public", Secret: [16]byte{5, 5, 1, 2, 3}}
 	fakeBristol := radio.Channel{Idx: 6, Name: "#bristol", Secret: [16]byte{6, 6, 1, 2, 3}}
@@ -86,6 +87,7 @@ func TestPrivateChannelsNamedLikeOpenOnesStayHidden(t *testing.T) {
 // TestMadeUpPathsDontCrowdOut: copies with invented paths sent first leave room for the real ones that follow,
 // those passed on by a neighbour first, then the strongest.
 func TestMadeUpPathsDontCrowdOut(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.m.contacts.heard = append(h.m.contacts.heard, heardNode{radio.Contact{Key: [32]byte{0xA3, 0x01}, Name: "Hill", PathLen: 0}, h.clk.t})
 	p, _ := meshcore.PacketFromBytes(channelPacket(t, h, "Public", "Bob", "again", nil))
@@ -149,6 +151,7 @@ func TestReplaysAreCapped(t *testing.T) {
 }
 
 func TestInspector(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("4")
 	if got := h.screen(); !strings.Contains(got, "Waiting for adverts, and messages on Public") {
@@ -217,6 +220,7 @@ func TestInspector(t *testing.T) {
 
 // Only messages on open channels are kept; the rest are counted, blanked in the ticker, and tallied for Stats.
 func TestInspectorShowsOnlyAdvertsAndOpenChannels(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("4")
 	self := h.m.ready.Self.PubKey[0]

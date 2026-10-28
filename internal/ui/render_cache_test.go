@@ -8,6 +8,7 @@ import (
 
 // TestAdminNodesCached: the list is worked out once per change to the contacts or the filter, and follows both.
 func TestAdminNodesCached(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	a, b := h.m.adminNodes(), h.m.adminNodes()
 	if len(a) < 2 || &a[0] != &b[0] {
@@ -30,6 +31,7 @@ func TestAdminNodesCached(t *testing.T) {
 
 // TestMapNodesOncePerFrame: drawing reuses one list, and what a resolver adds to it never reaches the next caller.
 func TestMapNodesOncePerFrame(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.m.mapv.drawing = true
 	a := h.m.mapNodes()

@@ -30,6 +30,7 @@ func (h *harness) typeFast(s string) {
 }
 
 func TestAddChannels(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys("n")
 	if !strings.Contains(h.screen(), "ADD A CHANNEL") || !strings.Contains(h.screen(), "3 of 40 slots used") {
@@ -113,6 +114,7 @@ func TestAddChannels(t *testing.T) {
 }
 
 func TestShareAndLeaveChannels(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	pub, _ := h.channel("Public")
 	h.m.jumpToConvo(store.ChannelConvo(pub.Idx))
@@ -161,6 +163,7 @@ func TestShareAndLeaveChannels(t *testing.T) {
 }
 
 func TestChannelCommand(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	run := func(line string) {
 		h.keys(":")
@@ -200,6 +203,7 @@ func TestChannelCommand(t *testing.T) {
 }
 
 func TestChannelFailures(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.m.Update(channelsMsg{err: errRadio, what: "JOINED  #x"})
 	if !strings.Contains(h.lastLog(), "JOINED  #x  the radio is busy") {
@@ -229,6 +233,7 @@ type radioBusy struct{}
 func (radioBusy) Error() string { return "the radio is busy" }
 
 func TestRenameChannel(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	bristol, _ := h.channel("#bristol")
 	h.m.jumpToConvo(store.ChannelConvo(bristol.Idx))
@@ -272,6 +277,7 @@ func TestRenameChannel(t *testing.T) {
 }
 
 func TestShareViewSaysWhenTheNameIsEnough(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	strong := [16]byte{0x3a, 0x91, 0x0c, 0xe7, 0x55, 0x12, 0xb8, 0x6f, 0xd4, 0x29, 0x80, 0x4e, 0xf3, 0x17, 0xaa, 0x6b}
 	for _, c := range []struct {
@@ -297,6 +303,7 @@ func TestShareViewSaysWhenTheNameIsEnough(t *testing.T) {
 }
 
 func TestCopiedMessagesKeepOnlyTheirLines(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.incoming(radio.Incoming{Channel: true, ChannelIdx: 0, Text: "Bob: line one\nline\x1b]52;c;x\x07 two\r"})
 	h.openConvo("Public")
@@ -308,6 +315,7 @@ func TestCopiedMessagesKeepOnlyTheirLines(t *testing.T) {
 }
 
 func TestWiFiSaysItIsUnencrypted(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	if strings.Contains(plainLog(h), "UNENCRYPTED") {
 		t.Fatal("only WiFi warns")
@@ -333,6 +341,7 @@ func TestWiFiSaysItIsUnencrypted(t *testing.T) {
 }
 
 func TestAddChannelRow(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	at := h.m.lastChannel()
 	h.m.chats.sel = at
@@ -364,6 +373,7 @@ func TestAddChannelRow(t *testing.T) {
 }
 
 func TestJoinHashtagFromAMessage(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	pub, _ := h.channel("Public")
 	h.m.jumpToConvo(store.ChannelConvo(pub.Idx))
@@ -388,6 +398,7 @@ func TestJoinHashtagFromAMessage(t *testing.T) {
 }
 
 func TestFinderJoinsAndAddsChannels(t *testing.T) {
+	t.Parallel()
 	h := newHarness(t)
 	h.keys(":")
 	h.typeFast("#cardiff")

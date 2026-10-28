@@ -15,6 +15,7 @@ import (
 
 // TestDemoNotifies runs the real simulator through the model, as --demo does.
 func TestDemoNotifies(t *testing.T) {
+	t.Parallel()
 	st, _ := store.Open(":memory:")
 	defer st.Close()
 	s := sim.New(1).Fast()
