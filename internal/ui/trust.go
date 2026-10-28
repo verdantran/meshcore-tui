@@ -166,8 +166,6 @@ func (m *Model) savedPasswordsOK() (bool, string) {
 		return false, "this radio hasn't proved which radio it is"
 	case m.target.Kind == "TCP":
 		return false, "the WiFi link to the radio isn't encrypted"
-	case m.target.Kind == "BLE" && !m.ready.Device.PinSet:
-		return false, "the radio has no Bluetooth PIN, so the link may not be encrypted"
 	}
 	return true, ""
 }

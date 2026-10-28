@@ -143,15 +143,12 @@ func TestLinksThatMayNotBeEncrypted(t *testing.T) {
 	}
 	h.key(tea.KeyEscape)
 
+	// A PIN setting of 0 means the radio makes one up, not that it pairs without one: companion
+	// firmware won't talk over Bluetooth until it's paired, so the link is encrypted.
 	h.onDevice("BLE", "AA:BB", key)
-	h.m.ready.Device.PinSet = false
 	h.prove(true)
-	if safe, _ := h.m.savedPasswordsOK(); safe {
-		t.Error("Bluetooth without a PIN may not be encrypted")
-	}
-	h.m.ready.Device.PinSet = true
-	if safe, _ := h.m.savedPasswordsOK(); !safe {
-		t.Error("Bluetooth paired with its PIN is fine")
+	if safe, why := h.m.savedPasswordsOK(); !safe {
+		t.Errorf("a verified radio over Bluetooth gets its saved passwords: %q", why)
 	}
 }
 

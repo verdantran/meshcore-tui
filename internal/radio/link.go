@@ -293,7 +293,7 @@ func (l *Link) sync(ctx context.Context) {
 			Lat: float64(self.AdvertLatitude) / 1e6, Lon: float64(self.AdvertLongitude) / 1e6,
 		},
 		Device: DeviceInfo{Model: untrusted.Line(dev.Model), Firmware: untrusted.Line(dev.FirmwareVersionStr), BuildDate: untrusted.Line(dev.FirmwareBuildDate), MaxContacts: int(dev.MaxContacts), MaxChannels: int(dev.MaxChannels),
-			PinSet: dev.FirmwareVersion >= 3 && dev.BLEPin != 0, PathHash: int(dev.PathHashMode) + 1},
+			PathHash: int(dev.PathHashMode) + 1},
 		Contacts:    len(contacts),
 		Channels:    len(channels),
 		Battery:     Battery{batt.BatteryMilliVolts},

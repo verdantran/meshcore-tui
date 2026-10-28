@@ -109,7 +109,7 @@ meshcore-tui --demo                           # a simulated mesh
 
 Heltec V4 radios ship separate firmware for USB, Bluetooth and WiFi companions. If a connection fails in a way that suggests the wrong build, the app says so.
 
-Over Bluetooth, the first connection may ask for the radio's PIN (`123456` on a Heltec unless you've changed it). On Linux, BlueZ has no agent to ask for it, so pair once with `bluetoothctl` first; on Windows, pair once in Settings → Bluetooth.
+Over Bluetooth, the radio must be paired before it takes commands, with the PIN on its screen, or `123456` if it has no screen, unless you've set your own. On Linux, BlueZ has no agent to ask for it, so pair once with `bluetoothctl` first; on Windows, pair once in Windows Settings (Win+I) → Bluetooth & devices → Add device.
 
 ## Getting around
 

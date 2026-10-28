@@ -21,8 +21,9 @@ Nothing is encrypted at rest beyond what your disk does: anyone who can read you
 
 ## What leaves your computer
 
-- **To your radio:** messages you send, settings you change, and, when you log in to a repeater or room server, its password. Saved passwords only go to a radio that has proved, by signing, that it's the one you saved, and never without asking over WiFi or a Bluetooth link that may not be encrypted.
-- **Over WiFi** the link to the radio isn't encrypted, so anyone on that network can read what passes, channel secrets included. USB and Bluetooth paired with the radio's PIN don't have that problem.
+- **To your radio:** messages you send, settings you change, and, when you log in to a repeater or room server, its password. Saved passwords only go to a radio that has proved, by signing, that it's the one you saved, and never without asking over WiFi.
+- **Over WiFi** the link to the radio isn't encrypted, so anyone on that network can read what passes, channel secrets included. USB and Bluetooth don't have that problem.
+- **Over Bluetooth** the link is encrypted once the computer has paired with the radio, and MeshCore's companion firmware won't take commands until it has: an unpaired computer is refused. A radio whose PIN setting is 0 still pairs with one, shown on its screen, or 123456 if it has no screen. So saved passwords go over Bluetooth as they do over USB. This rests on how the companion firmware behaves rather than on anything the app can check, so a build that let Bluetooth connect unpaired would carry saved passwords unencrypted. Pairing is also the moment to be careful: someone recording it with older Bluetooth pairing could later read the link, so pair where no one is likely to be listening, and only re-pair when you need to.
 - **Street detail** is downloaded only when you press `d` on the map.
 
 There are no accounts, analytics, crash reports or update checks.

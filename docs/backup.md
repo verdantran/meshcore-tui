@@ -18,7 +18,7 @@ On the Device screen (`6`), pick **Back up this radio**, or type `:radio backup`
 
 `space` ticks or unticks a part, `a` ticks or unticks them all, and `enter` saves. Everything but the private key starts ticked; the key goes in only if you tick it, and then only after a `y`.
 
-The file goes in your exports folder (`~/.local/share/meshcore-tui/exports` on macOS and Linux), named after the radio and the time, such as `radio-meshcore-k4-2026-10-23-091500.json`. It's readable only by you, and it's plain JSON, so you can read what's in it.
+The file goes in your exports folder (`~/.local/share/meshcore-tui/exports` on macOS and Linux, `%LOCALAPPDATA%\meshcore-tui\exports` on Windows), named after the radio and the time, such as `radio-meshcore-k4-2026-10-23-091500.json`. Once it's saved, the backup row shows the file. It's readable only by you, and it's plain JSON, so you can read what's in it.
 
 ## Keep it safe
 
@@ -27,14 +27,14 @@ The file goes in your exports folder (`~/.local/share/meshcore-tui/exports` on m
 
 ## Restoring
 
-On the Device screen, pick **Restore a backup**, or type `:radio restore`, optionally followed by the file's path. The newest backup in your exports folder is filled in for you.
+On the Device screen, pick **Restore a backup**, or type `:radio restore`, optionally followed by the file's path. The newest backup in your exports folder is filled in for you; pasting a path replaces it, and one copied with Explorer's Copy as path, in quotes, works as it is.
 
 Nothing changes until you've chosen what to restore. The same list shows each part in the file and what it would change: the radio settings now and after, say, or `2 to add, 3 already here` for channels. The private key always starts unticked, even when the file has it. Type `restore` to go ahead.
 
 - **Channels and contacts you already have are kept.** Only missing ones are added, so restoring never overwrites a channel or contact. Channels go into free slots.
 - **A channel that would mislead is refused**, and the list says which and why: a `#hashtag` whose secret isn't the one its name gives, or a private channel with a secret anyone could guess.
 - **New radio settings mean you'll only hear nodes that use them too**, as when changing them by hand.
-- **Restoring the private key replaces the radio's identity.** Contacts will see a different node, and the current key is gone unless you've backed it up.
+- **Restoring the private key replaces the radio's identity.** Contacts will see a different node, and the current key is gone unless you've backed it up. The app takes the restored key as this radio's from then on, so it isn't flagged as a different radio when it next connects.
 
 Each part is sent in turn, the private key last. If one fails, the rest still go ahead, and the log says which failed.
 

@@ -269,8 +269,7 @@ type DeviceInfo struct {
 	BuildDate   string
 	MaxContacts int
 	MaxChannels int
-	PinSet      bool // it pairs over Bluetooth only with its PIN, so that link is encrypted
-	PathHash    int  // bytes per hop in the paths it starts; 0 reads as 1
+	PathHash    int // bytes per hop in the paths it starts; 0 reads as 1
 }
 
 // Ready is sent once the connect sequence has finished.
