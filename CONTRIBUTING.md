@@ -13,7 +13,7 @@ go test ./...
 go run ./cmd/meshcore-tui --demo   # a simulated mesh, no radio needed
 ```
 
-`go test -short ./...` skips the frame-time check, which is slow on a busy machine. CI also runs `gofmt -l .`, which must print nothing, and `govulncheck`.
+`go test -short ./...` skips the frame-time check, which is slow on a busy machine. CI also runs `gofmt -l .`, which must print nothing, and `govulncheck`. It runs on pull requests and on main, so a branch is tested once it has a pull request, and a change only to Markdown, `docs/` or the licence runs nothing.
 
 ## Tests
 
