@@ -46,6 +46,9 @@ type chatsModel struct {
 	reading bool  // moving through the open conversation's messages, to reply to one or see its route
 	cur     int64 // the message picked while reading
 
+	board       *boardView // chess open in the conversation, or nil
+	boardLayout string     // "board" or "both", once changed; until then the config's
+
 	heard []heardMessage // message packets heard lately, for giving messages their paths
 
 	sigs     []pendingSig         // signatures waiting for their message
@@ -173,6 +176,9 @@ func (m *Model) rebuildChats(reload bool) {
 	default:
 		c.msgs, _ = m.chat.Messages(cur.Convo, historyLen)
 	}
+	if c.board != nil && cur.Convo == c.board.convo {
+		m.refreshBoard()
+	}
 	c.unread = 0
 	for _, info := range c.infos {
 		c.unread += info.Unread
@@ -234,7 +240,7 @@ func (m *Model) chatEvent(e radio.Event) tea.Cmd {
 		if m.chat.Mentions(msg.Text) {
 			tone = radio.ToneWarn
 		}
-		m.addLog(m.now, fmt.Sprintf("MSG  %s · %s: %s", title, msg.Sender, truncate(msg.Text, 60)), tone)
+		m.addLog(m.now, fmt.Sprintf("MSG  %s · %s: %s", title, msg.Sender, truncate(noteText(msg), 60)), tone)
 		m.chatsChanged(msg.Convo)
 		return m.considerNote(msg, title)
 	case radio.ChannelData:
@@ -393,6 +399,14 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		m.refreshChats()
 		return nil, true
 	}
+	if m.boardShown() && !c.board.chat && !c.board.idle {
+		return m.boardKey(s)
+	}
+	if m.boardShown() && c.board.chat && !c.writing && !c.reading && (s == "tab" || s == "esc") {
+		c.board.chat = false // tab goes back to the board; esc leaves it, to choose another conversation
+		c.board.idle = s == "esc"
+		return nil, true
+	}
 	if c.reading {
 		if cmd, handled := m.readingKey(s); handled {
 			return cmd, true
@@ -431,6 +445,15 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		}
 	}
 	switch s {
+	case "c":
+		switch {
+		case m.boardShown() && c.board.idle:
+			c.board.idle = false // back to the board left with esc
+		case m.boardShown():
+			m.closeBoard() // from the conversation beside the board
+		default:
+			m.openBoard()
+		}
 	case "/":
 		c.filtering, c.filter = true, lineEdit{}
 	case "esc":
@@ -676,6 +699,9 @@ func (m *Model) keepSigned(k string, msg store.Message) {
 }
 
 func (m *Model) chatsAnimating() bool {
+	if m.boardAnimating() {
+		return true
+	}
 	now := m.now
 	for _, t := range m.chats.arrived {
 		if motion.Running(t, arriveDur, now) {
@@ -730,9 +756,12 @@ func (m *Model) renderChats(inner, rows int) []string {
 	paneW := inner - listW - 3
 	left := m.convoList(listW, rows)
 	var right []string
-	if c.onAdd || len(c.infos) == 0 {
+	switch {
+	case c.onAdd || len(c.infos) == 0:
 		right = m.addPreview(paneW)
-	} else {
+	case m.boardShown():
+		right = m.boardPane(paneW, rows)
+	default:
 		right = m.convoPane(paneW, rows)
 	}
 	sep := th.Fg(th.Line, false).Render(" │ ")
@@ -899,8 +928,11 @@ func (m *Model) convoPane(w, rows int) []string {
 			m.joinHint()+
 			th.Paint(th.Dim, false, "← back to conversations"), w)
 	default:
-		compose = fit(th.Paint(th.Dim, false, "▸ "+fitHints([]string{"enter write", "↑↓ conversations", "n add channel", "→ pick a message",
-			"r reply", "/ filter", "ctrl+f search all"}, w-2)), w)
+		hs := []string{"enter write", "↑↓ conversations", "n add channel", "→ pick a message", "r reply", "/ filter", "ctrl+f search all"}
+		if ct, ok := m.chat.Contact(cur.Convo); ok && cur.Kind == chat.KindDirect && ct.Type == radio.TypeChat {
+			hs = slices.Insert(hs, 1, "c chess")
+		}
+		compose = fit(th.Paint(th.Dim, false, "▸ "+fitHints(hs, w-2)), w)
 	}
 
 	// Messages, newest at the bottom, drawn only as far up as the pane shows.
@@ -972,15 +1004,15 @@ func (m *Model) messageHeight(msg store.Message, w int) int {
 	if at, ok := c.failed[msg.ID]; ok && motion.Running(at, glitchDur*3, m.now) {
 		return len(m.messageLines(msg, w))
 	}
-	k := heightKey{msg.ID, w}
-	if h, ok := c.heights[k]; ok && h.text == msg.Text {
+	k, shown := heightKey{msg.ID, w}, m.shownText(msg)
+	if h, ok := c.heights[k]; ok && h.text == shown {
 		return h.rows
 	}
 	if c.heights == nil || len(c.heights) > 4*historyLen {
 		c.heights = map[heightKey]msgHeight{}
 	}
 	rows := len(m.messageLines(msg, w))
-	c.heights[k] = msgHeight{msg.Text, rows}
+	c.heights[k] = msgHeight{shown, rows}
 	return rows
 }
 
@@ -1022,7 +1054,7 @@ func (m *Model) messageLines(msg store.Message, w int) []string {
 	}
 	meta = clip(meta, metaRoom)
 
-	text, marks := emphasis(msg.Text)
+	text, marks := emphasis(m.shownText(msg))
 	if at, ok := m.chats.arrived[msg.ID]; ok && m.level.Allows(motion.Decode) && motion.Running(at, decodeDur, now) {
 		text, marks = motion.DecodeText(text, msg.ID, motion.Progress(at, decodeDur, now)), nil
 	}

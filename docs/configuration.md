@@ -57,6 +57,7 @@ beacon = true              # the rings pulsing around you on the map, at full mo
 mouse = true               # clicks pick screens and panes; off leaves the mouse to the terminal, for selecting text
 layout = ""                # split panes, e.g. "right 50 (*chats, packets)"; * marks the focused one
 ascii = false              # plain ASCII for terminals without braille or box drawing
+chess_layout = "both"      # both puts the conversation beside a chess board; board shows the board alone. L switches it
 ```
 
 Over SSH or mosh, motion starts at `reduced`; inside tmux the app asks tmux how you're attached, so a tmux started on the server and attached over SSH counts too. If frames tear inside tmux and your terminal supports synchronized output (iTerm2, kitty, WezTerm, Ghostty, foot, Windows Terminal), tell tmux so with `set -as terminal-features ',xterm*:sync'` (matching your `TERM`), then reattach.

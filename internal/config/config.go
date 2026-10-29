@@ -42,10 +42,11 @@ type Config struct {
 		Theme        string `toml:"theme"`
 		Motion       string `toml:"motion"` // empty means the default: full, or reduced over SSH
 		PacketTicker bool   `toml:"packet_ticker"`
-		Beacon       bool   `toml:"beacon"` // the rings pulsing around us on the map at full motion
-		Mouse        bool   `toml:"mouse"`  // clicks pick screens and panes; off leaves the mouse to the terminal, for selecting text
-		Layout       string `toml:"layout"` // split panes, e.g. "right 50 (*chats, packets)"; empty is one screen
-		ASCII        bool   `toml:"ascii"`  // plain ASCII for terminals without braille or box drawing
+		Beacon       bool   `toml:"beacon"`       // the rings pulsing around us on the map at full motion
+		Mouse        bool   `toml:"mouse"`        // clicks pick screens and panes; off leaves the mouse to the terminal, for selecting text
+		Layout       string `toml:"layout"`       // split panes, e.g. "right 50 (*chats, packets)"; empty is one screen
+		ASCII        bool   `toml:"ascii"`        // plain ASCII for terminals without braille or box drawing
+		ChessLayout  string `toml:"chess_layout"` // "both" puts the conversation beside a chess board, "board" shows it alone
 	} `toml:"ui"`
 	Connection struct {
 		AutoConnect   string `toml:"auto_connect"` // a saved device's name

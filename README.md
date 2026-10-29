@@ -2,7 +2,7 @@
 
 [![Latest release](https://img.shields.io/github/v/release/verdantran/meshcore-tui)](https://github.com/verdantran/meshcore-tui/releases/latest)
 
-A terminal client for [MeshCore](https://meshcore.io) radios: chats, contacts, a map of the mesh drawn in braille, a live packet inspector, and remote administration of repeaters and room servers. It connects over USB serial, Bluetooth or WiFi, runs happily over SSH and in tmux, and ships as a single binary.
+A terminal client for [MeshCore](https://meshcore.io) radios: chats, contacts, a map of the mesh drawn in braille, a live packet inspector, remote administration of repeaters and room servers, and chess with the people you message. It connects over USB serial, Bluetooth or WiFi, runs happily over SSH and in tmux, and ships as a single binary.
 
 meshcore-tui is an independent project. It isn't affiliated with, or endorsed by, the MeshCore project or its developers; it talks to radios running MeshCore's companion firmware.
 
@@ -15,6 +15,10 @@ The recording and screenshots here all come from `--demo`, a simulated mesh with
 **1 Chats.** Channels and direct messages, with unread counts, delivery state (sent, heard repeating, delivered), hops and signal on every message, and replies. Incoming DMs and mentions show as toasts, and can ring the bell or raise a desktop notification; `m` mutes a busy conversation. To join a channel, pick **+ add a channel** under the channels (or press `n`): a `#name` joins a public hashtag channel, and a private one takes its secret or a shared link. Picking a message that mentions a `#channel` you're not in offers `J` to join it. Channel messages can be signed, so someone posting under another person's name stands out; this is experimental, as [docs/signing.md](docs/signing.md) explains.
 
 ![Chats](docs/screenshots/chats.png)
+
+**Chess over the mesh.** Press `c` in a direct conversation to play chess with that person. The board sits beside the conversation or on its own, and you move with the cursor, the mouse or by typing a move. Each move is one short message, so it gets the usual delivery receipt, and a checksum on every move notices if your two boards drift apart, and one key puts them back in step. It uses the same messages as [meshcore-companion](https://github.com/edleeman17/meshcore-companion) by [edleeman17](https://github.com/edleeman17), so it's designed to play against that app too, and any other app that supports meshcore-companion's [chess messages](docs/chess.md#how-it-works), though that hasn't been tried yet. In `--demo` the made-up people play back. [docs/chess.md](docs/chess.md) has the keys and how it works.
+
+![A game of chess with Dan beside your conversation](docs/screenshots/chess.png)
 
 **2 Contacts.** Everyone your radio knows, sortable and filterable, with each contact's key, location, route and advert path. From here you can message, trace, discover or set a route, pin a signing key, share a contact as a QR code or link, and import one.
 
@@ -174,6 +178,8 @@ Nearly all of meshcore-tui was written with Claude, Anthropic's AI model. It's h
 ## Thanks
 
 meshcore-tui stands on [meshcore-go](https://github.com/OwlShack/meshcore-go), OwlShack's Go port of MeshCore. It does the hard part, from the companion protocol and packet decoding to the cryptography, and without all that careful work this app wouldn't exist. Thank you.
+
+Chess over the mesh comes from [edleeman17](https://github.com/edleeman17)'s [meshcore-companion](https://github.com/edleeman17/meshcore-companion): its message format, and the way a game is rebuilt from those messages, are followed here so the two apps can play each other. Thank you, edleeman17.
 
 Thanks also to the [MeshCore](https://github.com/meshcore-dev/MeshCore) project and everyone running nodes on the mesh.
 

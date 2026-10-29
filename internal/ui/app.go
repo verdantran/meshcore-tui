@@ -452,6 +452,9 @@ func (m *Model) pulsing() bool {
 			return true
 		}
 	}
+	if m.boardPulsing() {
+		return true
+	}
 	used, limit := m.composeLoad()
 	return m.visible(0) && m.chats.writing && limit > 0 && used*10 >= limit*9
 }
@@ -993,6 +996,17 @@ func (m *Model) screenKeys() []string {
 			key("I", "import a meshcore:// link"), key("a", "nodes heard but not added"), key("A", "auto-add settings"),
 			key("P", "suggest contacts to prune"), key("F", "filter by type or favourites"), key("o", "sort"), key("/", "filter by name"), ""}
 	}
+	if m.tab == 0 && m.chats.board != nil {
+		return []string{key("←↑↓→ h j k l", "move around the board"), key("enter space", "pick up one of your pieces, then put it down where it goes; esc puts it back"),
+			key("click", "a piece, then where it goes, as enter does"), key("i", "type a move: Nf3, exd5, O-O, or squares like g1f3 and e7e8q"),
+			key("f", "turn the board round"), key("n", "pick a side for a new game, w or b; with no game, your first move starts one as white"),
+			key("d", "offer a draw, or accept theirs; a move turns an offer down"), key("R", "resign, once you've confirmed it"),
+			key("S", "send your position when your boards don't match, so theirs is put back in step with yours"),
+			key("r", "send your latest move again if it never got a receipt"),
+			key("L", "the board alone, or with the conversation beside it"), key("tab", "between the board and the conversation beside it"),
+			key("esc", "leave the board open and go back to the list, to pick another conversation; c comes back to it"),
+			key("c", "close the board"), ""}
+	}
 	if m.tab == 0 {
 		return []string{key("↑↓ j k", "choose a conversation; g G the first or last"), key("enter i", "write a message; enter sends"), key("tab", "while writing, complete an @name; again for the next match"),
 			key("*bold*", "in messages, *bold*, _italic_, ~struck~ and `code` are drawn that way, as the chat apps write them"),
@@ -1011,7 +1025,8 @@ func (m *Model) screenKeys() []string {
 			key("m", "mute the open conversation, or unmute it: its messages still arrive, without notifications; :mute 8h mutes for a while"),
 			key("n", "add a channel: #name, a private one with its secret, or a shared link; the + row under the channels does the same"),
 			key("J", "on a picked message that mentions a #channel you're not in, join it"),
-			key("e x", "share or leave the channel that's open; :channel rename renames it"), ""}
+			key("e x", "share or leave the channel that's open; :channel rename renames it"),
+			key("c", "play chess with the person whose conversation is open; each move is a message to them"), ""}
 	}
 	return nil
 }
