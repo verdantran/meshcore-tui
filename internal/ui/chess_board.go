@@ -248,6 +248,8 @@ func (m *Model) boardKey(s string) (tea.Cmd, bool) {
 		} else {
 			m.closeBoard()
 		}
+	case "c":
+		m.closeBoard() // c opened it, and closes it again
 	case "f":
 		b.flip = !b.flip
 	case "i":
@@ -1024,7 +1026,7 @@ func (m *Model) boardKeys(w int) []string {
 	} else {
 		hs = append(hs, hint{"L", "board and chat"})
 	}
-	hs = append(hs, hint{"esc", "back"})
+	hs = append(hs, hint{"c", "close"})
 	return hintLines(hs, w)
 }
 

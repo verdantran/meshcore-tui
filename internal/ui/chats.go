@@ -445,7 +445,11 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 	}
 	switch s {
 	case "c":
-		m.openBoard()
+		if c.board != nil {
+			m.closeBoard() // from the conversation beside the board
+		} else {
+			m.openBoard()
+		}
 	case "/":
 		c.filtering, c.filter = true, lineEdit{}
 	case "esc":

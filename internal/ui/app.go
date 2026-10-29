@@ -1004,7 +1004,7 @@ func (m *Model) screenKeys() []string {
 			key("S", "send your position when your boards don't match, so theirs is put back in step with yours"),
 			key("r", "send your latest move again if it never got a receipt"),
 			key("L", "the board alone, or with the conversation beside it"), key("tab", "between the board and the conversation beside it"),
-			key("esc", "back to the conversation"), ""}
+			key("c esc", "close the board, back to the conversation"), ""}
 	}
 	if m.tab == 0 {
 		return []string{key("↑↓ j k", "choose a conversation; g G the first or last"), key("enter i", "write a message; enter sends"), key("tab", "while writing, complete an @name; again for the next match"),

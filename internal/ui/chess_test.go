@@ -322,3 +322,23 @@ func TestChessStillWithMotionOff(t *testing.T) {
 		t.Errorf("c6: %+v", p)
 	}
 }
+
+// c opens the board and closes it again, from the board or from the conversation beside it.
+func TestCTogglesTheBoard(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.chessWith("Alice")
+	h.keys("c")
+	if h.m.chats.board != nil {
+		t.Fatal("c on the board closes it")
+	}
+	h.keys("c")
+	h.key(tea.KeyTab) // to the conversation beside it
+	if b := h.m.chats.board; b == nil || !b.chat {
+		t.Fatal("tab moves to the conversation")
+	}
+	h.keys("c")
+	if h.m.chats.board != nil {
+		t.Error("c in the conversation beside it closes it too")
+	}
+}
