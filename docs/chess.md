@@ -28,7 +28,7 @@ When a pawn reaches the far side by cursor or mouse, you pick what it becomes: `
 
 `?` lists these while the board is open.
 
-The board is as big as the space allows, and moves glide across it, flashing the squares as they land; captures and a lost king break up. They follow the app's motion setting, so reduced keeps the flashes and off keeps it still.
+The board is as big as the space allows, with the pieces drawn as pixel art, lit from above, in ivory and ink. On the smallest board, and in ASCII mode, they're single symbols or letters instead. Moves glide across it, flashing the squares as they land; captures and a lost king break up. They follow the app's motion setting, so reduced keeps the flashes and off keeps it still.
 
 The board sits beside the conversation, so you can chat as you play; `L` shows it alone instead, and the app remembers which you chose (`chess_layout` in the [config](configuration.md)). In a window too narrow for both, the conversation goes under the board, or, if there's no room for that either, the board shows alone.
 

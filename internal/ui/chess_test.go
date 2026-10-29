@@ -313,9 +313,12 @@ func TestChessStillWithMotionOff(t *testing.T) {
 	}
 	h.screen() // the board takes its size from where it's drawn
 	b := h.m.chats.board
-	lines := h.m.boardLines(b.cw, b.ch)
-	row := strings.Join(lines[2*b.ch:3*b.ch], "\n") // rank 6, from white's side
-	if !strings.Contains(row, "♟") || strings.Contains(row, "♗") {
-		t.Errorf("the pawn is on c6 straight away, the bishop gone:\n%s", row)
+	now := strings.Join(h.m.boardLines(b.cw, b.ch), "\n")
+	h.advance(10 * time.Second)
+	if later := strings.Join(h.m.boardLines(b.cw, b.ch), "\n"); later != now {
+		t.Error("the board as the move lands is the board it settles to")
+	}
+	if p := h.m.chats.board.game.Pos.At(chess.Square{File: 2, Rank: 5}); p != (chess.Piece{Kind: 'P', Colour: chess.Black}) {
+		t.Errorf("c6: %+v", p)
 	}
 }

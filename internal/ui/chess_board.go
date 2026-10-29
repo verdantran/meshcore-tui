@@ -623,6 +623,9 @@ type cell struct {
 // ch cells, each piece in the middle of its square. A move glides its piece across and flashes the squares it
 // joined; a capture glitches out as the mover lands; a king in check glows.
 func (m *Model) boardLines(cw, ch int) []string {
+	if s := spritesFor(cw, ch); s != nil && !m.opt.ASCII {
+		return m.spriteLines(cw, ch, s)
+	}
 	th, b, now := m.th, m.chats.board, m.now
 	g := m.boardGame()
 	pos := g.Pos
@@ -662,9 +665,10 @@ func (m *Model) boardLines(cw, ch int) []string {
 			sq := chess.Square{File: file, Rank: rank}
 			row, col := screen(sq)
 			pc := pos.At(sq)
-			base := th.Raised
+			light, dark := squareColours(th)
+			base := dark
 			if (file+rank)%2 == 1 {
-				base = th.Line
+				base = light
 			}
 			bg := base
 			if hasLast && (sq == last.From || sq == last.To) {
