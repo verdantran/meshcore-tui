@@ -556,6 +556,11 @@ func (m *Model) deviceKey(s string) (tea.Cmd, bool) {
 		dm.sel = len(rows) - 1
 	case "u":
 		return m.loadDevice(), true
+	case "c":
+		if err := m.openConsole(); err != nil {
+			m.fail("CONSOLE  " + err.Error())
+		}
+		return nil, true
 	case "enter", "space":
 		if !dm.loaded {
 			return nil, true

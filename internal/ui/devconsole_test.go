@@ -54,9 +54,12 @@ func TestRadioConsole(t *testing.T) {
 	if h.m.device.prompt != devNone {
 		t.Error("esc closes the console")
 	}
-	h.m.openConsole()
-	if !strings.Contains(h.screen(), "RX gain off") {
-		t.Error("the console keeps what it showed")
+	if !strings.Contains(h.screen(), "c console") {
+		t.Error("the hint line offers c")
+	}
+	h.keys("c")
+	if h.m.device.prompt != devConsole || !strings.Contains(h.screen(), "RX gain off") {
+		t.Error("c opens the console again, as it was left")
 	}
 }
 
@@ -96,6 +99,8 @@ func TestRadioConsoleAsksFirst(t *testing.T) {
 	h.consoleSays("gone off the air")
 }
 
+func (h *harness) clearLog() { h.m.log = h.m.log[:0] }
+
 func TestRadioConsoleNeedsNewFirmware(t *testing.T) {
 	h := newHarness(t)
 	h.openDevice()
@@ -104,8 +109,11 @@ func TestRadioConsoleNeedsNewFirmware(t *testing.T) {
 	if r.value != "needs firmware v1.18.0" {
 		t.Errorf("the row says what it needs: %q", r.value)
 	}
-	h.key(tea.KeyEnter)
-	if h.m.device.prompt == devConsole || !strings.Contains(h.lastLog(), "v1.18.0 or newer; this radio has v1.17.1") {
-		t.Errorf("older firmware is told why: %s", h.lastLog())
+	for name, press := range map[string]func(){"enter": func() { h.key(tea.KeyEnter) }, "c": func() { h.keys("c") }} {
+		h.clearLog()
+		press()
+		if h.m.device.prompt == devConsole || !strings.Contains(h.lastLog(), "v1.18.0 or newer; this radio has v1.17.1") {
+			t.Errorf("%s: older firmware is told why: %s", name, h.lastLog())
+		}
 	}
 }
