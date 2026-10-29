@@ -1,5 +1,5 @@
 == board and chat ==
- MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.18.0 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ CHANNELS                         │ ▌♟ CHESS · Bob                                              │ ▌Bob  direct · 2 hops A3·1E · M shows i ┃
@@ -43,9 +43,9 @@
  [10:00:02] ▸ MSG  Bob · Bob: offers a draw
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles d85fadefab5bd22c
+styles 184cefc5083df2e2
 == board alone ==
- MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.18.0 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ CHANNELS                         │ ▌♟ CHESS · Bob                                                                                        ┃
@@ -89,9 +89,9 @@ styles d85fadefab5bd22c
  [10:00:02] ▸ MSG  Bob · Bob: offers a draw
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 8761d492c392d6cd
+styles 9613f3c49643d79f
 == from black's side ==
- MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.18.0 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ CHANNELS                         │ ▌♟ CHESS · Bob                                                                                        ┃
@@ -135,9 +135,9 @@ styles 8761d492c392d6cd
  [10:00:02] ▸ MSG  Bob · Bob: offers a draw
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles f01dc2a6e9793aba
+styles f95cb7494c939400
 == ascii ==
- MeshCore-k4  RX o  TX o  Heltec V4 . fw v1.17.1 . 869.618 SF8 BW62.5 . 4.02V ####.| 85% . SIM simulated radio                     o LINKED
+ MeshCore-k4  RX o  TX o  Heltec V4 . fw v1.18.0 . 869.618 SF8 BW62.5 . 4.02V ####.| 85% . SIM simulated radio                     o LINKED
  1 CHATS / 2 CONTACTS / 3 MAP / 4 PACKETS / 5 ADMIN / 6 DEVICE / 7 STATS
 +-|CHATS ----------------------------------------------------------------------------------------------------------------------------------+
 | CHANNELS                         | |p CHESS . Bob                                                                                        |
@@ -181,4 +181,4 @@ styles f01dc2a6e9793aba
  [10:00:02] > MSG  Bob . Bob: offers a draw
 
  1-7 screens . ctrl+w panes . : command . ? help . ctrl+f search . T theme . v motion . F12 frames . q quit
-styles 95e58cd2f5629337
+styles 798681a39550f4b9

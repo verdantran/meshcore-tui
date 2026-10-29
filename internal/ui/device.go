@@ -44,6 +44,7 @@ const (
 	devShowKey
 	devBackup
 	devRestorePath
+	devConsole
 )
 
 type rowKind int
@@ -70,6 +71,7 @@ type devConfirmation struct {
 	id, what             string
 	op                   devOp
 	after                func(m *Model) tea.Cmd
+	back                 devPrompt // where cancelling returns to
 }
 
 type deviceModel struct {
@@ -88,6 +90,7 @@ type deviceModel struct {
 	confirm  devConfirmation
 	key      string
 	bak      backupState
+	con      radioConsole
 	saved    string // the file the last backup went to
 	busy     map[string]time.Time
 	doneAt   map[string]time.Time
@@ -466,6 +469,7 @@ func (m *Model) deviceRows() []devRow {
 					op: func(ctx context.Context, d radio.Device) error { return d.FactoryReset(ctx) }}
 				return nil
 			}},
+		m.radioConsoleRow(),
 		devRow{id: "backup", group: "Backup", label: "Back up this radio", value: savedName(m.device.saved), kind: rowAction,
 			hint: "Settings, channels and contacts to a file in " + m.exportDir() + "; you choose what goes in, and the private key only if you ask.",
 			press: func(m *Model) tea.Cmd {
@@ -574,7 +578,11 @@ func (m *Model) deviceKey(s string) (tea.Cmd, bool) {
 func (m *Model) devicePromptKey(s string) tea.Cmd {
 	dm := &m.device
 	if s == "esc" {
-		dm.prompt, dm.key = devNone, ""
+		back := devNone
+		if dm.prompt == devConfirm {
+			back = dm.confirm.back
+		}
+		dm.prompt, dm.key = back, ""
 		return nil
 	}
 	typing := func() {
@@ -632,7 +640,7 @@ func (m *Model) devicePromptKey(s string) tea.Cmd {
 		c := dm.confirm
 		if c.word == "" {
 			if s != "y" {
-				dm.prompt = devNone
+				dm.prompt = c.back
 				return nil
 			}
 		} else {
@@ -652,6 +660,8 @@ func (m *Model) devicePromptKey(s string) tea.Cmd {
 		return m.runOp(c.id, c.what, c.op, c.id != "reboot" && c.id != "reset")
 	case devBackup:
 		return m.backupKey(s)
+	case devConsole:
+		return m.radioConsoleKey(s)
 	case devRestorePath:
 		if s != "enter" {
 			typing()

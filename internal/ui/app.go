@@ -364,6 +364,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.deviceMsg(msg))
 	case backupDoneMsg, restoredMsg:
 		cmds = append(cmds, m.backupMsg(msg))
+	case cliRanMsg:
+		cmds = append(cmds, m.consoleMsg(msg))
 	case radioCheckedMsg:
 		m.radioChecked(msg)
 	case statsMsg, statsTickMsg:

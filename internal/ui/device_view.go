@@ -42,6 +42,8 @@ func (m *Model) renderDevice(w, rows int) []string {
 		return m.backupLines(w)
 	case devRestorePath:
 		return m.restorePathLines(w)
+	case devConsole:
+		return m.devConsoleLines(w, rows)
 	}
 	out := []string{m.deviceStatus(w), ""}
 	list := m.deviceRows()

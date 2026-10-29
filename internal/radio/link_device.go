@@ -102,6 +102,11 @@ func (l *Link) SetDefaultScope(ctx context.Context, region string) error {
 
 func (l *Link) SetPin(ctx context.Context, pin uint32) error { return l.client.SetDevicePin(ctx, pin) }
 
+func (l *Link) RunCLI(ctx context.Context, command string) (string, error) {
+	reply, err := l.client.RunCLI(ctx, command)
+	return untrusted.Text(reply), err
+}
+
 func (l *Link) ExportKey(ctx context.Context) ([64]byte, error) {
 	k, err := l.client.ExportPrivateKey(ctx)
 	return k.PrivateKey, err

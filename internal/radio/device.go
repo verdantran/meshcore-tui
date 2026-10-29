@@ -26,6 +26,7 @@ type Device interface {
 	SyncClock(ctx context.Context) error
 	CustomVars(ctx context.Context) ([]Var, error)
 	SetCustomVar(ctx context.Context, name, value string) error
+	RunCLI(ctx context.Context, command string) (string, error) // a console command, from firmware with ConsoleCode
 	Storage(ctx context.Context) (Storage, error)
 	Stats(ctx context.Context) (Stats, error)
 }

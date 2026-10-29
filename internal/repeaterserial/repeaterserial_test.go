@@ -42,7 +42,7 @@ func TestConsoleRun(t *testing.T) {
 	c := NewConsole(s.Console("Dundry"))
 	defer c.Close()
 	ctx := context.Background()
-	if ver, ok := Probe(ctx, c); !ok || !strings.HasPrefix(ver, "v1.17.1 (Build") {
+	if ver, ok := Probe(ctx, c); !ok || !strings.HasPrefix(ver, "v1.18.0 (Build") {
 		t.Fatalf("probe = %q %v", ver, ok)
 	}
 	out, err := c.Run(ctx, "get name", nil)
@@ -198,7 +198,7 @@ func TestRepeater(t *testing.T) {
 	s := sim.New(2).Fast()
 	r := startRepeater(t, s, "Dundry")
 	ready := next[radio.Ready](t, r.Events())
-	if !ready.Console || ready.Self.Name != "Dundry" || ready.Device.Firmware != "v1.17.1" || ready.Device.Model != "Heltec V4" ||
+	if !ready.Console || ready.Self.Name != "Dundry" || ready.Device.Firmware != "v1.18.0" || ready.Device.Model != "Heltec V4" ||
 		ready.Self.FreqKHz != 869618 || ready.Self.SF != 8 || ready.Self.TxPower != 22 || ready.Battery.MilliVolts != 4105 {
 		t.Fatalf("ready = %+v", ready)
 	}
@@ -246,7 +246,7 @@ func TestRepeater(t *testing.T) {
 		t.Errorf("acl = %+v", acl)
 	}
 	owner, _ := meshcore.ParseOwnerInfoReply(binary(meshcore.BuildRequest(meshcore.ReqTypeGetOwnerInfo, [4]byte{})))
-	if owner.FirmwareVersion != "v1.17.1" || owner.Name != "Dundry" {
+	if owner.FirmwareVersion != "v1.18.0" || owner.Name != "Dundry" {
 		t.Errorf("owner = %+v", owner)
 	}
 	if _, err := r.BinaryRequest(ctx, self.Key, []byte{0x03}); err == nil {

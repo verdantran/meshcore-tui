@@ -94,7 +94,7 @@ func TestAdminLoginAndStatus(t *testing.T) {
 	h.until("admin login", func() bool { return sess.State == admin.LoggedIn })
 	h.idle(sess)
 	scr = h.screen()
-	for _, want := range []string{"ADMIN › Dundry (admin) · fw v1.17.1", "[ OK ] ADMIN", "Uptime", "Battery 4.", "Noise floor", "Packets", "Errors", "polled"} {
+	for _, want := range []string{"ADMIN › Dundry (admin) · fw v1.18.0", "[ OK ] ADMIN", "Uptime", "Battery 4.", "Noise floor", "Packets", "Errors", "polled"} {
 		if !strings.Contains(scr, want) {
 			t.Errorf("status lacks %q:\n%s", want, scr)
 		}
@@ -405,7 +405,7 @@ func TestAdminPanes(t *testing.T) {
 	h.typeLine("dance")
 	h.idle(sess)
 	scr := h.screen()
-	if !strings.Contains(scr, "▸ ver") || !strings.Contains(scr, "v1.17.1 (Build") || !strings.Contains(scr, "Unknown command") {
+	if !strings.Contains(scr, "▸ ver") || !strings.Contains(scr, "v1.18.0 (Build") || !strings.Contains(scr, "Unknown command") {
 		t.Fatalf("console:\n%s", scr)
 	}
 	if sess.Settings["name"].Value != "Dundry" {
@@ -738,7 +738,7 @@ func TestLocalConsole(t *testing.T) {
 	h.until("signed in", func() bool { return sess.State == admin.LoggedIn })
 	h.idle(sess)
 	scr := h.screen()
-	for _, want := range []string{"STATUS › Dundry (admin) · fw v1.17.1 · local console", "1 STATUS ╱ 2 HEALTH", "9 CONSOLE", "Battery 4.11 V",
+	for _, want := range []string{"STATUS › Dundry (admin) · fw v1.18.0 · local console", "1 STATUS ╱ 2 HEALTH", "9 CONSOLE", "Battery 4.11 V",
 		"Noise floor -113", "Errors   rx 14", "1-9 screens", "polled 1s ago, every 1m"} {
 		if !strings.Contains(scr, want) {
 			t.Errorf("local status lacks %q:\n%s", want, scr)
@@ -914,11 +914,11 @@ func TestKeychainAndFleet(t *testing.T) {
 	h.until("kelston polled", func() bool { return ks.State == admin.LoggedIn && len(ks.Status) > 0 && ks.Owner != nil })
 	h.until("dundry polled", func() bool { return len(sess.Status) > 1 })
 	ks.Owner.FirmwareVersion = "v1.15.0"
-	ps.Owner = &meshcore.OwnerInfo{FirmwareVersion: "v1.17.1"} // the bar is set by two nodes, not one
+	ps.Owner = &meshcore.OwnerInfo{FirmwareVersion: "v1.18.0"} // the bar is set by two nodes, not one
 	sess.Status = append(sess.Status, admin.StatusPoint{At: h.m.now, Stats: sess.Status[0].Stats})
 	sess.Status[len(sess.Status)-1].Stats.BattMilliVolts = 3400
 	scr := h.screen()
-	for _, want := range []string{"2 ALERTS", "FIRMWARE", "v1.17.1", "OLD FIRMWARE", "LOW BATTERY", "●"} {
+	for _, want := range []string{"2 ALERTS", "FIRMWARE", "v1.18.0", "OLD FIRMWARE", "LOW BATTERY", "●"} {
 		if !strings.Contains(scr, want) {
 			t.Errorf("fleet lacks %q:\n%s", want, scr)
 		}
