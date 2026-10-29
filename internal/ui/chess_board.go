@@ -34,6 +34,7 @@ type boardView struct {
 	input  lineEdit
 	flip   bool
 	chat   bool // the conversation beside the board has the keys
+	idle   bool // neither does: esc left them with the list, to choose another conversation
 	colour bool // choosing a colour for a new game
 	note   string
 
@@ -87,6 +88,21 @@ func (m *Model) openBoard() {
 
 func (m *Model) closeBoard() { m.chats.board = nil }
 
+// boardShown reports chess open in the conversation that's selected.
+func (m *Model) boardShown() bool {
+	b := m.chats.board
+	if b == nil {
+		return false
+	}
+	cur, ok := m.selectedConvo()
+	return ok && cur.Convo == b.convo
+}
+
+// boardFocused reports the board itself having the keys.
+func (m *Model) boardFocused() bool {
+	return m.boardShown() && !m.chats.board.chat && !m.chats.board.idle
+}
+
 // refreshBoard rebuilds the game from the conversation's chess messages, and starts the animations for what's
 // changed since: a move gliding in, a game ending.
 func (m *Model) refreshBoard() {
@@ -94,9 +110,8 @@ func (m *Model) refreshBoard() {
 	if b == nil || m.chat == nil {
 		return
 	}
-	if cur, ok := m.selectedConvo(); !ok || cur.Convo != b.convo {
-		m.closeBoard() // the conversation it was in has gone from under it
-		return
+	if !m.boardShown() {
+		return // it stays open in its conversation while you look at another
 	}
 	msgs, err := m.chat.ChessMessages(b.convo)
 	if err != nil {
@@ -246,7 +261,7 @@ func (m *Model) boardKey(s string) (tea.Cmd, bool) {
 		if b.picked {
 			b.picked = false
 		} else {
-			m.closeBoard()
+			b.idle = true // the list has the keys, with the board left open
 		}
 	case "c":
 		m.closeBoard() // c opened it, and closes it again
@@ -481,7 +496,7 @@ func (m *Model) failedMove() (store.Message, bool) {
 // boardAnimating reports a chess animation running, for the frame clock.
 func (m *Model) boardAnimating() bool {
 	b := m.chats.board
-	if b == nil || !m.visible(0) || m.level == motion.Off {
+	if !m.boardShown() || !m.visible(0) || m.level == motion.Off {
 		return false
 	}
 	now := m.now
@@ -492,8 +507,7 @@ func (m *Model) boardAnimating() bool {
 
 // boardPulsing is a king in check, glowing while it waits on its side to answer.
 func (m *Model) boardPulsing() bool {
-	b := m.chats.board
-	if b == nil || !m.visible(0) || !m.level.Allows(motion.Flash) {
+	if !m.boardShown() || !m.visible(0) || !m.level.Allows(motion.Flash) {
 		return false
 	}
 	g := m.boardGame()
@@ -526,7 +540,7 @@ func (m *Model) boardPane(w, rows int) []string {
 			bw := max(boardWidth(cw), 32)
 			left := m.boardBlock(bw, rows, cw, ch, false)
 			right := m.convoPane(w-bw-3, rows)
-			if !b.chat && len(right) > 0 {
+			if m.boardFocused() && len(right) > 0 {
 				// The conversation's own keys don't reach it while the board has them.
 				right[len(right)-1] = m.th.Paint(m.th.Dim, false, "tab to write in the chat")
 			}
@@ -696,7 +710,7 @@ func (m *Model) boardLines(cw, ch int) []string {
 			if targets[sq] && pc != (chess.Piece{}) {
 				bg = th.Green.Lerp(base, 0.45)
 			}
-			cursor := sq == b.cursor && !b.chat
+			cursor := sq == b.cursor && m.boardFocused()
 			if cursor {
 				bg = th.Cyan.Lerp(base, 0.15)
 			}
@@ -769,7 +783,7 @@ func (m *Model) boardLines(cw, ch int) []string {
 		var line strings.Builder
 		line.WriteString(label)
 		for i, c := range cells {
-			cursor := !b.chat && th.Mono && b.cursor == m.squareAtCell(r, i, cw, ch)
+			cursor := m.boardFocused() && th.Mono && b.cursor == m.squareAtCell(r, i, cw, ch)
 			line.WriteString(paintCell(th, c, cursor))
 		}
 		out = append(out, line.String())
@@ -1015,6 +1029,9 @@ func (m *Model) receipt() string {
 
 func (m *Model) boardKeys(w int) []string {
 	b := m.chats.board
+	if b.idle {
+		return hintLines([]hint{{"c", "back to the board"}, {"↑↓", "other conversations"}, {"click", "a square to play"}}, w)
+	}
 	hs := []hint{{"←↑↓→", "move"}, {"enter", "pick up · put down"}, {"i", "type a move"}, {"f", "flip"}}
 	if g := b.game; g == nil || g.End != nil || b.fresh {
 		hs = append(hs, hint{"n", "pick a side"})
@@ -1026,7 +1043,7 @@ func (m *Model) boardKeys(w int) []string {
 	} else {
 		hs = append(hs, hint{"L", "board and chat"})
 	}
-	hs = append(hs, hint{"c", "close"})
+	hs = append(hs, hint{"esc", "leave it"}, hint{"c", "close"})
 	return hintLines(hs, w)
 }
 

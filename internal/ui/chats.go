@@ -176,7 +176,7 @@ func (m *Model) rebuildChats(reload bool) {
 	default:
 		c.msgs, _ = m.chat.Messages(cur.Convo, historyLen)
 	}
-	if c.board != nil && (reload || cur.Convo != c.board.convo) {
+	if c.board != nil && cur.Convo == c.board.convo {
 		m.refreshBoard()
 	}
 	c.unread = 0
@@ -399,11 +399,12 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		m.refreshChats()
 		return nil, true
 	}
-	if c.board != nil && !c.board.chat {
+	if m.boardShown() && !c.board.chat && !c.board.idle {
 		return m.boardKey(s)
 	}
-	if c.board != nil && !c.writing && !c.reading && (s == "tab" || s == "esc") {
-		c.board.chat = false // back to the board from the conversation beside it
+	if m.boardShown() && c.board.chat && !c.writing && !c.reading && (s == "tab" || s == "esc") {
+		c.board.chat = false // tab goes back to the board; esc leaves it, to choose another conversation
+		c.board.idle = s == "esc"
 		return nil, true
 	}
 	if c.reading {
@@ -445,9 +446,12 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 	}
 	switch s {
 	case "c":
-		if c.board != nil {
+		switch {
+		case m.boardShown() && c.board.idle:
+			c.board.idle = false // back to the board left with esc
+		case m.boardShown():
 			m.closeBoard() // from the conversation beside the board
-		} else {
+		default:
 			m.openBoard()
 		}
 	case "/":
@@ -755,7 +759,7 @@ func (m *Model) renderChats(inner, rows int) []string {
 	switch {
 	case c.onAdd || len(c.infos) == 0:
 		right = m.addPreview(paneW)
-	case c.board != nil:
+	case m.boardShown():
 		right = m.boardPane(paneW, rows)
 	default:
 		right = m.convoPane(paneW, rows)

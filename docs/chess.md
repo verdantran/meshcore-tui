@@ -24,7 +24,8 @@ When a pawn reaches the far side by cursor or mouse, you pick what it becomes: `
 | `n` | pick a side for a new game: `w` or `b` |
 | `L` | the board alone, or with the conversation beside it |
 | `tab` | between the board and the conversation beside it |
-| `c` or `esc` | close the board, back to the conversation |
+| `esc` | leave the board open and go back to the list, to pick another conversation; `c` or a click comes back to it |
+| `c` | close the board |
 
 `?` lists these while the board is open.
 

@@ -37,13 +37,13 @@
 ┃                                  │                                                             │        ♟ 3... a6                        ┃
 ┃                                  │ ←↑↓→ move · enter pick up · put down · i type a move        │  10:00 Bob                        1 hop ┃
 ┃                                  │ f flip · d draw · R resign · tab to the chat · L board only │        ♟ Bob offers a draw              ┃
-┃                                  │ c close                                                     │ tab to write in the chat                ┃
+┃                                  │ esc leave it · c close                                      │ tab to write in the chat                ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 18 contacts · 3 channels · theme neon · motion full
  [10:00:02] ▸ MSG  Bob · Bob: offers a draw
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles fc6cae5dbff75cd5
+styles c3fe6127ebbeb7d1
 == board alone ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -83,13 +83,13 @@ styles fc6cae5dbff75cd5
 ┃                                  │                                                                                                       ┃
 ┃                                  │                                                                                                       ┃
 ┃                                  │ ←↑↓→ move · enter pick up · put down · i type a move · f flip · d draw · R resign · L board and chat  ┃
-┃                                  │ c close                                                                                               ┃
+┃                                  │ esc leave it · c close                                                                                ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 18 contacts · 3 channels · theme neon · motion full
  [10:00:02] ▸ MSG  Bob · Bob: offers a draw
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles c456cce3188800a9
+styles 8761d492c392d6cd
 == from black's side ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -129,13 +129,13 @@ styles c456cce3188800a9
 ┃                                  │                                                                                                       ┃
 ┃                                  │                                                                                                       ┃
 ┃                                  │ ←↑↓→ move · enter pick up · put down · i type a move · f flip · d draw · R resign · L board and chat  ┃
-┃                                  │ c close                                                                                               ┃
+┃                                  │ esc leave it · c close                                                                                ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 18 contacts · 3 channels · theme neon · motion full
  [10:00:02] ▸ MSG  Bob · Bob: offers a draw
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 82f4a2620e3dd758
+styles f01dc2a6e9793aba
 == ascii ==
  MeshCore-k4  RX o  TX o  Heltec V4 . fw v1.17.1 . 869.618 SF8 BW62.5 . 4.02V ####.| 85% . SIM simulated radio                     o LINKED
  1 CHATS / 2 CONTACTS / 3 MAP / 4 PACKETS / 5 ADMIN / 6 DEVICE / 7 STATS
@@ -175,10 +175,10 @@ styles 82f4a2620e3dd758
 |                                  |                                                                                                       |
 |                                  |                                                                                                       |
 |                                  | <^v> move . enter pick up . put down . i type a move . f flip . d draw . R resign . L board and chat  |
-|                                  | c close                                                                                               |
+|                                  | esc leave it . c close                                                                                |
 +------------------------------------------------------------------------------------------------------------------------------------------+
  0 packets heard . 18 contacts . 3 channels . theme neon . motion full
  [10:00:02] > MSG  Bob . Bob: offers a draw
 
  1-7 screens . ctrl+w panes . : command . ? help . ctrl+f search . T theme . v motion . F12 frames . q quit
-styles 2626e838b0aecf28
+styles 95e58cd2f5629337

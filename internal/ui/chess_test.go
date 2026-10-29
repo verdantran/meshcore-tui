@@ -181,9 +181,9 @@ func TestPlayingChessWithTheDemo(t *testing.T) {
 	h.keys("kk")
 	h.key(tea.KeyEnter)
 	h.until("the rematch", func() bool { g := h.m.chats.board.game; return g.ID != old && g.Ply == 2 })
-	h.key(tea.KeyEscape)
+	h.keys("c")
 	if h.m.chats.board != nil {
-		t.Error("esc goes back to the conversation")
+		t.Error("c closes the board")
 	}
 }
 
@@ -340,5 +340,35 @@ func TestCTogglesTheBoard(t *testing.T) {
 	h.keys("c")
 	if h.m.chats.board != nil {
 		t.Error("c in the conversation beside it closes it too")
+	}
+}
+
+// esc leaves the board open and hands the keys to the list, to look at another conversation and come back.
+func TestEscLeavesTheBoardOpen(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.dmFrom("Bob", "fancy a game?")
+	h.chessWith("Alice")
+	h.key(tea.KeyEscape)
+	if !h.m.boardShown() || h.m.boardFocused() {
+		t.Fatal("esc leaves the board open, without the keys")
+	}
+	if !strings.Contains(h.screen(), "c back to the board") {
+		t.Errorf("it says how to get back:\n%s", h.screen())
+	}
+	start, _ := h.m.selectedConvo()
+	for cur := start; cur.Convo == start.Convo; cur, _ = h.m.selectedConvo() {
+		h.key(tea.KeyUp) // the list has the keys now
+	}
+	if h.m.boardShown() || strings.Contains(h.screen(), "♟ CHESS") {
+		t.Errorf("another conversation shows as usual:\n%s", h.screen())
+	}
+	h.openConvo("Alice")
+	if !h.m.boardShown() || !strings.Contains(h.screen(), "♟ CHESS · Alice") {
+		t.Fatalf("back in Alice's conversation, the board's still there:\n%s", h.screen())
+	}
+	h.keys("c")
+	if !h.m.boardFocused() {
+		t.Error("c goes back to it")
 	}
 }

@@ -37,13 +37,13 @@
 ┃                                  │                                                             │        ♟ 3. Bb5                         ┃
 ┃                                  │ ←↑↓→ move · enter pick up · put down · i type a move        │  10:00 Bob                        1 hop ┃
 ┃                                  │ f flip · d draw · R resign · tab to the chat · L board only │        ♟ 3... a6                        ┃
-┃                                  │ c close                                                     │ tab to write in the chat                ┃
+┃                                  │ esc leave it · c close                                      │ tab to write in the chat                ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 18 contacts · 3 channels · theme neon · motion full
  [10:00:02] ▸ MSG  Bob · Bob: played 3... a6
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 1f6a67a19d63a1c0
+styles 4eabcf2cfe567374
 == half open ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -83,13 +83,13 @@ styles 1f6a67a19d63a1c0
 ┃                                  │                                                             │        ♟ 3. Bb5                         ┃
 ┃                                  │ ←↑↓→ move · enter pick up · put down · i type a move        │  10:00 Bob                        1 hop ┃
 ┃                                  │ f flip · d draw · R resign · tab to the chat · L board only │        ♟ 3... a6                        ┃
-┃                                  │ c close                                                     │ tab to write in the chat                ┃
+┃                                  │ esc leave it · c close                                      │ tab to write in the chat                ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 18 contacts · 3 channels · theme neon · motion full
  [10:00:02] ▸ MSG  Bob · Bob: played 3... a6
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles dbdff107e4e9a863
+styles a8c8eac43c13c881
 == capture starts ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -129,13 +129,13 @@ styles dbdff107e4e9a863
 ┃                                  │                                                             │        ♟ 4. Bxc6                        ┃
 ┃                                  │ ←↑↓→ move · enter pick up · put down · i type a move        │ ▌10:00 Bob                        1 hop ┃
 ┃                                  │ f flip · d draw · R resign · tab to the chat · L board only │ ▌      0 1▟$╱ ▟9B4                      ┃
-┃                                  │ c close                                                     │ tab to write in the chat                ┃
+┃                                  │ esc leave it · c close                                      │ tab to write in the chat                ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 18 contacts · 3 channels · theme neon · motion full
  [10:00:32] ▸ █
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 6da1381d8177048f
+styles 8fa49b428221e46b
 == half way ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -175,13 +175,13 @@ styles 6da1381d8177048f
 ┃                                  │                                                             │        ♟ 4. Bxc6                        ┃
 ┃                                  │ ←↑↓→ move · enter pick up · put down · i type a move        │ ▌10:00 Bob                        1 hop ┃
 ┃                                  │ f flip · d draw · R resign · tab to the chat · L board only │ ▌      ♟ 4... dxFF                      ┃
-┃                                  │ c close                                                     │ tab to write in the chat                ┃
+┃                                  │ esc leave it · c close                                      │ tab to write in the chat                ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 18 contacts · 3 channels · theme neon · motion full
  [10:00:32] ▸ MSG  Bob · Bob: played█
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 164d4872dc4cbb38
+styles 7aecd33156920a1c
 == landed ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -221,13 +221,13 @@ styles 164d4872dc4cbb38
 ┃                                  │                                                             │        ♟ 4. Bxc6                        ┃
 ┃                                  │ ←↑↓→ move · enter pick up · put down · i type a move        │ ▌10:00 Bob                        1 hop ┃
 ┃                                  │ f flip · d draw · R resign · tab to the chat · L board only │ ▌      ♟ 4... dxc6                      ┃
-┃                                  │ c close                                                     │ tab to write in the chat                ┃
+┃                                  │ esc leave it · c close                                      │ tab to write in the chat                ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 18 contacts · 3 channels · theme neon · motion full
  [10:00:32] ▸ MSG  Bob · Bob: played 4... dxc6
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles f86f97cf508bf303
+styles 5d6c0088827fd0c5
 == flash settling ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -267,13 +267,13 @@ styles f86f97cf508bf303
 ┃                                  │                                                             │        ♟ 4. Bxc6                        ┃
 ┃                                  │ ←↑↓→ move · enter pick up · put down · i type a move        │ ▌10:00 Bob                        1 hop ┃
 ┃                                  │ f flip · d draw · R resign · tab to the chat · L board only │ ▌      ♟ 4... dxc6                      ┃
-┃                                  │ c close                                                     │ tab to write in the chat                ┃
+┃                                  │ esc leave it · c close                                      │ tab to write in the chat                ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 18 contacts · 3 channels · theme neon · motion full
  [10:00:32] ▸ MSG  Bob · Bob: played 4... dxc6
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 37f51290bc2ad800
+styles ac6917d8306bc9b4
 == resigned ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -313,10 +313,10 @@ styles 37f51290bc2ad800
 ┃                                  │                                                             │        ♟ 4... dxc6                      ┃
 ┃                                  │ ←↑↓→ move · enter pick up · put down · i type a move        │  10:00 MeshCore-k4          ▁▃▅ sending ┃
 ┃                                  │ f flip · n pick a side · tab to the chat · L board only     │        ♟ You resigned                   ┃
-┃                                  │ c close                                                     │ tab to write in the chat                ┃
+┃                                  │ esc leave it · c close                                      │ tab to write in the chat                ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 18 contacts · 3 channels · theme neon · motion full
  [10:00:32] ▸ MSG  Bob · Bob: played 4... dxc6
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 710ab978fb14b11b
+styles 2bf9b00e749bdd8d

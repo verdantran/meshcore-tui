@@ -196,7 +196,7 @@ func (m *Model) spriteLines(cw, ch int, sprites map[byte][]string) []string {
 			if targets[sq] && pc != (chess.Piece{}) {
 				sbg = th.Green.Lerp(base, 0.45)
 			}
-			if sq == b.cursor && !b.chat {
+			if sq == b.cursor && m.boardFocused() {
 				sbg = th.Cyan.Lerp(base, 0.35)
 			}
 			for dy := range ch {
@@ -268,7 +268,7 @@ func (m *Model) spriteLines(cw, ch int, sprites map[byte][]string) []string {
 					fg = p.col
 				}
 			}
-			cursor := th.Mono && !b.chat && b.cursor == m.squareAtCell(r, c, cw, ch)
+			cursor := th.Mono && m.boardFocused() && b.cursor == m.squareAtCell(r, c, cw, ch)
 			line.WriteString(paintCell(th, cell{s: quarters[bits], fg: fg, bg: bg[r][c]}, cursor))
 		}
 		out = append(out, line.String())
