@@ -36,7 +36,7 @@ func TestChessMessagesReadAsWhatTheyDo(t *testing.T) {
 
 	h.openConvo("Alice")
 	screen := h.screen()
-	for _, want := range []string{"♟ Alice challenged you, you're black", "♟ 1. e4", "♟ Alice offers a draw"} {
+	for _, want := range []string{"♟ New game, I'll play white", "♟ 1. e4", "♟ Alice offers a draw"} {
 		if !strings.Contains(screen, want) {
 			t.Errorf("missing %q:\n%s", want, screen)
 		}
