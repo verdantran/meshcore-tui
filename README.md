@@ -16,7 +16,9 @@ The recording and screenshots here all come from `--demo`, a simulated mesh with
 
 ![Chats](docs/screenshots/chats.png)
 
-**Chess over the mesh.** Press `c` in a direct conversation to play chess with that person. The board sits beside the conversation or on its own, and you move with the cursor, the mouse or by typing a move. Each move is one short message, so it gets the usual delivery receipt, and a checksum on every move notices if your two boards drift apart, and one key puts them back in step. It uses the same messages as [meshcore-companion](https://github.com/edleeman17/meshcore-companion) by [edleeman17](https://github.com/edleeman17), so it's designed to play against that app too, though that hasn't been tried yet. In `--demo` the made-up people play back. [docs/chess.md](docs/chess.md) has the keys and how it works.
+**Chess over the mesh.** Press `c` in a direct conversation to play chess with that person. The board sits beside the conversation or on its own, and you move with the cursor, the mouse or by typing a move. Each move is one short message, so it gets the usual delivery receipt, and a checksum on every move notices if your two boards drift apart, and one key puts them back in step. It uses the same messages as [meshcore-companion](https://github.com/edleeman17/meshcore-companion) by [edleeman17](https://github.com/edleeman17), so it's designed to play against that app too, and any other app that supports meshcore-companion's [chess messages](docs/chess.md#how-it-works), though that hasn't been tried yet. In `--demo` the made-up people play back. [docs/chess.md](docs/chess.md) has the keys and how it works.
+
+![A game of chess with Dan beside your conversation](docs/screenshots/chess.png)
 
 **2 Contacts.** Everyone your radio knows, sortable and filterable, with each contact's key, location, route and advert path. From here you can message, trace, discover or set a route, pin a signing key, share a contact as a QR code or link, and import one.
 
