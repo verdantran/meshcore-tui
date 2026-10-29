@@ -31,7 +31,7 @@ func (m *Model) shownText(msg store.Message) string {
 	case chess.KindNew:
 		what = them + " challenged you, you're " + cm.Colour.Other().String()
 		if out {
-			what = "New game, you're " + cm.Colour.String()
+			what = "New game, I'll play " + cm.Colour.String() // in your own words, as it's your message
 		}
 	case chess.KindMove:
 		what = chess.Label(cm.Ply, cm.SAN)

@@ -24,7 +24,7 @@
 ┃                                  │                                                             │  10:00 Bob                        1 hop ┃
 ┃                                  │                                                             │        fancy a game?                    ┃
 ┃                                  │  2                                                          │  10:00 MeshCore-k4          ▆█▆ sending ┃
-┃                                  │                                                             │        ♟ New game, you're white         ┃
+┃                                  │                                                             │        ♟ New game, I'll play white      ┃
 ┃                                  │                                                             │  10:00 MeshCore-k4          ▆█▆ sending ┃
 ┃                                  │  1                                                          │        ♟ 1. e4                          ┃
 ┃                                  │                                                             │  10:00 Bob                        1 hop ┃
@@ -43,7 +43,7 @@
  [10:00:02] ▸ MSG  Bob · Bob: played 3... a6
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 4eabcf2cfe567374
+styles 5ec9664d8e990ffd
 == half open ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -70,7 +70,7 @@ styles 4eabcf2cfe567374
 ┃                                  │                                        ▗▄███                │  10:00 Bob                        1 hop ┃
 ┃                                  │       ▄      ▄      ▄      ▄             ▄      ▄      ▄    │        fancy a game?                    ┃
 ┃                                  │  2   ▝█▘    ▝█▘    ▝█▘    ▝█▘           ▝█▘    ▝█▘    ▝█▘   │  10:00 MeshCore-k4          ▇▅▃ sending ┃
-┃                                  │      ▟█▙    ▟█▙    ▟█▙    ▟█▙           ▟█▙    ▟█▙    ▟█▙   │        ♟ New game, you're white         ┃
+┃                                  │      ▟█▙    ▟█▙    ▟█▙    ▟█▙           ▟█▙    ▟█▙    ▟█▙   │        ♟ New game, I'll play white      ┃
 ┃                                  │     ▐▙█▟▌   ▗▟▙▖    ▟▖   ▙ █ ▟   ▄█▄                 ▐▙█▟▌  │  10:00 MeshCore-k4          ▇▅▃ sending ┃
 ┃                                  │  1   ███   ▐▛▜██   ▐▟█   ▝███▘  ▗▄█▄▖                 ███   │        ♟ 1. e4                          ┃
 ┃                                  │     ▐███▌  ▗▄███  ▗▄█▙▖  ▗▟█▙▖  ▗███▖                ▐███▌  │  10:00 Bob                        1 hop ┃
@@ -89,7 +89,7 @@ styles 4eabcf2cfe567374
  [10:00:02] ▸ MSG  Bob · Bob: played 3... a6
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles a8c8eac43c13c881
+styles e0b71078d17b90e4
 == capture starts ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -112,7 +112,7 @@ styles a8c8eac43c13c881
 ┃                                  │  4                               ▝█▘                        │  10:00 Bob                        1 hop ┃
 ┃                                  │                                  ▟█▙                        │        fancy a game?                    ┃
 ┃                                  │                                         ▗▟▙▖                │  10:00 MeshCore-k4          ▁▃▅ sending ┃
-┃                                  │  3                                     ▐▛▜██                │        ♟ New game, you're white         ┃
+┃                                  │  3                                     ▐▛▜██                │        ♟ New game, I'll play white      ┃
 ┃                                  │                                        ▗▄███                │  10:00 MeshCore-k4          ▁▃▅ sending ┃
 ┃                                  │       ▄      ▄      ▄      ▄             ▄      ▄      ▄    │        ♟ 1. e4                          ┃
 ┃                                  │  2   ▝█▘    ▝█▘    ▝█▘    ▝█▘           ▝█▘    ▝█▘    ▝█▘   │  10:00 Bob                        1 hop ┃
@@ -135,7 +135,7 @@ styles a8c8eac43c13c881
  [10:00:32] ▸ █
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 8fa49b428221e46b
+styles 94ab28e4ae4101c6
 == half way ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -158,7 +158,7 @@ styles 8fa49b428221e46b
 ┃                                  │  4                               ▝█▘                        │  10:00 Bob                        1 hop ┃
 ┃                                  │                                  ▟█▙                        │        fancy a game?                    ┃
 ┃                                  │                                         ▗▟▙▖                │  10:00 MeshCore-k4          ▃▅▇ sending ┃
-┃                                  │  3                                     ▐▛▜██                │        ♟ New game, you're white         ┃
+┃                                  │  3                                     ▐▛▜██                │        ♟ New game, I'll play white      ┃
 ┃                                  │                                        ▗▄███                │  10:00 MeshCore-k4          ▃▅▇ sending ┃
 ┃                                  │       ▄      ▄      ▄      ▄             ▄      ▄      ▄    │        ♟ 1. e4                          ┃
 ┃                                  │  2   ▝█▘    ▝█▘    ▝█▘    ▝█▘           ▝█▘    ▝█▘    ▝█▘   │  10:00 Bob                        1 hop ┃
@@ -181,7 +181,7 @@ styles 8fa49b428221e46b
  [10:00:32] ▸ MSG  Bob · Bob: played█
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 7aecd33156920a1c
+styles c6c65980852d2473
 == landed ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -204,7 +204,7 @@ styles 7aecd33156920a1c
 ┃                                  │  4                               ▝█▘                        │  10:00 Bob                        1 hop ┃
 ┃                                  │                                  ▟█▙                        │        fancy a game?                    ┃
 ┃                                  │                                         ▗▟▙▖                │  10:00 MeshCore-k4          ▅▇▇ sending ┃
-┃                                  │  3                                     ▐▛▜██                │        ♟ New game, you're white         ┃
+┃                                  │  3                                     ▐▛▜██                │        ♟ New game, I'll play white      ┃
 ┃                                  │                                        ▗▄███                │  10:00 MeshCore-k4          ▅▇▇ sending ┃
 ┃                                  │       ▄      ▄      ▄      ▄             ▄      ▄      ▄    │        ♟ 1. e4                          ┃
 ┃                                  │  2   ▝█▘    ▝█▘    ▝█▘    ▝█▘           ▝█▘    ▝█▘    ▝█▘   │  10:00 Bob                        1 hop ┃
@@ -227,7 +227,7 @@ styles 7aecd33156920a1c
  [10:00:32] ▸ MSG  Bob · Bob: played 4... dxc6
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 5d6c0088827fd0c5
+styles b105cd12227bdce2
 == flash settling ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -250,7 +250,7 @@ styles 5d6c0088827fd0c5
 ┃                                  │  4                               ▝█▘                        │  10:00 Bob                        1 hop ┃
 ┃                                  │                                  ▟█▙                        │        fancy a game?                    ┃
 ┃                                  │                                         ▗▟▙▖                │  10:00 MeshCore-k4          ▆▄▂ sending ┃
-┃                                  │  3                                     ▐▛▜██                │        ♟ New game, you're white         ┃
+┃                                  │  3                                     ▐▛▜██                │        ♟ New game, I'll play white      ┃
 ┃                                  │                                        ▗▄███                │  10:00 MeshCore-k4          ▆▄▂ sending ┃
 ┃                                  │       ▄      ▄      ▄      ▄             ▄      ▄      ▄    │        ♟ 1. e4                          ┃
 ┃                                  │  2   ▝█▘    ▝█▘    ▝█▘    ▝█▘           ▝█▘    ▝█▘    ▝█▘   │  10:00 Bob                        1 hop ┃
@@ -273,7 +273,7 @@ styles 5d6c0088827fd0c5
  [10:00:32] ▸ MSG  Bob · Bob: played 4... dxc6
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles ac6917d8306bc9b4
+styles ec2f7225fc01e3bb
 == resigned ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
@@ -294,7 +294,7 @@ styles ac6917d8306bc9b4
 ┃                                  │                                  ▟█▙                        │  10:00 Bob                        1 hop ┃
 ┃                                  │                                   ▄                         │        fancy a game?                    ┃
 ┃                                  │  4                               ▝█▘                        │  10:00 MeshCore-k4          ▁▃▅ sending ┃
-┃                                  │                                  ▟█▙                        │        ♟ New game, you're white         ┃
+┃                                  │                                  ▟█▙                        │        ♟ New game, I'll play white      ┃
 ┃                                  │                                         ▗▟▙▖                │  10:00 MeshCore-k4          ▁▃▅ sending ┃
 ┃                                  │  3                                     ▐▛▜██                │        ♟ 1. e4                          ┃
 ┃                                  │                                        ▗▄███                │  10:00 Bob                        1 hop ┃
@@ -319,4 +319,4 @@ styles ac6917d8306bc9b4
  [10:00:32] ▸ MSG  Bob · Bob: played 4... dxc6
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 2bf9b00e749bdd8d
+styles a4801c11a428d55e
