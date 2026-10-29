@@ -117,3 +117,19 @@ func TestRadioConsoleNeedsNewFirmware(t *testing.T) {
 		}
 	}
 }
+
+func TestRadioConsoleCompletes(t *testing.T) {
+	for in, want := range map[string]string{
+		"get dut":    "get dutycycle",
+		"set ca":     "set cad o",
+		"get dir":    "get direct.txdelay",
+		"set wifi.c": "set wifi.clear",
+		"get agc":    "get agc.reset.interval",
+		"zzz":        "zzz",
+		"get radio":  "get radio",
+	} {
+		if got := completeWords(in, companionWords); got != want {
+			t.Errorf("%q completes to %q, want %q", in, got, want)
+		}
+	}
+}

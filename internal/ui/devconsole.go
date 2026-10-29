@@ -197,11 +197,17 @@ func (m *Model) consoleMsg(msg cliRanMsg) tea.Cmd {
 	return nil
 }
 
-var companionWords = []string{"ver", "board", "reboot", "poweroff", "get name", "set name", "set pin", "get radio",
-	"get radio.fem.rxgain", "set radio.fem.rxgain on", "set radio.fem.rxgain off", "get radio.rxgain", "set radio.rxgain",
-	"get tx", "set tx", "get af", "set af", "get rxdelay", "set rxdelay", "get multi.acks", "set multi.acks",
-	"get wifi.ssid", "get wifi.status", "get wifi.ip", "get wifi.enabled", "set wifi.ssid", "set wifi.pwd", "set wifi.enabled",
-	"get tz.offset", "set tz.offset"}
+// companionWords are the console commands of companion firmware v1.18.0: its own, the shared radio
+// settings, and the board-specific FEM gain. WiFi ones only answer on WiFi builds.
+var companionWords = []string{"ver", "board", "reboot", "poweroff", "shutdown",
+	"get name", "set name", "set pin", "get tz.offset", "set tz.offset",
+	"get radio", "set radio", "get freq", "get tx", "set tx", "get radio.rxgain", "set radio.rxgain on", "set radio.rxgain off",
+	"get radio.fem.rxgain", "set radio.fem.rxgain on", "set radio.fem.rxgain off",
+	"get af", "set af", "get dutycycle", "set dutycycle", "get cad", "set cad on", "set cad off", "get int.thresh", "set int.thresh",
+	"get rxdelay", "set rxdelay", "get txdelay", "set txdelay", "get direct.txdelay", "set direct.txdelay",
+	"get agc.reset.interval", "set agc.reset.interval", "get path.hash.mode", "set path.hash.mode", "get multi.acks", "set multi.acks",
+	"get wifi.ssid", "set wifi.ssid", "get wifi.pwd", "set wifi.pwd", "set wifi.clear", "get wifi.enabled", "set wifi.enabled",
+	"get wifi.status", "get wifi.ip"}
 
 // completeWords extends the line to the longest prefix its matching words share.
 func completeWords(in string, words []string) string {
