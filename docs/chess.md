@@ -6,7 +6,7 @@ Chess over MeshCore comes from [meshcore-companion](https://github.com/edleeman1
 
 Open a direct conversation with someone and press `c`. Chess is only for people: not channels, rooms or repeaters.
 
-With no game yet, press `n`, then `w` or `b` for your side. That sends them a challenge, and white moves first. When it's your move:
+With no game yet, the board is set up with you as white: make the first move and it goes to them with the challenge. To play black instead, press `n` then `b`, and wait for their move. When a game's over, any move starts the next one. When it's your move:
 
 - **Cursor:** the arrow keys (or `h j k l`) move round the board. `enter` or `space` picks up one of your pieces and marks where it can go, and again puts it down. `esc` puts it back.
 - **Mouse:** click a piece, then where it goes.
@@ -21,12 +21,14 @@ When a pawn reaches the far side by cursor or mouse, you pick what it becomes: `
 | `R` | resign, once you've confirmed it |
 | `S` | send your position, when your boards don't match |
 | `r` | send your latest move again, if it never got a receipt |
-| `n` | a new game, once this one's over |
+| `n` | pick a side for a new game: `w` or `b` |
 | `L` | the board alone, or with the conversation beside it |
 | `tab` | between the board and the conversation beside it |
 | `esc` | back to the conversation |
 
 `?` lists these while the board is open.
+
+The board is as big as the space allows, and moves glide across it, flashing the squares as they land; captures and a lost king break up. They follow the app's motion setting, so reduced keeps the flashes and off keeps it still.
 
 The board sits beside the conversation, so you can chat as you play; `L` shows it alone instead, and the app remembers which you chose (`chess_layout` in the [config](configuration.md)). In a window too narrow for both, the conversation goes under the board, or, if there's no room for that either, the board shows alone.
 

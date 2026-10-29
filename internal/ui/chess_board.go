@@ -2,22 +2,28 @@ package ui
 
 import (
 	"fmt"
+	"math"
+	"math/rand"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/verdantran/meshcore-tui/internal/chat"
 	"github.com/verdantran/meshcore-tui/internal/chess"
+	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/store"
 	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
 // boardView is a chess game open in a direct conversation, played with its contact. The game is rebuilt from
-// the conversation's chess messages each time it changes; nothing is kept but where you're looking.
+// the conversation's chess messages each time it changes; nothing is kept but where you're looking and what's
+// animating.
 type boardView struct {
 	convo  store.Convo
 	game   *chess.Game
+	fresh  bool                    // the board is set up for a new game, which your first move starts
 	msgs   map[int64]store.Message // the conversation's chess messages, by id, for their delivery state
 	cursor chess.Square
 	picked bool         // a piece is lifted, from: where it stands
@@ -30,17 +36,33 @@ type boardView struct {
 	chat   bool // the conversation beside the board has the keys
 	colour bool // choosing a colour for a new game
 	note   string
-	// Where the board was last drawn, in the conversation pane, for clicks: its top-left square's cell.
-	at     [2]int
+
+	// Where the board was last drawn, in the conversation pane, for clicks.
+	at     [2]int // the cell of its top-left square
+	cw, ch int    // a square's size in cells
 	drawn  bool
-	viewer chess.Colour // the side at the bottom when it was drawn
+	viewer chess.Colour // the side at the bottom
+
+	// Animation: when things happened, all checked against the frame clock.
+	openedAt time.Time
+	moveAt   time.Time // the latest move arriving, or being made
+	mover    chess.Piece
+	taken    chess.Piece // what the latest move captured, glitching out as the mover lands
+	pickedAt time.Time
+	endAt    time.Time
+	status   string // the status line as last shown, to decode a new one in
+	statusAt time.Time
 }
 
 const (
-	sqW         = 3  // a square is three cells: the piece and a space either side
-	boardBlockW = 32 // rank labels, eight squares, and room for what's going on in the game
 	chatBesideW = 30 // the least the conversation needs beside the board
+	flashDur    = 700 * time.Millisecond
+	openDur     = 3 * wipeDur
+	endGlitch   = 6 * glitchDur
 )
+
+// Square sizes in cells, biggest first; the board takes the biggest that fits.
+var squareSizes = [][2]int{{7, 3}, {5, 2}, {3, 1}}
 
 // openBoard opens chess in the selected conversation, if it's with a person.
 func (m *Model) openBoard() {
@@ -54,18 +76,19 @@ func (m *Model) openBoard() {
 		return
 	}
 	m.chats.reading, m.chats.writing = false, false
-	m.chats.board = &boardView{convo: cur.Convo}
+	m.chats.board = &boardView{convo: cur.Convo, openedAt: m.now}
 	m.refreshBoard()
 	b := m.chats.board
 	b.cursor = chess.Square{File: 4, Rank: 1}
-	if b.game != nil && b.game.Mine == chess.Black {
+	if g := m.boardGame(); g.Mine == chess.Black {
 		b.cursor = chess.Square{File: 4, Rank: 6}
 	}
 }
 
 func (m *Model) closeBoard() { m.chats.board = nil }
 
-// refreshBoard rebuilds the game from the conversation's chess messages.
+// refreshBoard rebuilds the game from the conversation's chess messages, and starts the animations for what's
+// changed since: a move gliding in, a game ending.
 func (m *Model) refreshBoard() {
 	b := m.chats.board
 	if b == nil || m.chat == nil {
@@ -90,10 +113,49 @@ func (m *Model) refreshBoard() {
 		b.msgs[msg.ID] = msg
 		entries = append(entries, chess.Entry{Text: msg.Text, Mine: msg.Out, At: at, Failed: msg.State == store.Failed, Ref: msg.ID})
 	}
-	b.game = chess.Latest(entries)
-	if b.picked && (b.game == nil || !b.game.MyTurn() || len(b.game.Pos.From(b.from)) == 0) {
+	prev, g := b.game, chess.Latest(entries)
+	b.game = g
+	switch {
+	case g == nil:
+		b.fresh = true
+	case g.End == nil:
+		b.fresh = false
+	}
+	if prev != nil && g != nil && prev.ID == g.ID && g.Ply == prev.Ply+1 {
+		if last, ok := g.Last(); ok {
+			b.moveAt, b.mover, b.taken = m.now, prev.Pos.At(last.From), prev.Pos.At(last.To)
+		}
+	}
+	if prev != nil && g != nil && g.End != nil && (prev.End == nil || prev.ID != g.ID) {
+		b.endAt = m.now
+	}
+	if gg := m.boardGame(); b.picked && (!gg.MyTurn() || len(gg.Pos.From(b.from)) == 0) {
 		b.picked, b.promo = false, nil
 	}
+	m.noteStatus()
+}
+
+// noteStatus starts the status line decoding in when what it says has changed.
+func (m *Model) noteStatus() {
+	b := m.chats.board
+	if b == nil {
+		return
+	}
+	if text, _, _ := m.statusLine(); text != b.status {
+		if b.status != "" {
+			b.statusAt = m.now
+		}
+		b.status = text
+	}
+}
+
+// boardGame is the game the board plays: the one in the conversation, or a new one set up for your first move.
+func (m *Model) boardGame() *chess.Game {
+	b := m.chats.board
+	if b.fresh || b.game == nil {
+		return &chess.Game{Mine: chess.White, Pos: chess.Start(), Gap: -1}
+	}
+	return b.game
 }
 
 func (m *Model) chessLayout() string {
@@ -122,8 +184,8 @@ func (m *Model) toggleChessLayout() {
 
 // boardKey handles a key while the board has them; one it doesn't use goes on to the screen and the app.
 func (m *Model) boardKey(s string) (tea.Cmd, bool) {
+	defer m.noteStatus()
 	b := m.chats.board
-	g := b.game
 	b.note = ""
 	switch {
 	case b.typing:
@@ -164,6 +226,7 @@ func (m *Model) boardKey(s string) (tea.Cmd, bool) {
 		}
 		return nil, true
 	}
+	g := b.game
 	up := 1
 	if b.viewer == chess.Black {
 		up = -1 // the board is drawn black's way up, so up is towards rank 1
@@ -188,7 +251,8 @@ func (m *Model) boardKey(s string) (tea.Cmd, bool) {
 	case "f":
 		b.flip = !b.flip
 	case "i":
-		if g == nil || !g.MyTurn() {
+		m.setUpAfterEnd()
+		if !m.boardGame().MyTurn() {
 			b.note = m.notYourMove()
 		} else {
 			b.typing, b.input, b.picked = true, lineEdit{}, false
@@ -239,13 +303,20 @@ func (m *Model) boardKey(s string) (tea.Cmd, bool) {
 
 func clampSq(n int) int { return min(max(n, 0), 7) }
 
+// setUpAfterEnd sets the board up for a new game once the last one's over, on the first move towards one.
+func (m *Model) setUpAfterEnd() {
+	b := m.chats.board
+	if b.game != nil && b.game.End != nil && !b.fresh {
+		b.fresh, b.picked, b.moveAt, b.openedAt = true, false, time.Time{}, m.now
+		b.note = "A new game: you're white, so make the first move · n then b to play black"
+	}
+}
+
 func (m *Model) notYourMove() string {
-	g := m.chats.board.game
+	g := m.boardGame()
 	switch {
-	case g == nil:
-		return "No game yet: n starts one"
 	case g.End != nil:
-		return "This game is over: n starts another"
+		return "This game is over: any move starts another"
 	case g.Problem != nil:
 		return "Your boards don't match: S sends your position"
 	case g.Gap >= 0:
@@ -260,8 +331,12 @@ func (m *Model) notYourMove() string {
 func (m *Model) pressSquare(sq chess.Square) tea.Cmd {
 	b := m.chats.board
 	b.cursor = sq
-	g := b.game
-	if g == nil || !g.MyTurn() {
+	if b.game != nil && b.game.End != nil && !b.fresh {
+		m.setUpAfterEnd()
+		return nil
+	}
+	g := m.boardGame()
+	if !g.MyTurn() {
 		b.note = m.notYourMove()
 		return nil
 	}
@@ -270,7 +345,7 @@ func (m *Model) pressSquare(sq chess.Square) tea.Cmd {
 			b.picked, b.note = false, "That piece has nowhere to go"
 			return nil
 		}
-		b.picked, b.from = true, sq
+		b.picked, b.from, b.pickedAt = true, sq, m.now
 		return nil
 	}
 	if !b.picked {
@@ -308,7 +383,7 @@ func promoOrder(moves []chess.Move) []chess.Move {
 
 func (m *Model) playTyped() tea.Cmd {
 	b := m.chats.board
-	mv, err := b.game.Pos.Find(b.input.text)
+	mv, err := m.boardGame().Pos.Find(b.input.text)
 	if err != nil {
 		b.note = strings.TrimPrefix(err.Error(), "chess: ")
 		return nil
@@ -317,23 +392,52 @@ func (m *Model) playTyped() tea.Cmd {
 	return m.playMove(mv)
 }
 
+// playMove sends a move. On a board set up for a new game it sends the challenge first, so making the first
+// move is all it takes to start one.
 func (m *Model) playMove(mv chess.Move) tea.Cmd {
 	b := m.chats.board
 	b.picked, b.promo = false, nil
-	msg, err := b.game.Next(mv)
+	g := m.boardGame()
+	var challenge tea.Cmd
+	if b.fresh {
+		g = &chess.Game{ID: chess.NewID(), Mine: chess.White, Pos: chess.Start(), Gap: -1}
+		challenge = m.sendChess(chess.Msg{Game: g.ID, Kind: chess.KindNew, Colour: chess.White})
+	}
+	msg, err := g.Next(mv)
 	if err != nil {
 		b.note = strings.TrimPrefix(err.Error(), "chess: ")
-		return nil
+		return challenge
 	}
 	b.cursor = mv.To
-	return m.sendChess(msg)
+	b.moveAt, b.mover, b.taken = m.now, g.Pos.At(mv.From), g.Pos.At(mv.To)
+	move := m.sendChess(msg)
+	b.moveAt = m.now // sending rebuilt the game, which would have started the same glide
+	if challenge != nil {
+		return inOrder(challenge, move) // so the challenge goes out first
+	}
+	return move
+}
+
+// inOrder makes radio calls one after another, then hands back each one's result.
+func inOrder(cmds ...tea.Cmd) tea.Cmd {
+	return func() tea.Msg {
+		var out tea.BatchMsg
+		for _, c := range cmds {
+			if c == nil {
+				continue
+			}
+			msg := c()
+			out = append(out, func() tea.Msg { return msg })
+		}
+		return out
+	}
 }
 
 func (m *Model) drawKey() tea.Cmd {
 	b := m.chats.board
 	g := b.game
 	switch {
-	case g == nil || g.End != nil || g.Mine == chess.NoColour:
+	case g == nil || g.End != nil || g.Mine == chess.NoColour || b.fresh:
 		b.note = "There's no game going"
 	case g.Offer != nil && !g.Offer.Mine:
 		return m.sendChess(chess.Msg{Game: g.ID, Kind: chess.KindDrawAccept})
@@ -372,16 +476,54 @@ func (m *Model) failedMove() (store.Message, bool) {
 	return store.Message{}, false
 }
 
+// boardAnimating reports a chess animation running, for the frame clock.
+func (m *Model) boardAnimating() bool {
+	b := m.chats.board
+	if b == nil || !m.visible(0) || m.level == motion.Off {
+		return false
+	}
+	now := m.now
+	return motion.Running(b.openedAt, openDur, now) || motion.Running(b.moveAt, slideDur+flashDur, now) ||
+		motion.Running(b.pickedAt, popDur, now) || motion.Running(b.endAt, endGlitch, now) ||
+		motion.Running(b.statusAt, decodeDur, now)
+}
+
+// boardPulsing is a king in check, glowing while it waits on its side to answer.
+func (m *Model) boardPulsing() bool {
+	b := m.chats.board
+	if b == nil || !m.visible(0) || !m.level.Allows(motion.Flash) {
+		return false
+	}
+	g := m.boardGame()
+	return g.End == nil && g.Pos.InCheck()
+}
+
+// boardRows is how many rows the board block needs for squares ch cells tall: the title, the board and its file
+// letters, the status under it and the keys.
+func boardRows(ch int) int { return 2 + 8*ch + 1 + 6 + 3 }
+
+func boardWidth(cw int) int { return 3 + 8*cw }
+
+// squareSize is the biggest square that fits a board in w cells by rows.
+func squareSize(w, rows int) (int, int, bool) {
+	for _, s := range squareSizes {
+		if boardWidth(s[0]) <= w && boardRows(s[1]) <= rows {
+			return s[0], s[1], true
+		}
+	}
+	return 3, 1, false
+}
+
 // boardPane is the conversation pane while chess is open: the board alone, or with the conversation beside it,
 // or under it when there's no room beside.
 func (m *Model) boardPane(w, rows int) []string {
 	b := m.chats.board
 	b.drawn = false
 	if m.chessLayout() == "both" {
-		switch {
-		case w >= boardBlockW+3+chatBesideW:
-			left := m.boardBlock(boardBlockW, rows, false)
-			right := m.convoPane(w-boardBlockW-3, rows)
+		if cw, ch, ok := squareSize(w-3-chatBesideW, rows); ok {
+			bw := max(boardWidth(cw), 32)
+			left := m.boardBlock(bw, rows, cw, ch, false)
+			right := m.convoPane(w-bw-3, rows)
 			if !b.chat && len(right) > 0 {
 				// The conversation's own keys don't reach it while the board has them.
 				right[len(right)-1] = m.th.Paint(m.th.Dim, false, "tab to write in the chat")
@@ -396,46 +538,52 @@ func (m *Model) boardPane(w, rows int) []string {
 				if i < len(right) {
 					r = right[i]
 				}
-				out[i] = fit(l, boardBlockW) + sep + r
+				out[i] = fit(l, bw) + sep + r
 			}
 			return out
-		case rows >= 30:
-			top := m.boardBlock(w, rows, false)
+		}
+		if cw, ch, ok := squareSize(w, rows-12); ok {
+			top := m.boardBlock(w, boardRows(ch), cw, ch, false)
 			out := append(top, m.th.Paint(m.th.Line, false, strings.Repeat("─", w)))
 			return append(out, m.convoPane(w, rows-len(out))...)
 		}
 		b.chat = false
 	}
-	return m.boardBlock(w, rows, true)
+	moves := 18 // the move list beside the board
+	cw, ch, _ := squareSize(w-moves, rows)
+	return m.boardBlock(w, rows, cw, ch, true)
 }
 
 // boardBlock is the board with what's going on in the game: alone, it has the move list beside it.
-func (m *Model) boardBlock(w, rows int, alone bool) []string {
+func (m *Model) boardBlock(w, rows, cw, ch int, alone bool) []string {
 	th, b := m.th, m.chats.board
-	g := b.game
+	g := m.boardGame()
 	them := m.chat.Title(b.convo)
 	title := th.Paint(th.Magenta, true, "▌") + th.Paint(th.Text, true, chess.Prefix+" CHESS · "+them)
 	side := ""
-	if g != nil && g.Mine != chess.NoColour {
+	if g.Mine != chess.NoColour {
 		side = th.Paint(th.Dim, false, "  you play "+g.Mine.String())
 	}
 	out := []string{clip(title, w), side}
 	b.viewer = chess.White
-	if g != nil && g.Mine == chess.Black {
+	if g.Mine == chess.Black {
 		b.viewer = chess.Black
 	}
 	if b.flip {
 		b.viewer = b.viewer.Other()
 	}
-	board := m.boardLines()
-	b.at, b.drawn = [2]int{len(out), 3}, true
+	board := m.boardLines(cw, ch)
+	b.at, b.cw, b.ch, b.drawn = [2]int{len(out), 3}, cw, ch, true
 	var moves []string
-	if alone && w >= boardBlockW+16 {
+	if bw := boardWidth(cw); alone && w >= bw+16 {
 		moves = m.moveList(len(board))
+		for i, l := range moves {
+			moves[i] = strings.Repeat(" ", 3) + l
+		}
 	}
 	for i, l := range board {
 		if i < len(moves) {
-			l = fit(l, boardBlockW) + moves[i]
+			l = fit(l, boardWidth(cw)) + moves[i]
 		}
 		out = append(out, l)
 	}
@@ -458,19 +606,27 @@ var (
 	blackGlyph = map[byte]string{'K': "♚", 'Q': "♛", 'R': "♜", 'B': "♝", 'N': "♞", 'P': "♟"}
 )
 
-// boardLines draws the board, the viewer's side at the bottom, with the file letters under it.
-func (m *Model) boardLines() []string {
-	th, b := m.th, m.chats.board
-	g := b.game
-	pos := chess.Start()
-	if g != nil {
-		pos = g.Pos
+func glyph(pc chess.Piece) string {
+	if pc.Colour == chess.Black {
+		return blackGlyph[pc.Kind]
 	}
-	var last chess.Played
-	hasLast := false
-	if g != nil {
-		last, hasLast = g.Last()
-	}
+	return whiteGlyph[pc.Kind]
+}
+
+// cell is one character cell of the board.
+type cell struct {
+	s      string
+	fg, bg theme.RGB
+}
+
+// boardLines draws the board, the viewer's side at the bottom, with the file letters under it. Squares are cw by
+// ch cells, each piece in the middle of its square. A move glides its piece across and flashes the squares it
+// joined; a capture glitches out as the mover lands; a king in check glows.
+func (m *Model) boardLines(cw, ch int) []string {
+	th, b, now := m.th, m.chats.board, m.now
+	g := m.boardGame()
+	pos := g.Pos
+	last, hasLast := g.Last()
 	targets := map[chess.Square]bool{}
 	if b.picked {
 		for _, mv := range pos.From(b.from) {
@@ -478,80 +634,199 @@ func (m *Model) boardLines() []string {
 		}
 	}
 	check := pos.InCheck()
-	var out []string
-	for row := 0; row < 8; row++ {
-		rank := 7 - row
+	gliding := hasLast && m.level.Allows(motion.Wipe) && motion.Running(b.moveAt, slideDur, now) && b.mover != (chess.Piece{})
+	settled := motion.Progress(b.moveAt.Add(slideDur), flashDur, now)
+	if !m.level.Allows(motion.Wipe) {
+		settled = motion.Progress(b.moveAt, flashDur, now)
+	}
+	flashing := hasLast && m.level.Allows(motion.Flash) && settled < 1
+	revealed := 8.0 // ranks drawn so far as the board opens, from the viewer's side up
+	if m.level.Allows(motion.Wipe) {
+		revealed = 8 * motion.EaseOut(motion.Progress(b.openedAt, openDur, now))
+	}
+	ended := g.End != nil && m.level.Allows(motion.Glitch) && motion.Running(b.endAt, endGlitch, now)
+
+	// screen maps a square to its row and column on screen, from the top left.
+	screen := func(sq chess.Square) (int, int) {
 		if b.viewer == chess.Black {
-			rank = row
+			return sq.Rank, 7 - sq.File
 		}
-		line := th.Paint(th.Dim, false, fmt.Sprintf(" %d ", rank+1))
-		for col := 0; col < 8; col++ {
-			file := col
-			if b.viewer == chess.Black {
-				file = 7 - col
-			}
+		return 7 - sq.Rank, sq.File
+	}
+	grid := make([][]cell, 8*ch)
+	for r := range grid {
+		grid[r] = make([]cell, 8*cw)
+	}
+	for file := range 8 {
+		for rank := range 8 {
 			sq := chess.Square{File: file, Rank: rank}
+			row, col := screen(sq)
 			pc := pos.At(sq)
-			bg := th.Raised
+			base := th.Raised
 			if (file+rank)%2 == 1 {
-				bg = th.Line
+				base = th.Line
 			}
+			bg := base
 			if hasLast && (sq == last.From || sq == last.To) {
-				bg = th.Yellow.Lerp(bg, 0.55)
+				bg = th.Yellow.Lerp(base, 0.55)
+				if flashing && !gliding {
+					bg = th.Yellow.Lerp(base, 0.1+0.45*settled) // bright as the piece lands, settling to the tint
+				}
 			}
 			if check && pc.Kind == 'K' && pc.Colour == pos.Turn() {
-				bg = th.Red.Lerp(bg, 0.3)
+				glow := 0.3
+				if m.level.Allows(motion.Flash) {
+					glow = 0.2 + 0.4*motion.Pulse(now, pulsePeriod)
+				}
+				bg = th.Red.Lerp(base, 1-glow-0.3)
 			}
 			if b.picked && sq == b.from {
-				bg = th.Magenta.Lerp(bg, 0.3)
+				p := 1.0
+				if m.level.Allows(motion.Flash) {
+					p = motion.EaseOut(motion.Progress(b.pickedAt, popDur, now))
+				}
+				bg = th.Magenta.Lerp(base, 0.3*p) // bright as it's lifted, then held
 			}
 			if targets[sq] && pc != (chess.Piece{}) {
-				bg = th.Green.Lerp(bg, 0.45)
-			}
-			text, fg := "   ", th.Text
-			switch {
-			case pc.Colour == chess.White:
-				text = " " + whiteGlyph[pc.Kind] + " "
-			case pc.Colour == chess.Black:
-				text, fg = " "+blackGlyph[pc.Kind]+" ", th.Magenta
-			case targets[sq]:
-				text, fg = " · ", th.Green
+				bg = th.Green.Lerp(base, 0.45)
 			}
 			cursor := sq == b.cursor && !b.chat
 			if cursor {
-				bg, fg = th.Cyan, th.Bg
+				bg = th.Cyan.Lerp(base, 0.15)
 			}
-			line += square(th, text, fg, bg, cursor)
+			text, fg := "", th.Text
+			switch {
+			case gliding && sq == last.To:
+				if b.taken != (chess.Piece{}) && m.level.Allows(motion.Glitch) {
+					text, fg = glitchGlyph(glyph(b.taken), b.moveAt.UnixNano(), int(now.Sub(b.moveAt)/motion.FrameDur)), th.Red
+				}
+			case pc != (chess.Piece{}):
+				text = glyph(pc)
+				if pc.Colour == chess.Black {
+					fg = th.Magenta
+				}
+				if ended && pc.Kind == 'K' && m.lost(g, pc.Colour) {
+					text, fg = glitchGlyph(text, b.endAt.UnixNano(), int(now.Sub(b.endAt)/motion.FrameDur)), th.Red
+				}
+			case targets[sq]:
+				text, fg = "·", th.Green
+			}
+			if cursor {
+				fg = th.Bg
+			}
+			if th.Mono && (file+rank)%2 == 0 && !cursor {
+				bg = theme.RGB{} // marked with ░ instead
+			}
+			for dy := range ch {
+				for dx := range cw {
+					c := cell{s: " ", fg: fg, bg: bg}
+					if th.Mono && (file+rank)%2 == 0 && !cursor {
+						c.s = "░"
+					}
+					if dy == ch/2 && dx == cw/2 && text != "" {
+						c.s = text
+					}
+					grid[row*ch+dy][col*cw+dx] = c
+				}
+			}
 		}
-		out = append(out, line)
+	}
+	if gliding {
+		// The moving piece, part way from its square to the one it's going to.
+		t := motion.EaseOut(motion.Progress(b.moveAt, slideDur, now))
+		fr, fc := screen(last.From)
+		tr, tc := screen(last.To)
+		y := int(math.Round((float64(fr) + (float64(tr-fr))*t) * float64(ch)))
+		x := int(math.Round((float64(fc) + (float64(tc-fc))*t) * float64(cw)))
+		y, x = min(max(y+ch/2, 0), 8*ch-1), min(max(x+cw/2, 0), 8*cw-1)
+		fg := th.Text
+		if b.mover.Colour == chess.Black {
+			fg = th.Magenta
+		}
+		grid[y][x].s, grid[y][x].fg = glyph(b.mover), fg
+	}
+	var out []string
+	for r, cells := range grid {
+		label := "   "
+		if r%ch == ch/2 {
+			rank := 8 - r/ch
+			if b.viewer == chess.Black {
+				rank = r/ch + 1
+			}
+			label = th.Paint(th.Dim, false, fmt.Sprintf(" %d ", rank))
+		}
+		// Ranks still to come in as the board opens are blank, from the far side down.
+		if float64(8-r/ch) > revealed+0.5 {
+			out = append(out, label+strings.Repeat(" ", 8*cw))
+			continue
+		}
+		var line strings.Builder
+		line.WriteString(label)
+		for i, c := range cells {
+			cursor := !b.chat && th.Mono && b.cursor == m.squareAtCell(r, i, cw, ch)
+			line.WriteString(paintCell(th, c, cursor))
+		}
+		out = append(out, line.String())
 	}
 	files := "   "
-	for col := 0; col < 8; col++ {
+	for col := range 8 {
 		f := col
 		if b.viewer == chess.Black {
 			f = 7 - col
 		}
-		files += " " + string(rune('a'+f)) + " "
+		pad := strings.Repeat(" ", cw/2)
+		files += pad + string(rune('a'+f)) + strings.Repeat(" ", cw-cw/2-1)
 	}
 	return append(out, th.Paint(th.Dim, false, files))
 }
 
-// square paints one square. Without colours it keeps the piece and marks the cursor by reversing it.
-func square(th theme.Theme, text string, fg, bg theme.RGB, cursor bool) string {
+// glitchGlyph is a piece breaking up: most frames it's a scramble character instead, always one cell wide, so
+// the square around it keeps its shape.
+func glitchGlyph(g string, seed int64, frame int) string {
+	rng := rand.New(rand.NewSource(seed + int64(frame)*7919))
+	if rng.Float64() < 0.6 {
+		chars := []rune(motion.Scramble)
+		return string(chars[rng.Intn(len(chars))])
+	}
+	return g
+}
+
+// squareAtCell is the square under a cell of the board as it's drawn.
+func (m *Model) squareAtCell(row, col, cw, ch int) chess.Square {
+	r, c := row/ch, col/cw
+	if m.chats.board.viewer == chess.Black {
+		return chess.Square{File: 7 - c, Rank: r}
+	}
+	return chess.Square{File: c, Rank: 7 - r}
+}
+
+// paintCell paints one cell. Without colours it keeps the piece and marks the cursor by reversing it.
+func paintCell(th theme.Theme, c cell, cursor bool) string {
 	if th.Mono {
 		if cursor {
-			return "\x1b[7m" + text + "\x1b[m"
+			return "\x1b[7m" + c.s + "\x1b[m"
 		}
-		return text
+		return c.s
 	}
-	return fmt.Sprintf("\x1b[1;38;2;%d;%d;%d;48;2;%d;%d;%dm%s\x1b[m", fg.R, fg.G, fg.B, bg.R, bg.G, bg.B, text)
+	return fmt.Sprintf("\x1b[1;38;2;%d;%d;%d;48;2;%d;%d;%dm%s\x1b[m", c.fg.R, c.fg.G, c.fg.B, c.bg.R, c.bg.G, c.bg.B, c.s)
+}
+
+// lost reports whether a side lost the game: mated, or resigned.
+func (m *Model) lost(g *chess.Game, c chess.Colour) bool {
+	switch g.End.Why {
+	case chess.EndCheckmate:
+		return g.Pos.Turn() == c
+	case chess.EndResign:
+		return g.End.Mine == (c == g.Mine)
+	}
+	return false
 }
 
 // moveList is the moves in numbered pairs, the latest at the bottom, with a receipt mark on yours.
 func (m *Model) moveList(rows int) []string {
 	th, b := m.th, m.chats.board
-	g := b.game
-	if g == nil || len(g.Played) == 0 {
+	g := m.boardGame()
+	if len(g.Played) == 0 {
 		return []string{th.Paint(th.Dim, false, "No moves yet")}
 	}
 	type pair struct {
@@ -559,14 +834,18 @@ func (m *Model) moveList(rows int) []string {
 		w, k string // white's move and black's
 	}
 	var pairs []pair
-	for _, p := range g.Played {
+	for i, p := range g.Played {
+		cell := m.moveCell(p)
+		if i == len(g.Played)-1 && m.level.Allows(motion.Decode) && motion.Running(b.moveAt, decodeDur, m.now) {
+			cell = th.Paint(th.Text, p.Mine, motion.DecodeText(p.SAN, b.moveAt.UnixNano(), motion.Progress(b.moveAt, decodeDur, m.now)))
+		}
 		if len(pairs) == 0 || pairs[len(pairs)-1].n != p.Ply/2 {
 			pairs = append(pairs, pair{n: p.Ply / 2, w: th.Paint(th.Dim, false, "…")}) // white's is missing when a game picks up from a position
 		}
 		if p.Ply%2 == 0 {
-			pairs[len(pairs)-1].w = m.moveCell(p)
+			pairs[len(pairs)-1].w = cell
 		} else {
-			pairs[len(pairs)-1].k = m.moveCell(p)
+			pairs[len(pairs)-1].k = cell
 		}
 	}
 	var out []string
@@ -591,38 +870,50 @@ func (m *Model) moveCell(p chess.Played) string {
 	return cell + th.Paint(th.Yellow, false, " …")
 }
 
-// gameStatus says whose move it is, how the game ended, or what's wrong, then what's in hand: your latest
-// move's receipt, a draw offer, a promotion or a move being typed.
-func (m *Model) gameStatus(w int) []string {
+// statusLine says whose move it is, how the game ended, or what's wrong, in its colour.
+func (m *Model) statusLine() (string, theme.RGB, []string) {
 	th, b := m.th, m.chats.board
-	g := b.game
+	g := m.boardGame()
 	them := m.chat.Title(b.convo)
-	var out []string
 	switch {
-	case g == nil:
-		out = append(out, th.Paint(th.Text, true, "No game with "+them+" yet"))
+	case b.fresh && b.game != nil && b.game.End != nil:
+		return "A new game · make the first move", th.Green, nil
+	case b.fresh:
+		return "Make the first move to challenge " + them, th.Green, []string{th.Paint(th.Muted, false, "you're white · n then b to play black")}
 	case g.Mine == chess.NoColour:
-		out = append(out, th.Paint(th.Yellow, true, them+" started a game, but their first message is missing"))
+		return them + " started a game, but their first message is missing", th.Yellow, nil
 	case g.End != nil:
-		out = append(out, th.Paint(th.Text, true, m.endText(g, them)))
+		return m.endText(g, them), th.Text, []string{th.Paint(th.Muted, false, "any move starts a new game")}
 	case g.Problem != nil:
-		why := "your boards don't match after " + g.Problem.Move.Label()
+		why := "Your boards don't match after " + g.Problem.Move.Label()
 		if g.Problem.Illegal {
 			why = g.Problem.Move.Label() + " can't be played on your board"
 		}
-		out = append(out, th.Paint(th.Red, true, "⚠ "+strings.ToUpper(why[:1])+why[1:]), th.Paint(th.Muted, false, "S sends your position to put them back in step"))
+		return "⚠ " + why, th.Red, []string{th.Paint(th.Muted, false, "S sends your position to put them back in step")}
 	case g.Gap >= 0:
-		out = append(out, th.Paint(th.Yellow, true, "Waiting for "+chess.Label(g.Gap, "…")+", which hasn't arrived yet"))
+		return "Waiting for " + chess.Label(g.Gap, "…") + ", which hasn't arrived yet", th.Yellow, nil
 	case g.MyTurn():
-		turn := "Your move"
 		if g.Pos.InCheck() {
-			turn += " · check!"
+			return "Your move · check!", th.Red, nil
 		}
-		out = append(out, th.Paint(th.Green, true, turn))
-	default:
-		out = append(out, th.Paint(th.Muted, true, them+" to move"))
+		return "Your move", th.Green, nil
 	}
-	if g != nil && g.Offer != nil && g.End == nil {
+	return them + " to move", th.Muted, nil
+}
+
+// gameStatus is the status line, decoding in when it changes, then what's in hand: your latest move's receipt,
+// a draw offer, a promotion or a move being typed.
+func (m *Model) gameStatus(w int) []string {
+	th, b := m.th, m.chats.board
+	g := m.boardGame()
+	them := m.chat.Title(b.convo)
+	text, col, more := m.statusLine()
+	shown := text
+	if m.level.Allows(motion.Decode) && motion.Running(b.statusAt, decodeDur, m.now) {
+		shown = motion.DecodeText(text, b.statusAt.UnixNano(), motion.Progress(b.statusAt, decodeDur, m.now))
+	}
+	out := append([]string{th.Paint(col, true, shown)}, more...)
+	if g.Offer != nil && g.End == nil {
 		if g.Offer.Mine {
 			out = append(out, th.Paint(th.Muted, false, "You offered a draw"))
 		} else {
@@ -636,11 +927,7 @@ func (m *Model) gameStatus(w int) []string {
 	case b.promo != nil:
 		var opts []string
 		for i, mv := range b.promo {
-			glyph := whiteGlyph[mv.Promo]
-			if b.game.Mine == chess.Black {
-				glyph = blackGlyph[mv.Promo]
-			}
-			opt := " " + glyph + " " + strings.ToLower(string(mv.Promo)) + " "
+			opt := " " + glyph(chess.Piece{Kind: mv.Promo, Colour: g.Mine}) + " " + strings.ToLower(string(mv.Promo)) + " "
 			if i == b.choice {
 				opt = th.Block(th.Bg, th.Cyan).Render(opt)
 			}
@@ -698,10 +985,10 @@ func (m *Model) endText(g *chess.Game, them string) string {
 // receipt is how your latest move is getting on: on its way, delivered, or never acknowledged.
 func (m *Model) receipt() string {
 	th, b := m.th, m.chats.board
-	g := b.game
-	if g == nil {
+	if b.fresh {
 		return ""
 	}
+	g := m.boardGame()
 	for i := len(g.Played) - 1; i >= 0; i-- {
 		p := g.Played[i]
 		if !p.Mine {
@@ -723,8 +1010,8 @@ func (m *Model) receipt() string {
 func (m *Model) boardKeys(w int) []string {
 	b := m.chats.board
 	hs := []hint{{"←↑↓→", "move"}, {"enter", "pick up · put down"}, {"i", "type a move"}, {"f", "flip"}}
-	if g := b.game; g == nil || g.End != nil {
-		hs = append(hs, hint{"n", "new game"})
+	if g := b.game; g == nil || g.End != nil || b.fresh {
+		hs = append(hs, hint{"n", "pick a side"})
 	} else {
 		hs = append(hs, hint{"d", "draw"}, hint{"R", "resign"})
 	}
@@ -739,17 +1026,16 @@ func (m *Model) boardKeys(w int) []string {
 
 // boardSquareAt is the square under a cell of the conversation pane, as the board was last drawn.
 func (b *boardView) boardSquareAt(x, y int) (chess.Square, bool) {
-	if !b.drawn {
+	if !b.drawn || b.cw == 0 || b.ch == 0 {
 		return chess.Square{}, false
 	}
 	row, col := y-b.at[0], x-b.at[1]
-	if row < 0 || row >= 8 || col < 0 || col >= 8*sqW {
+	if row < 0 || row >= 8*b.ch || col < 0 || col >= 8*b.cw {
 		return chess.Square{}, false
 	}
-	c := col / sqW
-	sq := chess.Square{File: c, Rank: 7 - row}
+	r, c := row/b.ch, col/b.cw
 	if b.viewer == chess.Black {
-		sq = chess.Square{File: 7 - c, Rank: row}
+		return chess.Square{File: 7 - c, Rank: r}, true
 	}
-	return sq, true
+	return chess.Square{File: c, Rank: 7 - r}, true
 }

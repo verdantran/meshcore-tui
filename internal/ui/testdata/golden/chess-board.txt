@@ -2,83 +2,83 @@
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ CHANNELS                         │ ▌♟ CHESS · Bob                   │ ▌Bob  direct · 2 hops A3·1E · M shows it                           ┃
-┃  # Public                        │   you play white                 │                                                                    ┃
-┃  # bristol                       │  8  ♜     ♝  ♛  ♚  ♝  ♞  ♜       │                                                                    ┃
-┃  # hilltop                       │  7     ♟  ♟  ♟     ♟  ♟  ♟       │                                                                    ┃
-┃  + add a channel                 │  6  ♟     ♞                      │                                                                    ┃
-┃                                  │  5     ♗        ♟     ·          │                                                                    ┃
-┃ DIRECT                           │  4           ·  ♙        ·       │                                                                    ┃
-┃ ▌ ● Bob                          │  3                 ♘             │                                                                    ┃
-┃  ● Alice                         │  2  ♙  ♙  ♙  ♙     ♙  ♙  ♙       │                                                                    ┃
-┃                                  │  1  ♖  ♘  ♗  ♕  ♔     ·  ♖       │                                                                    ┃
-┃                                  │     a  b  c  d  e  f  g  h       │                                                                    ┃
-┃                                  │                                  │                                                                    ┃
-┃                                  │ Your move                        │                                                                    ┃
-┃                                  │ Bob offers a draw · d accepts    │                                                                    ┃
-┃                                  │ … Sending 3. Bb5                 │                                                                    ┃
-┃                                  │                                  │                                                                    ┃
-┃                                  │                                  │                                                                    ┃
-┃                                  │                                  │  10:00 Bob                                                   1 hop ┃
-┃                                  │                                  │        fancy a game?                                               ┃
-┃                                  │                                  │  10:00 MeshCore-k4                                     ▆█▆ sending ┃
-┃                                  │                                  │        ♟ New game, you're white                                    ┃
-┃                                  │                                  │  10:00 MeshCore-k4                                     ▆█▆ sending ┃
-┃                                  │                                  │        ♟ 1. e4                                                     ┃
-┃                                  │                                  │  10:00 Bob                                                   1 hop ┃
-┃                                  │                                  │        ♟ 1... e5                                                   ┃
-┃                                  │                                  │  10:00 MeshCore-k4                                     ▆█▆ sending ┃
-┃                                  │                                  │        ♟ 2. Nf3                                                    ┃
-┃                                  │                                  │  10:00 Bob                                                   1 hop ┃
-┃                                  │                                  │        ♟ 2... Nc6                                                  ┃
-┃                                  │                                  │  10:00 MeshCore-k4                                     ▆█▆ sending ┃
-┃                                  │                                  │        ♟ 3. Bb5                                                    ┃
-┃                                  │ ←↑↓→ move                        │  10:00 Bob                                                   1 hop ┃
-┃                                  │ enter pick up · put down         │        ♟ 3... a6                                                   ┃
-┃                                  │ i type a move · f flip · d draw  │  10:00 Bob                                                   1 hop ┃
-┃                                  │ R resign · tab to the chat       │        ♟ Bob offers a draw                                         ┃
-┃                                  │ L board only · esc back          │ tab to write in the chat                                           ┃
+┃ CHANNELS                         │ ▌♟ CHESS · Bob                                              │ ▌Bob  direct · 2 hops A3·1E · M shows i ┃
+┃  # Public                        │   you play white                                            │                                         ┃
+┃  # bristol                       │                                                             │                                         ┃
+┃  # hilltop                       │  8    ♜             ♝      ♛      ♚      ♝      ♞      ♜    │                                         ┃
+┃  + add a channel                 │                                                             │                                         ┃
+┃                                  │                                                             │                                         ┃
+┃ DIRECT                           │  7           ♟      ♟      ♟             ♟      ♟      ♟    │                                         ┃
+┃ ▌ ● Bob                          │                                                             │                                         ┃
+┃  ● Alice                         │                                                             │                                         ┃
+┃                                  │  6    ♟             ♞                                       │                                         ┃
+┃                                  │                                                             │                                         ┃
+┃                                  │                                                             │                                         ┃
+┃                                  │  5           ♗                    ♟             ·           │                                         ┃
+┃                                  │                                                             │                                         ┃
+┃                                  │                                                             │                                         ┃
+┃                                  │  4                         ·      ♙                    ·    │                                         ┃
+┃                                  │                                                             │                                         ┃
+┃                                  │                                                             │  10:00 Bob                        1 hop ┃
+┃                                  │  3                                       ♘                  │        fancy a game?                    ┃
+┃                                  │                                                             │  10:00 MeshCore-k4          ▆█▆ sending ┃
+┃                                  │                                                             │        ♟ New game, you're white         ┃
+┃                                  │  2    ♙      ♙      ♙      ♙             ♙      ♙      ♙    │  10:00 MeshCore-k4          ▆█▆ sending ┃
+┃                                  │                                                             │        ♟ 1. e4                          ┃
+┃                                  │                                                             │  10:00 Bob                        1 hop ┃
+┃                                  │  1    ♖      ♘      ♗      ♕      ♔             ·      ♖    │        ♟ 1... e5                        ┃
+┃                                  │                                                             │  10:00 MeshCore-k4          ▆█▆ sending ┃
+┃                                  │       a      b      c      d      e      f      g      h    │        ♟ 2. Nf3                         ┃
+┃                                  │                                                             │  10:00 Bob                        1 hop ┃
+┃                                  │ Your move                                                   │        ♟ 2... Nc6                       ┃
+┃                                  │ Bob offers a draw · d accepts                               │  10:00 MeshCore-k4          ▆█▆ sending ┃
+┃                                  │ … Sending 3. Bb5                                            │        ♟ 3. Bb5                         ┃
+┃                                  │                                                             │  10:00 Bob                        1 hop ┃
+┃                                  │                                                             │        ♟ 3... a6                        ┃
+┃                                  │ ←↑↓→ move · enter pick up · put down · i type a move        │  10:00 Bob                        1 hop ┃
+┃                                  │ f flip · d draw · R resign · tab to the chat · L board only │        ♟ Bob offers a draw              ┃
+┃                                  │ esc back                                                    │ tab to write in the chat                ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
  0 packets heard · 18 contacts · 3 channels · theme neon · motion full
  [10:00:02] ▸ MSG  Bob · Bob: offers a draw
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 73b265d339f45b15
+styles f04ede5f0736ce12
 == board alone ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ CHANNELS                         │ ▌♟ CHESS · Bob                                                                                        ┃
 ┃  # Public                        │   you play white                                                                                      ┃
-┃  # bristol                       │  8  ♜     ♝  ♛  ♚  ♝  ♞  ♜        1. e4 …      e5                                                     ┃
-┃  # hilltop                       │  7     ♟  ♟  ♟     ♟  ♟  ♟        2. Nf3 …     Nc6                                                    ┃
-┃  + add a channel                 │  6  ♟     ♞                       3. Bb5 …     a6                                                     ┃
-┃                                  │  5     ♗        ♟     ·                                                                               ┃
-┃ DIRECT                           │  4           ·  ♙        ·                                                                            ┃
-┃ ▌ ● Bob                          │  3                 ♘                                                                                  ┃
-┃  ● Alice                         │  2  ♙  ♙  ♙  ♙     ♙  ♙  ♙                                                                            ┃
-┃                                  │  1  ♖  ♘  ♗  ♕  ♔     ·  ♖                                                                            ┃
-┃                                  │     a  b  c  d  e  f  g  h                                                                            ┃
+┃  # bristol                       │                                                                 1. e4 …      e5                       ┃
+┃  # hilltop                       │  8    ♜             ♝      ♛      ♚      ♝      ♞      ♜        2. Nf3 …     Nc6                      ┃
+┃  + add a channel                 │                                                                 3. Bb5 …     a6                       ┃
+┃                                  │                                                                                                       ┃
+┃ DIRECT                           │  7           ♟      ♟      ♟             ♟      ♟      ♟                                              ┃
+┃ ▌ ● Bob                          │                                                                                                       ┃
+┃  ● Alice                         │                                                                                                       ┃
+┃                                  │  6    ♟             ♞                                                                                 ┃
+┃                                  │                                                                                                       ┃
+┃                                  │                                                                                                       ┃
+┃                                  │  5           ♗                    ♟             ·                                                     ┃
+┃                                  │                                                                                                       ┃
+┃                                  │                                                                                                       ┃
+┃                                  │  4                         ·      ♙                    ·                                              ┃
+┃                                  │                                                                                                       ┃
+┃                                  │                                                                                                       ┃
+┃                                  │  3                                       ♘                                                            ┃
+┃                                  │                                                                                                       ┃
+┃                                  │                                                                                                       ┃
+┃                                  │  2    ♙      ♙      ♙      ♙             ♙      ♙      ♙                                              ┃
+┃                                  │                                                                                                       ┃
+┃                                  │                                                                                                       ┃
+┃                                  │  1    ♖      ♘      ♗      ♕      ♔             ·      ♖                                              ┃
+┃                                  │                                                                                                       ┃
+┃                                  │       a      b      c      d      e      f      g      h                                              ┃
 ┃                                  │                                                                                                       ┃
 ┃                                  │ Your move                                                                                             ┃
 ┃                                  │ Bob offers a draw · d accepts                                                                         ┃
 ┃                                  │ … Sending 3. Bb5                                                                                      ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
 ┃                                  │                                                                                                       ┃
 ┃                                  │                                                                                                       ┃
 ┃                                  │                                                                                                       ┃
@@ -89,42 +89,42 @@ styles 73b265d339f45b15
  [10:00:02] ▸ MSG  Bob · Bob: offers a draw
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 231ccc418844afcd
+styles fbdc32eb065015f0
 == from black's side ==
  MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ CHANNELS                         │ ▌♟ CHESS · Bob                                                                                        ┃
 ┃  # Public                        │   you play white                                                                                      ┃
-┃  # bristol                       │  1  ♖        ♔  ♕  ♗  ♘  ♖        1. e4 …      e5                                                     ┃
-┃  # hilltop                       │  2  ♙  ♙  ♙     ♙  ♙  ♙  ♙        2. Nf3 …     Nc6                                                    ┃
-┃  + add a channel                 │  3        ♘                       3. Bb5 …     a6                                                     ┃
-┃                                  │  4           ♙                                                                                        ┃
-┃ DIRECT                           │  5           ♟        ♗                                                                               ┃
-┃ ▌ ● Bob                          │  6                 ♞     ♟                                                                            ┃
-┃  ● Alice                         │  7  ♟  ♟  ♟     ♟  ♟  ♟                                                                               ┃
-┃                                  │  8  ♜  ♞  ♝  ♚  ♛  ♝     ♜                                                                            ┃
-┃                                  │     h  g  f  e  d  c  b  a                                                                            ┃
+┃  # bristol                       │                                                                 1. e4 …      e5                       ┃
+┃  # hilltop                       │  1    ♖                    ♔      ♕      ♗      ♘      ♖        2. Nf3 …     Nc6                      ┃
+┃  + add a channel                 │                                                                 3. Bb5 …     a6                       ┃
+┃                                  │                                                                                                       ┃
+┃ DIRECT                           │  2    ♙      ♙      ♙             ♙      ♙      ♙      ♙                                              ┃
+┃ ▌ ● Bob                          │                                                                                                       ┃
+┃  ● Alice                         │                                                                                                       ┃
+┃                                  │  3                  ♘                                                                                 ┃
+┃                                  │                                                                                                       ┃
+┃                                  │                                                                                                       ┃
+┃                                  │  4                         ♙                                                                          ┃
+┃                                  │                                                                                                       ┃
+┃                                  │                                                                                                       ┃
+┃                                  │  5                         ♟                    ♗                                                     ┃
+┃                                  │                                                                                                       ┃
+┃                                  │                                                                                                       ┃
+┃                                  │  6                                       ♞             ♟                                              ┃
+┃                                  │                                                                                                       ┃
+┃                                  │                                                                                                       ┃
+┃                                  │  7    ♟      ♟      ♟             ♟      ♟      ♟                                                     ┃
+┃                                  │                                                                                                       ┃
+┃                                  │                                                                                                       ┃
+┃                                  │  8    ♜      ♞      ♝      ♚      ♛      ♝             ♜                                              ┃
+┃                                  │                                                                                                       ┃
+┃                                  │       h      g      f      e      d      c      b      a                                              ┃
 ┃                                  │                                                                                                       ┃
 ┃                                  │ Your move                                                                                             ┃
 ┃                                  │ Bob offers a draw · d accepts                                                                         ┃
 ┃                                  │ … Sending 3. Bb5                                                                                      ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
-┃                                  │                                                                                                       ┃
 ┃                                  │                                                                                                       ┃
 ┃                                  │                                                                                                       ┃
 ┃                                  │                                                                                                       ┃
@@ -135,42 +135,42 @@ styles 231ccc418844afcd
  [10:00:02] ▸ MSG  Bob · Bob: offers a draw
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 11fd8f48fb36b18e
+styles 5ba14e93292f371d
 == ascii ==
  MeshCore-k4  RX o  TX o  Heltec V4 . fw v1.17.1 . 869.618 SF8 BW62.5 . 4.02V ####.| 85% . SIM simulated radio                     o LINKED
  1 CHATS / 2 CONTACTS / 3 MAP / 4 PACKETS / 5 ADMIN / 6 DEVICE / 7 STATS
 +-|CHATS ----------------------------------------------------------------------------------------------------------------------------------+
 | CHANNELS                         | |p CHESS . Bob                                                                                        |
 |  # Public                        |   you play white                                                                                      |
-|  # bristol                       |  1  R        K  Q  B  N  R        1. e4 ~      e5                                                     |
-|  # hilltop                       |  2  P  P  P     P  P  P  P        2. Nf3 ~     Nc6                                                    |
-|  + add a channel                 |  3        N                       3. Bb5 ~     a6                                                     |
-|                                  |  4           P                                                                                        |
-| DIRECT                           |  5           p        B                                                                               |
-| | o Bob                          |  6                 n     p                                                                            |
-|  o Alice                         |  7  p  p  p     p  p  p                                                                               |
-|                                  |  8  r  n  b  k  q  b     r                                                                            |
-|                                  |     h  g  f  e  d  c  b  a                                                                            |
+|  # bristol                       |                                                                 1. e4 ~      e5                       |
+|  # hilltop                       |  1    R                    K      Q      B      N      R        2. Nf3 ~     Nc6                      |
+|  + add a channel                 |                                                                 3. Bb5 ~     a6                       |
+|                                  |                                                                                                       |
+| DIRECT                           |  2    P      P      P             P      P      P      P                                              |
+| | o Bob                          |                                                                                                       |
+|  o Alice                         |                                                                                                       |
+|                                  |  3                  N                                                                                 |
+|                                  |                                                                                                       |
+|                                  |                                                                                                       |
+|                                  |  4                         P                                                                          |
+|                                  |                                                                                                       |
+|                                  |                                                                                                       |
+|                                  |  5                         p                    B                                                     |
+|                                  |                                                                                                       |
+|                                  |                                                                                                       |
+|                                  |  6                                       n             p                                              |
+|                                  |                                                                                                       |
+|                                  |                                                                                                       |
+|                                  |  7    p      p      p             p      p      p                                                     |
+|                                  |                                                                                                       |
+|                                  |                                                                                                       |
+|                                  |  8    r      n      b      k      q      b             r                                              |
+|                                  |                                                                                                       |
+|                                  |       h      g      f      e      d      c      b      a                                              |
 |                                  |                                                                                                       |
 |                                  | Your move                                                                                             |
 |                                  | Bob offers a draw . d accepts                                                                         |
 |                                  | ~ Sending 3. Bb5                                                                                      |
-|                                  |                                                                                                       |
-|                                  |                                                                                                       |
-|                                  |                                                                                                       |
-|                                  |                                                                                                       |
-|                                  |                                                                                                       |
-|                                  |                                                                                                       |
-|                                  |                                                                                                       |
-|                                  |                                                                                                       |
-|                                  |                                                                                                       |
-|                                  |                                                                                                       |
-|                                  |                                                                                                       |
-|                                  |                                                                                                       |
-|                                  |                                                                                                       |
-|                                  |                                                                                                       |
-|                                  |                                                                                                       |
-|                                  |                                                                                                       |
 |                                  |                                                                                                       |
 |                                  |                                                                                                       |
 |                                  |                                                                                                       |
@@ -181,4 +181,4 @@ styles 11fd8f48fb36b18e
  [10:00:02] > MSG  Bob . Bob: offers a draw
 
  1-7 screens . ctrl+w panes . : command . ? help . ctrl+f search . T theme . v motion . F12 frames . q quit
-styles 724863449b1ab57a
+styles 027abc2ff8eafc1d

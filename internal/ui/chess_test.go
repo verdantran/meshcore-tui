@@ -9,6 +9,7 @@ import (
 
 	"github.com/verdantran/meshcore-tui/internal/chess"
 	"github.com/verdantran/meshcore-tui/internal/golden"
+	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
@@ -96,8 +97,8 @@ func (h *harness) clickSquare(sq chess.Square) {
 		row, col = sq.Rank, 7-sq.File
 	}
 	listW := min(max((h.m.w-4)/4, 20), 32)
-	x := 2 + listW + 3 + b.at[1] + col*sqW + 1
-	y := 2 + 1 + b.at[0] + row
+	x := 2 + listW + 3 + b.at[1] + col*b.cw + b.cw/2
+	y := 2 + 1 + b.at[0] + row*b.ch + b.ch/2
 	_, cmd := h.m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: x, Y: y})
 	h.start(cmd)
 	h.settle()
@@ -107,21 +108,22 @@ func TestPlayingChessWithTheDemo(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
 	h.chessWith("Alice")
-	if s := h.screen(); !strings.Contains(s, "♟ CHESS · Alice") || !strings.Contains(s, "No game with Alice yet") {
-		t.Fatalf("an empty board:\n%s", s)
-	}
-	h.keys("n")
-	h.keys("w")
-	h.until("the challenge", func() bool { g := h.m.chats.board.game; return g != nil && g.Mine == chess.White })
-	if !strings.Contains(h.screen(), "Your move") {
-		t.Fatalf("white moves first:\n%s", h.screen())
+	if s := h.screen(); !strings.Contains(s, "♟ CHESS · Alice") || !strings.Contains(s, "Make the first move to challenge Alice") {
+		t.Fatalf("a board set up for a new game:\n%s", s)
 	}
 
-	// By cursor: it starts on the king's pawn; pick it up, take it two squares up, put it down.
+	// By cursor, and with no game yet: making the first move is what starts one. The cursor starts on the
+	// king's pawn; pick it up, take it two squares up, put it down.
 	h.key(tea.KeyEnter)
 	h.keys("kk")
 	h.key(tea.KeyEnter)
 	h.until("Alice's reply", func() bool { return h.gamePly() == 2 })
+	if g := h.m.chats.board.game; g.Mine != chess.White {
+		t.Fatalf("the first move made us white: %v", g.Mine)
+	}
+	if msgs, _ := h.m.chat.ChessMessages(h.m.chats.board.convo); len(msgs) < 2 || !strings.HasSuffix(msgs[0].Text, "new white") {
+		t.Fatalf("the challenge goes out before the move: %+v", msgs)
+	}
 	if p := h.m.chats.board.game.Played[0]; p.SAN != "e4" || !p.Mine {
 		t.Fatalf("first move: %+v", p)
 	}
@@ -167,6 +169,18 @@ func TestPlayingChessWithTheDemo(t *testing.T) {
 	if !strings.Contains(h.screen(), "You resigned · Alice wins") {
 		t.Errorf("after resigning:\n%s", h.screen())
 	}
+
+	// Once it's over, a move starts the next game: the board is set up again, and the first move challenges.
+	old := h.m.chats.board.game.ID
+	h.key(tea.KeyEnter)
+	if !h.m.chats.board.fresh || !strings.Contains(h.screen(), "A new game") {
+		t.Fatalf("after the end, a key sets up a new game:\n%s", h.screen())
+	}
+	h.m.chats.board.cursor = chess.Square{File: 3, Rank: 1}
+	h.key(tea.KeyEnter)
+	h.keys("kk")
+	h.key(tea.KeyEnter)
+	h.until("the rematch", func() bool { g := h.m.chats.board.game; return g.ID != old && g.Ply == 2 })
 	h.key(tea.KeyEscape)
 	if h.m.chats.board != nil {
 		t.Error("esc goes back to the conversation")
@@ -198,17 +212,16 @@ func TestATypedMoveThatIsntLegalSaysSo(t *testing.T) {
 	}
 }
 
-// TestGoldenChessBoard keeps the board's layout: beside the chat, alone, from black's side and in ASCII. The
-// game is made from messages put in the conversation directly, as the demo's replies carry the real time.
-func TestGoldenChessBoard(t *testing.T) {
-	t.Parallel()
-	h := newHarness(t)
+// gameWithBob is a harness in a conversation with Bob, and a way to put chess messages in it from either side.
+// They go in directly, not through the demo, whose replies carry the real time and would change every run.
+func gameWithBob(t *testing.T) (h *harness, say func(mine bool, msg chess.Msg), play func(mine bool, san string)) {
+	h = newHarness(t)
 	h.dmFrom("Bob", "fancy a game?")
 	h.openConvo("Bob")
 	bob := h.contact("Bob")
 	cur, _ := h.m.selectedConvo()
-	pos := chess.Start()
-	say := func(mine bool, msg chess.Msg) {
+	pos, ply := chess.Start(), 0
+	say = func(mine bool, msg chess.Msg) {
 		if mine {
 			if _, _, err := h.m.chat.Compose(cur.Convo, msg.Text(), h.clk.t); err != nil {
 				t.Fatal(err)
@@ -218,25 +231,32 @@ func TestGoldenChessBoard(t *testing.T) {
 		}
 		h.incoming(radio.Incoming{From: [6]byte(bob.Key[:6]), Hops: 1, Text: msg.Text()})
 	}
-	play := func(mine bool, san string, ply int) {
+	play = func(mine bool, san string) {
 		mv, err := pos.Find(san)
 		if err != nil {
 			t.Fatal(err)
 		}
-		g := &chess.Game{ID: "g0d", Pos: pos, Ply: ply}
-		msg, _ := g.Next(mv)
+		msg, _ := (&chess.Game{ID: "g0d", Pos: pos, Ply: ply}).Next(mv)
 		pos, _ = pos.Play(mv)
+		ply++
 		say(mine, msg)
 	}
 	say(true, chess.Msg{Game: "g0d", Kind: chess.KindNew, Colour: chess.White})
 	for i, san := range []string{"e4", "e5", "Nf3", "Nc6", "Bb5", "a6"} {
-		play(i%2 == 0, san, i)
+		play(i%2 == 0, san)
 	}
+	return h, say, play
+}
+
+// TestGoldenChessBoard keeps the board's layout: beside the chat, alone, from black's side and in ASCII.
+func TestGoldenChessBoard(t *testing.T) {
+	t.Parallel()
+	h, say, _ := gameWithBob(t)
 	say(false, chess.Msg{Game: "g0d", Kind: chess.KindDrawOffer})
 	h.keys("c")
 	h.keys("lk")                // from e2 to the knight on f3
 	h.key(tea.KeyEnter)         // and pick it up: its moves show
-	h.advance(10 * time.Second) // past the messages' arrival
+	h.advance(10 * time.Second) // past the messages' arrival and the board opening
 	var frames []golden.Frame
 	frames = append(frames, golden.Frame{Label: "board and chat", Lines: screen(t, h.m)})
 	h.keys("L")
@@ -247,4 +267,55 @@ func TestGoldenChessBoard(t *testing.T) {
 	h.m.opt.ASCII = true
 	frames = append(frames, golden.Frame{Label: "ascii", Lines: screen(t, h.m)})
 	golden.Check(t, "chess-board", frames)
+}
+
+// TestGoldenChessMove keeps the animations: the board opening, a capture gliding in while the piece it takes
+// glitches out, the squares flashing as it lands, and the losing king glitching when the game ends.
+func TestGoldenChessMove(t *testing.T) {
+	t.Parallel()
+	h, say, play := gameWithBob(t)
+	h.keys("L") // the board alone, so the frames are only the board
+	h.advance(10 * time.Second)
+	h.keys("c")
+	var frames []golden.Frame
+	shot := func(label string) { frames = append(frames, golden.Frame{Label: label, Lines: screen(t, h.m)}) }
+	shot("opening")
+	h.advance(openDur / 2)
+	shot("half open")
+	h.advance(10 * time.Second)
+	play(true, "Bxc6")
+	h.advance(10 * time.Second)
+	play(false, "dxc6") // Bob takes the bishop
+	shot("capture starts")
+	h.advance(slideDur / 2)
+	shot("half way")
+	h.advance(slideDur / 2)
+	shot("landed")
+	h.advance(flashDur / 2)
+	shot("flash settling")
+	h.advance(10 * time.Second)
+	say(true, chess.Msg{Game: "g0d", Kind: chess.KindResign})
+	h.advance(glitchDur)
+	shot("resigned")
+	golden.Check(t, "chess-move", frames)
+}
+
+// With motion off, a move is simply there: no glide, no glitch, no flash.
+func TestChessStillWithMotionOff(t *testing.T) {
+	t.Parallel()
+	h, _, play := gameWithBob(t)
+	h.m.level = motion.Off
+	h.keys("c")
+	play(true, "Bxc6")
+	play(false, "dxc6")
+	if h.m.boardAnimating() {
+		t.Error("nothing animates with motion off")
+	}
+	h.screen() // the board takes its size from where it's drawn
+	b := h.m.chats.board
+	lines := h.m.boardLines(b.cw, b.ch)
+	row := strings.Join(lines[2*b.ch:3*b.ch], "\n") // rank 6, from white's side
+	if !strings.Contains(row, "♟") || strings.Contains(row, "♗") {
+		t.Errorf("the pawn is on c6 straight away, the bishop gone:\n%s", row)
+	}
 }

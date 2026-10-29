@@ -691,6 +691,9 @@ func (m *Model) keepSigned(k string, msg store.Message) {
 }
 
 func (m *Model) chatsAnimating() bool {
+	if m.boardAnimating() {
+		return true
+	}
 	now := m.now
 	for _, t := range m.chats.arrived {
 		if motion.Running(t, arriveDur, now) {

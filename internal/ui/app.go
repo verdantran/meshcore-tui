@@ -452,6 +452,9 @@ func (m *Model) pulsing() bool {
 			return true
 		}
 	}
+	if m.boardPulsing() {
+		return true
+	}
 	used, limit := m.composeLoad()
 	return m.visible(0) && m.chats.writing && limit > 0 && used*10 >= limit*9
 }
@@ -996,7 +999,7 @@ func (m *Model) screenKeys() []string {
 	if m.tab == 0 && m.chats.board != nil {
 		return []string{key("←↑↓→ h j k l", "move around the board"), key("enter space", "pick up one of your pieces, then put it down where it goes; esc puts it back"),
 			key("click", "a piece, then where it goes, as enter does"), key("i", "type a move: Nf3, exd5, O-O, or squares like g1f3 and e7e8q"),
-			key("f", "turn the board round"), key("n", "a new game, once this one's over: w or b picks your side"),
+			key("f", "turn the board round"), key("n", "pick a side for a new game, w or b; with no game, your first move starts one as white"),
 			key("d", "offer a draw, or accept theirs; a move turns an offer down"), key("R", "resign, once you've confirmed it"),
 			key("S", "send your position when your boards don't match, so theirs is put back in step with yours"),
 			key("r", "send your latest move again if it never got a receipt"),
