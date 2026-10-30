@@ -364,6 +364,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.deviceMsg(msg))
 	case backupDoneMsg, restoredMsg:
 		cmds = append(cmds, m.backupMsg(msg))
+	case cliRanMsg:
+		cmds = append(cmds, m.consoleMsg(msg))
 	case radioCheckedMsg:
 		m.radioChecked(msg)
 	case statsMsg, statsTickMsg:
@@ -927,7 +929,8 @@ func (m *Model) screenKeys() []string {
 	key := func(k, what string) string { return helpRow(th, k, what) }
 	if m.tab == 5 {
 		return []string{key("↑↓ j k", "choose a setting; g G the first or last"), key("enter space", "edit it, switch it, or run it"),
-			key("u", "read the settings again"), key("esc", "cancel an edit"),
+			key("u", "read the settings again"), key("c", "open the radio console, on companion firmware v1.18.0 and newer; :radio console too"),
+			key("esc", "cancel an edit"),
 			key("", "radio changes and a new identity ask for y; a reboot or factory reset needs a word typed"), ""}
 	}
 	if m.tab == 6 {

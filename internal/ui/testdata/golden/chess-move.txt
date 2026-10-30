@@ -1,5 +1,5 @@
 == opening ==
- MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.18.0 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ CHANNELS                         │ ▌♟ CHESS · Bob                                              │ ▌Bob  direct · 2 hops A3·1E · M shows i ┃
@@ -43,9 +43,9 @@
  [10:00:02] ▸ MSG  Bob · Bob: played 3... a6
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 5ec9664d8e990ffd
+styles 5f65c601ac0a2be3
 == half open ==
- MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.18.0 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ CHANNELS                         │ ▌♟ CHESS · Bob                                              │ ▌Bob  direct · 2 hops A3·1E · M shows i ┃
@@ -89,9 +89,9 @@ styles 5ec9664d8e990ffd
  [10:00:02] ▸ MSG  Bob · Bob: played 3... a6
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles e0b71078d17b90e4
+styles c39fd5070ea823f2
 == capture starts ==
- MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.18.0 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ CHANNELS                         │ ▌♟ CHESS · Bob                                              │ ▌Bob  direct · 2 hops A3·1E · M shows i ┃
@@ -135,9 +135,9 @@ styles e0b71078d17b90e4
  [10:00:32] ▸ █
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles 94ab28e4ae4101c6
+styles c99435c38bdf32ac
 == half way ==
- MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.18.0 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ CHANNELS                         │ ▌♟ CHESS · Bob                                              │ ▌Bob  direct · 2 hops A3·1E · M shows i ┃
@@ -181,9 +181,9 @@ styles 94ab28e4ae4101c6
  [10:00:32] ▸ MSG  Bob · Bob: played█
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles c6c65980852d2473
+styles 74d0be93a55dc3a1
 == landed ==
- MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.18.0 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ CHANNELS                         │ ▌♟ CHESS · Bob                                              │ ▌Bob  direct · 2 hops A3·1E · M shows i ┃
@@ -227,9 +227,9 @@ styles c6c65980852d2473
  [10:00:32] ▸ MSG  Bob · Bob: played 4... dxc6
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles b105cd12227bdce2
+styles 8e8b60ae9368a250
 == flash settling ==
- MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.18.0 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ CHANNELS                         │ ▌♟ CHESS · Bob                                              │ ▌Bob  direct · 2 hops A3·1E · M shows i ┃
@@ -273,9 +273,9 @@ styles b105cd12227bdce2
  [10:00:32] ▸ MSG  Bob · Bob: played 4... dxc6
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles ec2f7225fc01e3bb
+styles 64e45aee6141fb71
 == resigned ==
- MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.18.0 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85% · SIM simulated radio                     ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌CHATS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ CHANNELS                         │ ▌♟ CHESS · Bob                                              │ ▌Bob  direct · 2 hops A3·1E · M shows i ┃
@@ -319,4 +319,4 @@ styles ec2f7225fc01e3bb
  [10:00:32] ▸ MSG  Bob · Bob: played 4... dxc6
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames · q quit
-styles a4801c11a428d55e
+styles 2225098304b198f0

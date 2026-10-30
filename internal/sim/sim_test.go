@@ -369,7 +369,7 @@ func TestAdminServers(t *testing.T) {
 	for _, c := range [][2]string{
 		{"get tx", "> 22"}, {"set tx 30", "Error: Transmit power must be between 1 and 22 dBm"}, {"set tx 20", "OK"},
 		{"set radio 869.525,250,11,5", "OK - reboot to apply"}, {"get nope", "Unknown config: nope"}, {"set nope 1", "Unknown config: nope"},
-		{"ver", "v1.17.1 (Build: 14 Aug 2026)"}, {"board", "Heltec V4"}, {"advert", "OK - Advert sent"}, {"advert.zerohop", "OK - zerohop advert sent"},
+		{"ver", "v1.18.0 (Build: 15 Oct 2026)"}, {"board", "Heltec V4"}, {"advert", "OK - Advert sent"}, {"advert.zerohop", "OK - zerohop advert sent"},
 		{"log start", "OK - logging started"}, {"log stop", "OK - logging stopped"}, {"log erase", "OK - log erased"},
 		{"clear stats", "OK - stats reset"}, {"password hunter2", "password now: hunter2"}, {"setperm 3a 2", "Err - invalid params"}, {"setperm " + bobHex + " 2", "OK"},
 		{"setperm b0 0", "OK"}, {"setperm ee 0", "Err - invalid params"}, {"setperm b0", "Err - bad params"},

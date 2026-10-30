@@ -12,9 +12,10 @@ import (
 
 // devSettings is the simulated companion's own configuration, changed by the Device screen.
 type devSettings struct {
-	s    radio.Settings
-	vars []radio.Var
-	key  [64]byte
+	s      radio.Settings
+	vars   []radio.Var
+	key    [64]byte
+	femLNA bool
 }
 
 func newDevSettings() devSettings {
@@ -29,8 +30,9 @@ func newDevSettings() devSettings {
 			Scope:        "bristol",
 			HasScope:     true,
 			PathHashMode: 0},
-		vars: []radio.Var{{Name: "gps", Value: "0"}, {Name: "gps.interval", Value: "600"}},
-		key:  [64]byte{0x5E, 0xC2, 0x7A},
+		vars:   []radio.Var{{Name: "gps", Value: "0"}, {Name: "gps.interval", Value: "600"}},
+		key:    [64]byte{0x5E, 0xC2, 0x7A},
+		femLNA: true,
 	}
 }
 
@@ -207,4 +209,61 @@ func (s *Sim) Stats(ctx context.Context) (radio.Stats, error) {
 		TxAir: time.Duration(secs/90) * time.Second, RxAir: time.Duration(secs/11) * time.Second,
 		Recv: recv, Sent: recv / 20, SentFlood: recv / 30, SentDirect: recv / 60, RecvFlood: recv * 3 / 4, RecvDirect: recv / 4,
 		RecvErrors: secs / 900}, nil
+}
+
+// RunCLI answers the companion console's commands as Heltec V4 firmware v1.18.0 does; reboot and poweroff
+// never reply, as the radio goes away.
+func (s *Sim) RunCLI(ctx context.Context, command string) (string, error) {
+	s.frame(66, 0)
+	time.Sleep(s.delay(60))
+	cmd := strings.TrimSpace(command)
+	if cmd == "reboot" || cmd == "poweroff" || cmd == "shutdown" {
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d := &s.dev
+	onOff := map[bool]string{true: "on", false: "off"}
+	switch {
+	case cmd == "ver":
+		return device.info.Firmware + " (Build: " + device.info.BuildDate + ")", nil
+	case cmd == "board":
+		return device.info.Model, nil
+	case cmd == "get name":
+		return "> " + d.s.Self.Name, nil
+	case strings.HasPrefix(cmd, "set name "):
+		d.s.Self.Name = strings.TrimPrefix(cmd, "set name ")
+		return "OK", nil
+	case strings.HasPrefix(cmd, "set pin "):
+		var pin uint32
+		fmt.Sscan(strings.TrimPrefix(cmd, "set pin "), &pin)
+		d.s.Pin = pin
+		return fmt.Sprintf("> pin is now %06d", pin), nil
+	case cmd == "get radio.fem.rxgain":
+		return "> " + onOff[d.femLNA], nil
+	case strings.HasPrefix(cmd, "set radio.fem.rxgain "):
+		switch strings.TrimPrefix(cmd, "set radio.fem.rxgain ") {
+		case "on":
+			d.femLNA = true
+			return "OK - LoRa FEM RX gain on", nil
+		case "off":
+			d.femLNA = false
+			return "OK - LoRa FEM RX gain off", nil
+		}
+		return "Error: state must be on or off", nil
+	case cmd == "get tx":
+		return fmt.Sprintf("> %d", d.s.Self.TxPower), nil
+	case strings.HasPrefix(cmd, "set tx "):
+		var dbm int
+		if _, err := fmt.Sscan(strings.TrimPrefix(cmd, "set tx "), &dbm); err != nil || dbm < 1 || dbm > d.s.MaxTxPower {
+			return "Error, invalid power", nil
+		}
+		d.s.Self.TxPower = byte(dbm)
+		return "OK", nil
+	case cmd == "get radio":
+		r := d.s.Radio
+		return fmt.Sprintf("> %.3f,%.1f,%d,%d", float64(r.FreqKHz)/1000, float64(r.BwHz)/1000, r.SF, r.CR), nil
+	}
+	return "Unknown command", nil
 }

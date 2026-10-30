@@ -63,7 +63,7 @@ var device = struct {
 	drift time.Duration
 }{
 	self:  radio.SelfInfo{Name: "MeshCore-k4", PubKey: key(0xC0, "MeshCore-k4"), FreqKHz: 869618, BwHz: 62500, SF: 8, CR: 8, TxPower: 22, Lat: 51.44, Lon: -2.598},
-	info:  radio.DeviceInfo{Model: "Heltec V4", Firmware: "v1.17.1", BuildDate: "14 Aug 2026", MaxContacts: 350, MaxChannels: 40},
+	info:  radio.DeviceInfo{Model: "Heltec V4", Firmware: "v1.18.0", Code: radio.ConsoleCode, BuildDate: "15 Oct 2026", MaxContacts: 350, MaxChannels: 40},
 	drift: 14 * time.Second,
 }
 

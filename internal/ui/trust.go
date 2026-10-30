@@ -195,15 +195,17 @@ func (m *Model) identityRow() devRow {
 }
 
 func radioCommand() command {
-	return command{name: "radio", args: "trust | backup | restore [file]", help: "back up the radio or restore a backup, choosing what goes in; or accept a radio that proved its key but isn't the one saved",
+	return command{name: "radio", args: "console | backup | restore [file] | trust", help: "open your radio's console, back it up or restore a backup; or accept a radio that proved its key but isn't the one saved",
 		run: func(m *Model, a []string) error {
 			switch {
 			case len(a) == 1 && a[0] == "backup":
 				return m.startBackup()
+			case len(a) == 1 && a[0] == "console":
+				return m.openConsole()
 			case len(a) >= 1 && a[0] == "restore":
 				return m.startRestore(strings.Join(a[1:], " "))
 			case len(a) != 1 || a[0] != "trust":
-				return fmt.Errorf("radio takes trust, backup or restore")
+				return fmt.Errorf("radio takes console, backup, restore or trust")
 			}
 			if m.trust != trustChanged {
 				return fmt.Errorf("this radio isn't flagged as different")

@@ -263,9 +263,13 @@ func trimFloat(f float64) string {
 	return s
 }
 
+// ConsoleCode is the version code of companion firmware v1.18.0, the first to run console commands.
+const ConsoleCode = 14
+
 type DeviceInfo struct {
 	Model       string
 	Firmware    string
+	Code        int // the firmware's version code; ConsoleCode and up run console commands
 	BuildDate   string
 	MaxContacts int
 	MaxChannels int

@@ -42,6 +42,8 @@ func (m *Model) renderDevice(w, rows int) []string {
 		return m.backupLines(w)
 	case devRestorePath:
 		return m.restorePathLines(w)
+	case devConsole:
+		return m.devConsoleLines(w, rows)
 	}
 	out := []string{m.deviceStatus(w), ""}
 	list := m.deviceRows()
@@ -86,7 +88,7 @@ func (m *Model) renderDevice(w, rows int) []string {
 	for len(out) < rows-1 {
 		out = append(out, "")
 	}
-	return append(out, th.Fg(th.Dim, false).Render(clip("↑↓ choose · enter edit, toggle or run · u read again · changes go to the radio straight away", w)))
+	return append(out, th.Fg(th.Dim, false).Render(clip("↑↓ choose · enter edit, toggle or run · c console · u read again · changes go to the radio straight away", w)))
 }
 
 func (m *Model) devRowLine(r devRow, sel bool, labelW, w int) string {

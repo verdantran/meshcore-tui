@@ -292,7 +292,7 @@ func (l *Link) sync(ctx context.Context) {
 			SF: self.RadioSpreadFactor, CR: self.RadioCodingRate, TxPower: self.TxPower,
 			Lat: float64(self.AdvertLatitude) / 1e6, Lon: float64(self.AdvertLongitude) / 1e6,
 		},
-		Device: DeviceInfo{Model: untrusted.Line(dev.Model), Firmware: untrusted.Line(dev.FirmwareVersionStr), BuildDate: untrusted.Line(dev.FirmwareBuildDate), MaxContacts: int(dev.MaxContacts), MaxChannels: int(dev.MaxChannels),
+		Device: DeviceInfo{Model: untrusted.Line(dev.Model), Firmware: untrusted.Line(dev.FirmwareVersionStr), Code: int(dev.FirmwareVersion), BuildDate: untrusted.Line(dev.FirmwareBuildDate), MaxContacts: int(dev.MaxContacts), MaxChannels: int(dev.MaxChannels),
 			PathHash: int(dev.PathHashMode) + 1},
 		Contacts:    len(contacts),
 		Channels:    len(channels),

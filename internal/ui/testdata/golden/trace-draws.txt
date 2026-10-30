@@ -1,5 +1,5 @@
 == 0s ==
- MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.18.0 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌PATH · TRACE TO ALICE, NOW ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃                                             ⡠⠊                                                   ┃
@@ -29,9 +29,9 @@
  [10:00:02] ▸ TRACE  Alice  A3 +7.2 · 1E +1.2 · A3 -2.2 · back +3.8
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles d9ca5cba1255465d
+styles ceb7b9975d98307f
 == 480ms ==
- MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.18.0 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌PATH · TRACE TO ALICE, NOW ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃                                             ⡠⠊                                                   ┃
@@ -61,9 +61,9 @@ styles d9ca5cba1255465d
  [10:00:02] ▸ TRACE  Alice  A3 +7.2 · 1E +1.2 · A3 -2.2 · back +3.8
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles a26bd20a59f9cfb0
+styles eeec0507b6a33e3a
 == 1.46s ==
- MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.17.1 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
+ MeshCore-k4  RX ●  TX ●  Heltec V4 · fw v1.18.0 · 869.618 SF8 BW62.5 · 4.02V ████░▌ 85%   ● LINKED
  1 CHATS ╱ 2 CONTACTS ╱ 3 MAP ╱ 4 PACKETS ╱ 5 ADMIN ╱ 6 DEVICE ╱ 7 STATS
 ┏━▌PATH · TRACE TO ALICE, NOW ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃                                             ⡠⠊                                                   ┃
@@ -93,4 +93,4 @@ styles a26bd20a59f9cfb0
  [10:00:02] ▸ TRACE  Alice  A3 +7.2 · 1E +1.2 · A3 -2.2 · back +3.8
 
  1-7 screens · ctrl+w panes · : command · ? help · ctrl+f search · T theme · v motion · F12 frames ·
-styles dea4d933f5f8ccff
+styles 035d84bb95136cad
