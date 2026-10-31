@@ -86,40 +86,24 @@ func regionalIndicator(r rune) bool { return r >= 0x1F1E6 && r <= 0x1F1FF }
 // textEmojiProbe is an emoji that shows as text by default, as the width probe draws it.
 const textEmojiProbe = "\U0001F574"
 
-// widenTextEmoji makes room for emoji from the newer emoji blocks that show as text by default, such as 🕴 and
-// 🖐, for a terminal that draws them two cells wide where the app counted one. Each followed by two or more
-// spaces takes one of them, so the row keeps its width. Names never hold two spaces running, as
-// untrusted.Name collapses them, so the space taken is always padding and no two names come to look alike.
-// One followed by anything else is left as it is. Counting by grapheme, each also gets the emoji variation
-// selector: tmux may give the plain one two cells while the terminal behind it draws it in one, as Windows
-// Terminal does, but both draw it two wide with the selector, and so does the app's count, so all three agree.
-func widenTextEmoji(frame string, selector bool) string {
+// standInTextEmoji draws each emoji from the newer emoji blocks that shows as text by default, such as 🕴 and 🖐,
+// as *, for a terminal that draws them two cells wide where the app counted one. Inside tmux the gap can't be
+// closed any other way: Bubble Tea updates rows at the cells its own count gives, so padding the first draw
+// still leaves later updates a cell out, and with the emoji selector Windows Terminal draws over the cell
+// before. A * is one cell everywhere, so nothing moves. untrusted.Skeleton reads them as * too, so names
+// that differ only in such an emoji look alike there, and are matched as alike.
+func standInTextEmoji(frame string) string {
 	if !strings.ContainsFunc(frame, textDefaultEmoji) {
 		return frame
 	}
 	var b strings.Builder
-	p := ansi.NewParser()
-	var state byte
-	skip := false
-	for len(frame) > 0 {
-		seq, _, n, next := ansi.DecodeSequence(frame, state, p)
-		state, frame = next, frame[n:]
-		switch {
-		case strings.HasPrefix(seq, "\x1b"):
-			b.WriteString(seq) // colours between the emoji and its padding
-			continue
-		case skip && seq == " ":
-			skip = false
+	g := uniseg.NewGraphemes(frame)
+	for g.Next() {
+		if rs := g.Runes(); len(rs) == 1 && textDefaultEmoji(rs[0]) {
+			b.WriteByte('*')
 			continue
 		}
-		skip = false
-		b.WriteString(seq)
-		if rs := []rune(seq); len(rs) == 1 && textDefaultEmoji(rs[0]) {
-			skip = strings.HasPrefix(ansi.Strip(frame[:min(len(frame), 64)]), "  ")
-			if skip && selector {
-				b.WriteRune('\uFE0F')
-			}
-		}
+		b.WriteString(g.Str())
 	}
 	return b.String()
 }

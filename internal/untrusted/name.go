@@ -47,7 +47,9 @@ func skinTone(r rune) bool { return r >= 0x1f3fb && r <= 0x1f3ff }
 // cell: any run of them after 🏴 is kept, and one that spells no flag is drawn as the 🏴 alone. Skin tones
 // and a narrow symbol after an emoji, such as the ♂ in "🏊‍♂", go as well, as a terminal that draws joined
 // emoji as their parts shows neither, so "🏊‍♂" and "🏊‍♀", or "👍🏽" and "👍🏿", look alike there. Regional
-// indicators read as their letters: many terminals draw "🇷" alone as an R, and "🇫🇷" as FR without flags.
+// indicators read as their letters: many terminals draw "🇷" alone as an R, and "🇫🇷" as FR without flags. And
+// emoji from the newer blocks that show as text by default, such as 🕴 and 🖐, read as *, as they're drawn
+// where tmux and the terminal behind it disagree on their width.
 func Skeleton(s string) string {
 	var b strings.Builder
 	afterEmoji := false
@@ -57,6 +59,8 @@ func Skeleton(s string) string {
 		}
 		if r >= 0x1f1e6 && r <= 0x1f1ff {
 			r = 'a' + r - 0x1f1e6 // a regional indicator is drawn as its letter where it isn't paired into a flag
+		} else if r >= 0x1f000 && pictographic(r) && uniseg.StringWidth(string(r)) == 1 {
+			r = '*' // an emoji such as 🕴 that shows as text is drawn as * where tmux and the terminal disagree on it
 		}
 		// A narrow symbol such as ♂ after an emoji is left out where joined emoji are drawn as their parts.
 		wide := uniseg.StringWidth(string(r)) == 2

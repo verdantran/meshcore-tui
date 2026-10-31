@@ -91,6 +91,14 @@ func TestLookalikeSenders(t *testing.T) {
 		t.Errorf("a flag for its letters: %q", v)
 	}
 
+	// Where tmux and the terminal disagree on an emoji that shows as text, it's drawn as *, so one hides another.
+	h.m.pin("Zed\U0001F574", zed.pub)
+	h.clk.t = h.clk.t.Add(time.Minute)
+	h.say(1, "Zed\U0001F590", "trust me")
+	if v := h.verdict(); v != "⚠ looks like Zed\U0001F574" {
+		t.Errorf("another emoji that shows as text: %q", v)
+	}
+
 	// Even signed, a look-alike is flagged; K asks before pinning one.
 	mallory := newSigner("mallory")
 	h.m.contacts.heard = append(h.m.contacts.heard, heardNode{radio.Contact{Key: mallory.pub, Name: "Zеd"}, h.clk.t})

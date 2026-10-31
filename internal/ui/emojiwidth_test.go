@@ -102,73 +102,47 @@ func TestFlagsOnScreen(t *testing.T) {
 	}
 }
 
-func TestWidenTextEmoji(t *testing.T) {
+func TestStandInTextEmoji(t *testing.T) {
 	for in, want := range map[string]string{
-		"The Don\U0001F574   |":            "The Don\U0001F574  |",
-		"\U0001F590     |":                 "\U0001F590    |",
-		"\x1b[33mDon\U0001F574\x1b[0m   |": "\x1b[33mDon\U0001F574\x1b[0m  |",
-		"\U0001F574 Bob  |":                "\U0001F574 Bob  |", // one space after it, as in a name: left alone
-		"\U0001F574Bob  |":                 "\U0001F574Bob  |",
-		"\U0001F574\ufe0f   |":             "\U0001F574\ufe0f   |", // counted two already
-		"\U0001F344   |":                   "\U0001F344   |",       // an emoji counted two
-		"\u263a   |":                       "\u263a   |",           // an old symbol tmux draws in one cell
+		"The Don\U0001F574   |":          "The Don*   |",
+		"\U0001F590|":                    "*|",
+		"\x1b[33mDon\U0001F574\x1b[0m |": "\x1b[33mDon*\x1b[0m |",
+		"\U0001F574\ufe0f|":              "\U0001F574\ufe0f|", // asked to be an emoji, it's counted two already
+		"\U0001F344|":                    "\U0001F344|",       // an emoji counted two
+		"\u263a|":                        "\u263a|",           // an older symbol tmux draws in one cell
+		"\U0001F1EB\U0001F1F7|":          "\U0001F1EB\U0001F1F7|",
 	} {
-		if got := widenTextEmoji(in, false); got != want {
-			t.Errorf("widenTextEmoji(%q) = %q, want %q", in, got, want)
-		}
-	}
-	// Counting by grapheme, each gets the emoji variation selector, which the app counts two cells, as tmux and
-	// the terminal behind it both draw it.
-	for in, want := range map[string]string{
-		"The Don\U0001F574   |": "The Don\U0001F574\ufe0f  |",
-		"\U0001F574 Bob  |":     "\U0001F574 Bob  |",
-	} {
-		got := widenTextEmoji(in, true)
+		got := standInTextEmoji(in)
 		if got != want {
-			t.Errorf("widenTextEmoji(%q, true) = %q, want %q", in, got, want)
+			t.Errorf("standInTextEmoji(%q) = %q, want %q", in, got, want)
 		}
-		if ansi.GraphemeWidth.StringWidth(got) != ansi.GraphemeWidth.StringWidth(in) {
-			t.Errorf("%q: counted %d cells, not %d", got, ansi.GraphemeWidth.StringWidth(got), ansi.GraphemeWidth.StringWidth(in))
-		}
-	}
-}
-
-func TestTextEmojiOnScreen(t *testing.T) {
-	h := newHarness(t)
-	pub, _ := h.channel("Public")
-	h.m.opt.TextEmoji = 2
-	h.m.jumpToConvo(store.ChannelConvo(pub.Idx))
-	h.m.Update(eventMsg{radio.Incoming{At: h.m.now, Channel: true, ChannelIdx: pub.Idx, SentAt: h.m.now, Text: "Zed\U0001F574: \U0001F590"}})
-	h.settle()
-	found := false
-	for _, l := range strings.Split(h.m.View().Content, "\n") {
-		if strings.Contains(l, "\U0001F574") || strings.Contains(l, "\U0001F590") {
-			found = true
-			if got := ansi.WcWidth.StringWidth(l) + strings.Count(l, "\U0001F574") + strings.Count(l, "\U0001F590"); got != h.m.w {
-				t.Errorf("drawn two cells wide, the row is %d cells, not %d: %q", got, h.m.w, ansi.Strip(l))
+		for _, m := range []ansi.Method{ansi.WcWidth, ansi.GraphemeWidth} {
+			if m.StringWidth(got) != m.StringWidth(in) {
+				t.Errorf("%q: the row's width changed, which Bubble Tea's count of it wouldn't follow", in)
 			}
 		}
 	}
-	if !found {
-		t.Error("the message isn't on screen")
-	}
 }
 
-// Counting by grapheme, as inside tmux, the selector makes the app's count, tmux and the terminal behind it agree.
-func TestTextEmojiOnScreenByGrapheme(t *testing.T) {
+// Inside tmux, counting by grapheme, rows holding such an emoji come to the screen's width by every count.
+func TestTextEmojiOnScreen(t *testing.T) {
 	defer setRenderWidth(renderWidth)
 	setRenderWidth(ansi.GraphemeWidth)
 	h := newHarness(t)
 	pub, _ := h.channel("Public")
 	h.m.opt.TextEmoji = 2
 	h.m.jumpToConvo(store.ChannelConvo(pub.Idx))
-	h.m.Update(eventMsg{radio.Incoming{At: h.m.now, Channel: true, ChannelIdx: pub.Idx, SentAt: h.m.now, Text: "Zed\U0001F574: \U0001F590"}})
+	h.m.Update(eventMsg{radio.Incoming{At: h.m.now, Channel: true, ChannelIdx: pub.Idx, SentAt: h.m.now, Text: "Zed\U0001F574: hello"}})
 	h.settle()
-	scr := strings.Join(screen(t, h.m), "\n") // every row exactly the screen's width, as counted
-	if !strings.Contains(scr, "Zed\U0001F574\ufe0f") {
-		t.Fatalf("drawn with the selector:\n%s", ansi.Strip(scr))
+	scr := strings.Join(screen(t, h.m), "\n")
+	if !strings.Contains(scr, "Zed*") || strings.Contains(scr, "\U0001F574") {
+		t.Fatalf("drawn as *:\n%s", ansi.Strip(scr))
 	}
-	if msg := h.m.chats.msgs[len(h.m.chats.msgs)-1]; strings.ContainsRune(msg.Sender+msg.Text, '️') {
-		t.Errorf("the message keeps its text: %q %q", msg.Sender, msg.Text)
+	if msg := h.m.chats.msgs[len(h.m.chats.msgs)-1]; msg.Sender != "Zed\U0001F574" {
+		t.Errorf("the sender keeps it: %q", msg.Sender)
+	}
+	h.m.opt.TextEmoji = 1
+	if !strings.Contains(h.screen(), "Zed\U0001F574") {
+		t.Error("drawn as wide as it's counted, it's left alone")
 	}
 }

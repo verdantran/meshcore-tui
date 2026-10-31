@@ -52,7 +52,7 @@ func (m *Model) View() tea.View {
 		frame = splitEmoji(frame)
 	}
 	if m.opt.TextEmoji > renderWidth.StringWidth(textEmojiProbe) {
-		frame = widenTextEmoji(frame, renderWidth == ansi.GraphemeWidth)
+		frame = standInTextEmoji(frame)
 	}
 	lone, flags := renderWidth.StringWidth(loneProbe), renderWidth.StringWidth(flagProbe)
 	loneOff := m.opt.FlagLetters || m.opt.LoneLetter != 0 && m.opt.LoneLetter != lone

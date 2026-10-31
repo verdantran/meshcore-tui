@@ -115,3 +115,15 @@ func TestSkeletonReadsRegionalIndicators(t *testing.T) {
 		t.Error("Name keeps it")
 	}
 }
+
+func TestSkeletonReadsTextEmojiAsStar(t *testing.T) {
+	if Skeleton("Zed\U0001F574") != Skeleton("Zed\U0001F590") || Skeleton("Zed\U0001F574") != Skeleton("Zed*") {
+		t.Error("emoji that show as text are drawn alike as *")
+	}
+	if Skeleton("Zed\U0001F344") == Skeleton("Zed*") || Skeleton("Zed☺") == Skeleton("Zed*") {
+		t.Error("emoji counted two cells, and older symbols, aren't")
+	}
+	if Name("Zed\U0001F574") != "Zed\U0001F574" {
+		t.Error("Name keeps it")
+	}
+}
