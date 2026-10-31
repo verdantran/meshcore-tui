@@ -90,8 +90,10 @@ const textEmojiProbe = "\U0001F574"
 // 🖐, for a terminal that draws them two cells wide where the app counted one. Each followed by two or more
 // spaces takes one of them, so the row keeps its width. Names never hold two spaces running, as
 // untrusted.Name collapses them, so the space taken is always padding and no two names come to look alike.
-// One followed by anything else is left as it is.
-func widenTextEmoji(frame string) string {
+// One followed by anything else is left as it is. Counting by grapheme, each also gets the emoji variation
+// selector: tmux may give the plain one two cells while the terminal behind it draws it in one, as Windows
+// Terminal does, but both draw it two wide with the selector, and so does the app's count, so all three agree.
+func widenTextEmoji(frame string, selector bool) string {
 	if !strings.ContainsFunc(frame, textDefaultEmoji) {
 		return frame
 	}
@@ -114,6 +116,9 @@ func widenTextEmoji(frame string) string {
 		b.WriteString(seq)
 		if rs := []rune(seq); len(rs) == 1 && textDefaultEmoji(rs[0]) {
 			skip = strings.HasPrefix(ansi.Strip(frame[:min(len(frame), 64)]), "  ")
+			if skip && selector {
+				b.WriteRune('\uFE0F')
+			}
 		}
 	}
 	return b.String()

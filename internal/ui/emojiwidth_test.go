@@ -113,8 +113,22 @@ func TestWidenTextEmoji(t *testing.T) {
 		"\U0001F344   |":                   "\U0001F344   |",       // an emoji counted two
 		"\u263a   |":                       "\u263a   |",           // an old symbol tmux draws in one cell
 	} {
-		if got := widenTextEmoji(in); got != want {
+		if got := widenTextEmoji(in, false); got != want {
 			t.Errorf("widenTextEmoji(%q) = %q, want %q", in, got, want)
+		}
+	}
+	// Counting by grapheme, each gets the emoji variation selector, which the app counts two cells, as tmux and
+	// the terminal behind it both draw it.
+	for in, want := range map[string]string{
+		"The Don\U0001F574   |": "The Don\U0001F574\ufe0f  |",
+		"\U0001F574 Bob  |":     "\U0001F574 Bob  |",
+	} {
+		got := widenTextEmoji(in, true)
+		if got != want {
+			t.Errorf("widenTextEmoji(%q, true) = %q, want %q", in, got, want)
+		}
+		if ansi.GraphemeWidth.StringWidth(got) != ansi.GraphemeWidth.StringWidth(in) {
+			t.Errorf("%q: counted %d cells, not %d", got, ansi.GraphemeWidth.StringWidth(got), ansi.GraphemeWidth.StringWidth(in))
 		}
 	}
 }
@@ -137,5 +151,24 @@ func TestTextEmojiOnScreen(t *testing.T) {
 	}
 	if !found {
 		t.Error("the message isn't on screen")
+	}
+}
+
+// Counting by grapheme, as inside tmux, the selector makes the app's count, tmux and the terminal behind it agree.
+func TestTextEmojiOnScreenByGrapheme(t *testing.T) {
+	defer setRenderWidth(renderWidth)
+	setRenderWidth(ansi.GraphemeWidth)
+	h := newHarness(t)
+	pub, _ := h.channel("Public")
+	h.m.opt.TextEmoji = 2
+	h.m.jumpToConvo(store.ChannelConvo(pub.Idx))
+	h.m.Update(eventMsg{radio.Incoming{At: h.m.now, Channel: true, ChannelIdx: pub.Idx, SentAt: h.m.now, Text: "Zed\U0001F574: \U0001F590"}})
+	h.settle()
+	scr := strings.Join(screen(t, h.m), "\n") // every row exactly the screen's width, as counted
+	if !strings.Contains(scr, "Zed\U0001F574\ufe0f") {
+		t.Fatalf("drawn with the selector:\n%s", ansi.Strip(scr))
+	}
+	if msg := h.m.chats.msgs[len(h.m.chats.msgs)-1]; strings.ContainsRune(msg.Sender+msg.Text, '️') {
+		t.Errorf("the message keeps its text: %q %q", msg.Sender, msg.Text)
 	}
 }
