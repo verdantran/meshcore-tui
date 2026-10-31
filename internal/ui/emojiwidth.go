@@ -82,3 +82,44 @@ func plainLetters(frame string, lone, flags bool, loneCells int) string {
 }
 
 func regionalIndicator(r rune) bool { return r >= 0x1F1E6 && r <= 0x1F1FF }
+
+// textEmojiProbe is an emoji that shows as text by default, as the width probe draws it.
+const textEmojiProbe = "\U0001F574"
+
+// widenTextEmoji makes room for emoji from the newer emoji blocks that show as text by default, such as 🕴 and
+// 🖐, for a terminal that draws them two cells wide where the app counted one. Each followed by two or more
+// spaces takes one of them, so the row keeps its width. Names never hold two spaces running, as
+// untrusted.Name collapses them, so the space taken is always padding and no two names come to look alike.
+// One followed by anything else is left as it is.
+func widenTextEmoji(frame string) string {
+	if !strings.ContainsFunc(frame, textDefaultEmoji) {
+		return frame
+	}
+	var b strings.Builder
+	p := ansi.NewParser()
+	var state byte
+	skip := false
+	for len(frame) > 0 {
+		seq, _, n, next := ansi.DecodeSequence(frame, state, p)
+		state, frame = next, frame[n:]
+		switch {
+		case strings.HasPrefix(seq, "\x1b"):
+			b.WriteString(seq) // colours between the emoji and its padding
+			continue
+		case skip && seq == " ":
+			skip = false
+			continue
+		}
+		skip = false
+		b.WriteString(seq)
+		if rs := []rune(seq); len(rs) == 1 && textDefaultEmoji(rs[0]) {
+			skip = strings.HasPrefix(ansi.Strip(frame[:min(len(frame), 64)]), "  ")
+		}
+	}
+	return b.String()
+}
+
+// textDefaultEmoji is an emoji from the newer blocks that both ways of counting give one cell.
+func textDefaultEmoji(r rune) bool {
+	return r >= 0x1F000 && !regionalIndicator(r) && ansi.WcWidth.StringWidth(string(r)) == 1
+}

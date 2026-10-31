@@ -101,3 +101,41 @@ func TestFlagsOnScreen(t *testing.T) {
 		t.Error("asked for letters, flags are drawn as letters whatever the probe found")
 	}
 }
+
+func TestWidenTextEmoji(t *testing.T) {
+	for in, want := range map[string]string{
+		"The Don\U0001F574   |":            "The Don\U0001F574  |",
+		"\U0001F590     |":                 "\U0001F590    |",
+		"\x1b[33mDon\U0001F574\x1b[0m   |": "\x1b[33mDon\U0001F574\x1b[0m  |",
+		"\U0001F574 Bob  |":                "\U0001F574 Bob  |", // one space after it, as in a name: left alone
+		"\U0001F574Bob  |":                 "\U0001F574Bob  |",
+		"\U0001F574\ufe0f   |":             "\U0001F574\ufe0f   |", // counted two already
+		"\U0001F344   |":                   "\U0001F344   |",       // an emoji counted two
+		"\u263a   |":                       "\u263a   |",           // an old symbol tmux draws in one cell
+	} {
+		if got := widenTextEmoji(in); got != want {
+			t.Errorf("widenTextEmoji(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestTextEmojiOnScreen(t *testing.T) {
+	h := newHarness(t)
+	pub, _ := h.channel("Public")
+	h.m.opt.TextEmoji = 2
+	h.m.jumpToConvo(store.ChannelConvo(pub.Idx))
+	h.m.Update(eventMsg{radio.Incoming{At: h.m.now, Channel: true, ChannelIdx: pub.Idx, SentAt: h.m.now, Text: "Zed\U0001F574: \U0001F590"}})
+	h.settle()
+	found := false
+	for _, l := range strings.Split(h.m.View().Content, "\n") {
+		if strings.Contains(l, "\U0001F574") || strings.Contains(l, "\U0001F590") {
+			found = true
+			if got := ansi.WcWidth.StringWidth(l) + strings.Count(l, "\U0001F574") + strings.Count(l, "\U0001F590"); got != h.m.w {
+				t.Errorf("drawn two cells wide, the row is %d cells, not %d: %q", got, h.m.w, ansi.Strip(l))
+			}
+		}
+	}
+	if !found {
+		t.Error("the message isn't on screen")
+	}
+}

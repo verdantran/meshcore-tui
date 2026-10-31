@@ -30,9 +30,12 @@ var widthProbes = []string{"☀️", "🏊‍♂", "👨‍💻", "👍🏽"}
 // loneLetter is a regional indicator on its own, one of the letters two of which make a flag. Counted two
 // cells as a grapheme and one a character at a time, it's drawn either way, as an emoji or as a small letter.
 // flagProbe is two of them, counted two cells either way, which some terminals draw as one narrow glyph.
+// textEmoji is an emoji from the newer emoji blocks that shows as text unless asked otherwise, such as 🕴.
+// Both ways of counting give it one cell, and tmux among others draws it in two.
 const (
 	loneLetter = "\U0001F1F7"
 	flagProbe  = "\U0001F1EB\U0001F1F7"
+	textEmoji  = "\U0001F574"
 )
 
 // widths is what the probe found: how emoji are counted, and how wide a lone regional indicator and a flag
@@ -41,6 +44,7 @@ type widths struct {
 	mode       widthMode
 	loneLetter int
 	flag       int
+	textEmoji  int
 }
 
 // tty is the terminal as the width probe uses it: deadlines keep a silent terminal from holding up startup.
@@ -81,7 +85,7 @@ func measureWidths(t tty, wait time.Duration) widths {
 	for _, m := range []struct {
 		probe string
 		into  *int
-	}{{loneLetter, &w.loneLetter}, {flagProbe, &w.flag}} {
+	}{{loneLetter, &w.loneLetter}, {flagProbe, &w.flag}, {textEmoji, &w.textEmoji}} {
 		if _, err := io.WriteString(t, "\r"+m.probe+"\x1b[6n"); err != nil {
 			break
 		}

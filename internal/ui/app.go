@@ -53,6 +53,7 @@ type Options struct {
 	LoneLetter  int                 // how wide the terminal draws a lone regional indicator; 0 when it didn't say
 	Flag        int                 // how wide the terminal draws a flag, two regional indicators; 0 when it didn't say
 	FlagLetters bool                // draw every flag and lone regional indicator as letters, as [ui] flags says or tmux needs
+	TextEmoji   int                 // how wide the terminal draws an emoji such as 🕴 that shows as text by default; 0 when it didn't say
 	ExportDir   string              // where :export writes; empty uses the data directory
 	Keychain    admin.Keychain      // node passwords; nil keeps them only while the program runs
 	MapDir      string              // street detail and its download; empty uses the data directory
