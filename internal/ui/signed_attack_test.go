@@ -83,6 +83,14 @@ func TestLookalikeSenders(t *testing.T) {
 		t.Errorf("another skin tone: %q", v)
 	}
 
+	// Many terminals draw a regional indicator as its letter, and a flag as two where they don't draw flags.
+	h.m.pin("ZedFR", zed.pub)
+	h.clk.t = h.clk.t.Add(time.Minute)
+	h.say(1, "Zed\U0001F1EB\U0001F1F7", "trust me")
+	if v := h.verdict(); v != "⚠ looks like ZedFR" {
+		t.Errorf("a flag for its letters: %q", v)
+	}
+
 	// Even signed, a look-alike is flagged; K asks before pinning one.
 	mallory := newSigner("mallory")
 	h.m.contacts.heard = append(h.m.contacts.heard, heardNode{radio.Contact{Key: mallory.pub, Name: "Zеd"}, h.clk.t})

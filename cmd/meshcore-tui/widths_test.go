@@ -46,19 +46,20 @@ func TestMeasureWidths(t *testing.T) {
 	for _, c := range []struct {
 		name  string
 		reply string
-		want  widthMode
+		want  widths
 	}{
-		{"a grapheme at a time, as tmux 3.4 and later", report(3, 3, 3, 3), widthsGraphemes},
-		{"a character at a time", report(2, 4, 5, 5), widthsPerChar},
-		{"neither: joined, but the symbol drawn wide", report(3, 5, 3, 3), widthsSplit},
-		{"neither: the sun one cell, the rest joined", report(2, 3, 3, 3), widthsSplit},
-		{"a key typed first", "q\x1b[A" + report(3, 3, 3, 3), widthsGraphemes},
-		{"silent", "", widthsUnknown},
-		{"stops answering", report(3, 3), widthsUnknown},
+		{"a grapheme at a time, a lone letter narrow, as tmux 3.8", report(3, 3, 3, 3, 2), widths{widthsGraphemes, 1}},
+		{"a character at a time", report(2, 4, 5, 5, 2), widths{widthsPerChar, 1}},
+		{"neither: joined, but the symbol drawn wide", report(3, 5, 3, 3, 3), widths{widthsSplit, 2}},
+		{"neither: the sun one cell, the rest joined", report(2, 3, 3, 3, 2), widths{widthsSplit, 1}},
+		{"a key typed first", "q\x1b[A" + report(3, 3, 3, 3, 3), widths{widthsGraphemes, 2}},
+		{"no answer for the lone letter", report(3, 3, 3, 3), widths{widthsGraphemes, 0}},
+		{"silent", "", widths{}},
+		{"stops answering", report(3, 3), widths{}},
 	} {
 		f := &fakeTTY{reply: c.reply}
 		if got := measureWidths(f, time.Second); got != c.want {
-			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+			t.Errorf("%s: got %+v, want %+v", c.name, got, c.want)
 		}
 		if w := f.written.String(); !strings.Contains(w, widthProbes[0]+"\x1b[6n") || !strings.HasSuffix(w, "\r\x1b[K") {
 			t.Errorf("%s: wrote %q, want the probes then the line cleared", c.name, w)
@@ -68,7 +69,7 @@ func TestMeasureWidths(t *testing.T) {
 
 func TestMeasureWidthsNeedsADeadline(t *testing.T) {
 	f := &fakeTTY{reply: "\x1b[1;3R", noDeadline: true}
-	if measureWidths(f, time.Second) != widthsUnknown || f.written.Len() > 0 {
+	if measureWidths(f, time.Second) != (widths{}) || f.written.Len() > 0 {
 		t.Errorf("probed a terminal it couldn't stop waiting for: wrote %q", f.written.String())
 	}
 }

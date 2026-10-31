@@ -106,3 +106,12 @@ func TestSkeletonMatchesSplitEmoji(t *testing.T) {
 		t.Error("Name keeps every character")
 	}
 }
+
+func TestSkeletonReadsRegionalIndicators(t *testing.T) {
+	if Skeleton("Zed\U0001F1F7") != Skeleton("ZedR") || Skeleton("\U0001F1EB\U0001F1F7 Bob") != Skeleton("FR Bob") {
+		t.Error("a regional indicator should look like its letter")
+	}
+	if Name("Zed\U0001F1F7") != "Zed\U0001F1F7" {
+		t.Error("Name keeps it")
+	}
+}

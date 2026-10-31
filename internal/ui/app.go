@@ -50,6 +50,7 @@ type Options struct {
 	Env        func(string) string // environment lookups for notification detection; nil uses the process's
 	Remote     bool                // the terminal is reached over SSH or mosh, as worked out at startup
 	SplitEmoji bool                // the terminal draws joined emoji neither way the app can count, so they're drawn as their parts
+	LoneLetter int                 // how wide the terminal draws a lone regional indicator; 0 when it didn't say
 	ExportDir  string              // where :export writes; empty uses the data directory
 	Keychain   admin.Keychain      // node passwords; nil keeps them only while the program runs
 	MapDir     string              // street detail and its download; empty uses the data directory

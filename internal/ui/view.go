@@ -51,6 +51,9 @@ func (m *Model) View() tea.View {
 	} else if m.opt.SplitEmoji {
 		frame = splitEmoji(frame)
 	}
+	if counted := renderWidth.StringWidth(loneProbe); m.opt.LoneLetter != 0 && m.opt.LoneLetter != counted {
+		frame = plainLetters(frame, counted)
+	}
 	v := tea.NewView(frame)
 	v.AltScreen = true
 	v.ReportFocus = true

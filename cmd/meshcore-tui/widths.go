@@ -25,6 +25,17 @@ const (
 // narrow symbol, two emoji joined, and a skin tone. Terminals and tmux versions draw each differently.
 var widthProbes = []string{"☀️", "🏊‍♂", "👨‍💻", "👍🏽"}
 
+// loneLetter is a regional indicator on its own, one of the letters two of which make a flag. Counted two
+// cells as a grapheme and one a character at a time, it's drawn either way, as an emoji or as a small letter.
+const loneLetter = "\U0001F1F7"
+
+// widths is what the probe found: how emoji are counted, and how wide a lone regional indicator is drawn
+// (0 when the terminal didn't say).
+type widths struct {
+	mode       widthMode
+	loneLetter int
+}
+
 // tty is the terminal as the width probe uses it: deadlines keep a silent terminal from holding up startup.
 type tty interface {
 	io.ReadWriter
@@ -33,9 +44,9 @@ type tty interface {
 
 // measureWidths draws each probe and asks the terminal where the cursor landed. Many terminals, tmux among
 // them, never answer the mode 2027 query Bubble Tea relies on to learn how they count.
-func measureWidths(t tty, wait time.Duration) widthMode {
+func measureWidths(t tty, wait time.Duration) widths {
 	if t.SetReadDeadline(time.Now().Add(wait)) != nil {
-		return widthsUnknown
+		return widths{}
 	}
 	defer t.SetReadDeadline(time.Time{})
 	defer io.WriteString(t, "\r\x1b[K")
@@ -43,23 +54,29 @@ func measureWidths(t tty, wait time.Duration) widthMode {
 	var got []byte
 	for _, p := range widthProbes {
 		if _, err := io.WriteString(t, "\r"+p+"\x1b[6n"); err != nil {
-			return widthsUnknown
+			return widths{}
 		}
 		col, rest, ok := readColumn(t, got)
 		if !ok {
-			return widthsUnknown
+			return widths{}
 		}
 		got = rest
 		perChar = perChar && col-1 == ansi.WcWidth.StringWidth(p)
 		graphemes = graphemes && col-1 == ansi.GraphemeWidth.StringWidth(p)
 	}
+	w := widths{mode: widthsSplit}
 	switch {
 	case graphemes:
-		return widthsGraphemes
+		w.mode = widthsGraphemes
 	case perChar:
-		return widthsPerChar
+		w.mode = widthsPerChar
 	}
-	return widthsSplit
+	if _, err := io.WriteString(t, "\r"+loneLetter+"\x1b[6n"); err == nil {
+		if col, _, ok := readColumn(t, got); ok {
+			w.loneLetter = col - 1
+		}
+	}
+	return w
 }
 
 // readColumn reads until a cursor position report, returning its column and whatever came after it.
@@ -92,24 +109,24 @@ func cursorColumn(b []byte) (int, int, bool) {
 }
 
 // terminalWidths runs the probe on the controlling terminal, in raw mode so the reports aren't echoed.
-func terminalWidths() widthMode {
+func terminalWidths() widths {
 	f, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
-		return widthsUnknown
+		return widths{}
 	}
 	defer f.Close()
 	// Fd would make reads blocking and so lose the deadline.
 	conn, err := f.SyscallConn()
 	if err != nil {
-		return widthsUnknown
+		return widths{}
 	}
 	var fd uintptr
 	if conn.Control(func(p uintptr) { fd = p }) != nil {
-		return widthsUnknown
+		return widths{}
 	}
 	state, err := term.MakeRaw(fd)
 	if err != nil {
-		return widthsUnknown
+		return widths{}
 	}
 	defer term.Restore(fd, state)
 	return measureWidths(f, 300*time.Millisecond)

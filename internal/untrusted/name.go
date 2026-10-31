@@ -46,13 +46,17 @@ func skinTone(r rune) bool { return r >= 0x1f3fb && r <= 0x1f3ff }
 // since a terminal that doesn't join emoji draws "👩‍🚀" as "👩🚀", and so do a flag's tags, which take no
 // cell: any run of them after 🏴 is kept, and one that spells no flag is drawn as the 🏴 alone. Skin tones
 // and a narrow symbol after an emoji, such as the ♂ in "🏊‍♂", go as well, as a terminal that draws joined
-// emoji as their parts shows neither, so "🏊‍♂" and "🏊‍♀", or "👍🏽" and "👍🏿", look alike there.
+// emoji as their parts shows neither, so "🏊‍♂" and "🏊‍♀", or "👍🏽" and "👍🏿", look alike there. Regional
+// indicators read as their letters: many terminals draw "🇷" alone as an R, and "🇫🇷" as FR without flags.
 func Skeleton(s string) string {
 	var b strings.Builder
 	afterEmoji := false
 	for _, r := range norm.NFKD.String(Name(s)) {
 		if unicode.Is(unicode.Mn, r) || r == zwj || tag(r) || skinTone(r) {
 			continue
+		}
+		if r >= 0x1f1e6 && r <= 0x1f1ff {
+			r = 'a' + r - 0x1f1e6 // a regional indicator is drawn as its letter where it isn't paired into a flag
 		}
 		// A narrow symbol such as ♂ after an emoji is left out where joined emoji are drawn as their parts.
 		wide := uniseg.StringWidth(string(r)) == 2

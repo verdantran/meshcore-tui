@@ -48,3 +48,29 @@ func joinsEmoji(r rune) bool {
 
 // emojiPart is a symbol that can be part of an emoji: ♂, ♀, ⚕, ❤ and the like.
 func emojiPart(r rune) bool { return r >= 0x2190 && r <= 0x2bff }
+
+// loneProbe is a regional indicator on its own, as the width probe draws it.
+const loneProbe = "\U0001F1F7"
+
+// plainLetters draws each lone regional indicator, one not paired into a flag, as the capital letter it stands
+// for, padded to the cells it was counted as. It's for a terminal that draws them at another width from the
+// app's count; untrusted.Skeleton reads them as those letters, so a name looks alike either way.
+func plainLetters(frame string, counted int) string {
+	if !strings.ContainsFunc(frame, regionalIndicator) {
+		return frame
+	}
+	var b strings.Builder
+	g := uniseg.NewGraphemes(frame)
+	for g.Next() {
+		rs := g.Runes()
+		if len(rs) != 1 || !regionalIndicator(rs[0]) {
+			b.WriteString(g.Str())
+			continue
+		}
+		b.WriteRune('A' + rs[0] - 0x1F1E6)
+		b.WriteString(strings.Repeat(" ", max(counted-1, 0)))
+	}
+	return b.String()
+}
+
+func regionalIndicator(r rune) bool { return r >= 0x1F1E6 && r <= 0x1F1FF }
