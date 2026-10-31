@@ -67,6 +67,46 @@ func TestLookalikeSenders(t *testing.T) {
 		t.Errorf("tags after the flag: %q", v)
 	}
 
+	// Where joined emoji are drawn as their parts, ♀ for ♂ or another skin tone doesn't show, so neither hides a look-alike.
+	h.m.pin("🏊\u200d♂ Zed", zed.pub)
+	for _, fake := range []string{"🏊\u200d♀ Zed", "🏊 Zed"} {
+		h.clk.t = h.clk.t.Add(time.Minute)
+		h.say(1, fake, "trust me")
+		if v := h.verdict(); v != "⚠ looks like 🏊\u200d♂ Zed" {
+			t.Errorf("%q: %q", fake, v)
+		}
+	}
+	h.m.pin("👍🏽 Zed", zed.pub)
+	h.clk.t = h.clk.t.Add(time.Minute)
+	h.say(1, "👍🏿 Zed", "trust me")
+	if v := h.verdict(); v != "⚠ looks like 👍🏽 Zed" {
+		t.Errorf("another skin tone: %q", v)
+	}
+
+	// Many terminals draw a regional indicator as its letter, and a flag as two where they don't draw flags.
+	h.m.pin("ZedFR", zed.pub)
+	h.clk.t = h.clk.t.Add(time.Minute)
+	h.say(1, "Zed\U0001F1EB\U0001F1F7", "trust me")
+	if v := h.verdict(); v != "⚠ looks like ZedFR" {
+		t.Errorf("a flag for its letters: %q", v)
+	}
+
+	// Where tmux and the terminal disagree on an emoji that shows as text, it's drawn as *, so one hides another.
+	h.m.pin("Zed\U0001F574", zed.pub)
+	h.clk.t = h.clk.t.Add(time.Minute)
+	h.say(1, "Zed\U0001F590", "trust me")
+	if v := h.verdict(); v != "⚠ looks like Zed\U0001F574" {
+		t.Errorf("another emoji that shows as text: %q", v)
+	}
+
+	// Inside tmux an older symbol with the emoji selector can be drawn plain with a space after it.
+	h.m.pin("Zed\u270c\ufe0fx", zed.pub)
+	h.clk.t = h.clk.t.Add(time.Minute)
+	h.say(1, "Zed\u270c x", "trust me")
+	if v := h.verdict(); v != "⚠ looks like Zed\u270c\ufe0fx" {
+		t.Errorf("a symbol and a space: %q", v)
+	}
+
 	// Even signed, a look-alike is flagged; K asks before pinning one.
 	mallory := newSigner("mallory")
 	h.m.contacts.heard = append(h.m.contacts.heard, heardNode{radio.Contact{Key: mallory.pub, Name: "Zеd"}, h.clk.t})

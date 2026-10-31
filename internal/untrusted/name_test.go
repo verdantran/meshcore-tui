@@ -80,3 +80,59 @@ func TestSkeletonLookalikes(t *testing.T) {
 		}
 	}
 }
+
+func TestSkeletonMatchesSplitEmoji(t *testing.T) {
+	// Where joined emoji are drawn as their parts, the narrow symbol and the skin tone don't show.
+	for _, same := range [][]string{
+		{"🏊‍♂ Bob", "🏊‍♀ Bob", "🏊 Bob", "🏊♂ Bob"},
+		{"👍🏽 Bob", "👍🏿 Bob", "👍 Bob"},
+		{"🧑‍⚕️ Ann", "🧑 Ann"},
+	} {
+		for _, s := range same[1:] {
+			if Skeleton(s) != Skeleton(same[0]) {
+				t.Errorf("%q should look like %q", s, same[0])
+			}
+		}
+	}
+	for _, s := range []string{"Bob ↑", "Bob ↑↓", "👩‍🚀 Ada"} {
+		if Skeleton(s) == Skeleton("Bob") || Skeleton("👩‍🚀 Ada") == Skeleton("👩 Ada") {
+			t.Errorf("%q: only narrow symbols after an emoji go", s)
+		}
+	}
+	if Skeleton("Bob ↑") == Skeleton("Bob ↑↓") {
+		t.Error("arrows after text aren't emoji parts")
+	}
+	if Name("🏊‍♂ Bob") != "🏊‍♂ Bob" || Name("👍🏽 Bob") != "👍🏽 Bob" {
+		t.Error("Name keeps every character")
+	}
+}
+
+func TestSkeletonReadsRegionalIndicators(t *testing.T) {
+	if Skeleton("Zed\U0001F1F7") != Skeleton("ZedR") || Skeleton("\U0001F1EB\U0001F1F7 Bob") != Skeleton("FR Bob") {
+		t.Error("a regional indicator should look like its letter")
+	}
+	if Name("Zed\U0001F1F7") != "Zed\U0001F1F7" {
+		t.Error("Name keeps it")
+	}
+}
+
+func TestSkeletonReadsTextEmojiAsStar(t *testing.T) {
+	if Skeleton("Zed\U0001F574") != Skeleton("Zed\U0001F590") || Skeleton("Zed\U0001F574") != Skeleton("Zed*") {
+		t.Error("emoji that show as text are drawn alike as *")
+	}
+	if Skeleton("Zed\U0001F344") == Skeleton("Zed*") || Skeleton("Zed☺") == Skeleton("Zed*") {
+		t.Error("emoji counted two cells, and older symbols, aren't")
+	}
+	if Name("Zed\U0001F574") != "Zed\U0001F574" {
+		t.Error("Name keeps it")
+	}
+}
+
+func TestSkeletonIgnoresASpaceAfterASymbol(t *testing.T) {
+	if Skeleton("Bob✌️x") != Skeleton("Bob✌ x") || Skeleton("☀ Zed") != Skeleton("☀Zed") {
+		t.Error("a symbol drawn plain with a space after it looks like the symbol and the space")
+	}
+	if Skeleton("Bob x") == Skeleton("Bobx") {
+		t.Error("only a space after a symbol goes")
+	}
+}

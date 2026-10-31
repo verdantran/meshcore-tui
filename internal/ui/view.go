@@ -48,6 +48,19 @@ func (m *Model) View() tea.View {
 	frame := drawable(strings.Join(lines, "\n"))
 	if m.opt.ASCII {
 		frame = toASCII(frame)
+	} else if m.opt.SplitEmoji {
+		frame = splitEmoji(frame)
+	}
+	if m.opt.PlainSymbols && renderWidth == ansi.GraphemeWidth {
+		frame = plainSymbols(frame)
+	}
+	if m.opt.TextEmoji > renderWidth.StringWidth(textEmojiProbe) {
+		frame = standInTextEmoji(frame)
+	}
+	lone, flags := renderWidth.StringWidth(loneProbe), renderWidth.StringWidth(flagProbe)
+	loneOff := m.opt.FlagLetters || m.opt.LoneLetter != 0 && m.opt.LoneLetter != lone
+	if flagsOff := m.opt.FlagLetters || m.opt.Flag != 0 && m.opt.Flag != flags; loneOff || flagsOff {
+		frame = plainLetters(frame, loneOff, flagsOff, lone)
 	}
 	v := tea.NewView(frame)
 	v.AltScreen = true

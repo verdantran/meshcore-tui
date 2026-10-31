@@ -7,6 +7,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/rivo/uniseg"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -37,17 +38,41 @@ func invisible(r rune) bool {
 	return false
 }
 
+func skinTone(r rune) bool { return r >= 0x1f3fb && r <= 0x1f3ff }
+
 // Skeleton is what a name looks like: two names with the same skeleton are hard to tell apart on screen,
 // whatever their letters. It folds case, drops accents and maps look-alikes from any script to Latin.
 // Capitals are looked up before folding, since "І" looks like "l" where "і" looks like "i". Joiners go too,
 // since a terminal that doesn't join emoji draws "👩‍🚀" as "👩🚀", and so do a flag's tags, which take no
-// cell: any run of them after 🏴 is kept, and one that spells no flag is drawn as the 🏴 alone.
+// cell: any run of them after 🏴 is kept, and one that spells no flag is drawn as the 🏴 alone. Skin tones
+// and a narrow symbol after an emoji, such as the ♂ in "🏊‍♂", go as well, as a terminal that draws joined
+// emoji as their parts shows neither, so "🏊‍♂" and "🏊‍♀", or "👍🏽" and "👍🏿", look alike there. Regional
+// indicators read as their letters: many terminals draw "🇷" alone as an R, and "🇫🇷" as FR without flags. And
+// emoji from the newer blocks that show as text by default, such as 🕴 and 🖐, read as *, as they're drawn
+// where tmux and the terminal behind it disagree on their width. A space after a symbol or emoji goes too, as an
+// older symbol with the emoji selector, such as ✌️, is drawn plain with a space after it there.
 func Skeleton(s string) string {
 	var b strings.Builder
+	afterEmoji, afterSymbol := false, false
 	for _, r := range norm.NFKD.String(Name(s)) {
-		if unicode.Is(unicode.Mn, r) || r == zwj || tag(r) {
+		if unicode.Is(unicode.Mn, r) || r == zwj || tag(r) || skinTone(r) {
 			continue
 		}
+		if r == ' ' && afterSymbol {
+			continue // a symbol may be drawn plain with a space after it where tmux and the terminal disagree on it
+		}
+		afterSymbol = pictographic(r) && !(r >= 0x1f1e6 && r <= 0x1f1ff) // a regional indicator reads as a letter
+		if r >= 0x1f1e6 && r <= 0x1f1ff {
+			r = 'a' + r - 0x1f1e6 // a regional indicator is drawn as its letter where it isn't paired into a flag
+		} else if r >= 0x1f000 && pictographic(r) && uniseg.StringWidth(string(r)) == 1 {
+			r = '*' // an emoji such as 🕴 that shows as text is drawn as * where tmux and the terminal disagree on it
+		}
+		// A narrow symbol such as ♂ after an emoji is left out where joined emoji are drawn as their parts.
+		wide := uniseg.StringWidth(string(r)) == 2
+		if afterEmoji && !wide && r >= 0x2190 && r <= 0x2bff {
+			continue
+		}
+		afterEmoji = wide && pictographic(r)
 		if l, ok := lookalikes[r]; ok {
 			r = l
 		} else if l, ok := lookalikes[unicode.ToLower(r)]; ok {

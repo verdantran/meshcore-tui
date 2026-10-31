@@ -16,6 +16,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"go.bug.st/serial/enumerator"
 
 	"github.com/verdantran/meshcore-tui/internal/admin"
@@ -99,6 +100,7 @@ func simRepeater() radio.Radio {
 var (
 	errUsage   = errors.New("usage")
 	errVersion = errors.New("version")
+	errWidths  = errors.New("widths")
 )
 
 // stdout is where --version prints; tests replace it.
@@ -143,11 +145,19 @@ func setup(args []string, env func(string) string, sess session, stderr io.Write
 	themeFlag := fs.String("theme", "", strings.Join(theme.Names(), " | "))
 	configPath := fs.String("config", filepath.Join(config.Dir(), "config.toml"), "config file")
 	showVersion := fs.Bool("version", false, "print the version and exit")
+	showWidths := fs.Bool("widths", false, "measure how the terminal draws emoji and flags, say what the app does about it, and exit")
 	if err := fs.Parse(args); err != nil {
 		return ui.Options{}, errUsage
 	}
 	if *showVersion {
 		return ui.Options{}, errVersion
+	}
+	if *showWidths {
+		cfg, err := config.Load(*configPath)
+		if err != nil {
+			cfg = config.Default()
+		}
+		return ui.Options{Config: cfg}, errWidths
 	}
 
 	cfg, err := config.Load(*configPath)
@@ -233,6 +243,10 @@ func run(args []string, env func(string) string, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "meshcore-tui "+version())
 		return 0
 	}
+	if errors.Is(err, errWidths) {
+		widthReport(stdout, sess, terminalWidths(), opt.Config.UI.Flags)
+		return 0
+	}
 	if err != nil {
 		fmt.Fprintln(stderr, untrusted.Line(err.Error())) // a parse error can quote a handed file's text
 		return 2
@@ -244,9 +258,17 @@ func run(args []string, env func(string) string, stderr io.Writer) int {
 	}
 	defer db.Close()
 	opt.Store = db
+	widths := terminalWidths()
+	opt.SplitEmoji, opt.LoneLetter, opt.Flag = widths.mode == widthsSplit, widths.loneLetter, widths.flag
+	opt.FlagLetters = flagLetters(opt.Config.UI.Flags, sess, widths)
+	opt.TextEmoji = widths.textEmoji
+	opt.PlainSymbols = sess.tmux && !knownBehindTmux(sess)
 	out := &timedOutput{File: os.Stdout}
 	p := tea.NewProgram(ui.New(opt), tea.WithOutput(out), tea.WithFPS(motion.FrameRate), tea.WithEnvironment(teaEnv(os.Environ(), sess))) // the app never animates faster
 	out.slow = func() { p.Send(ui.SlowTerminalMsg{}) }
+	if widths.mode == widthsGraphemes {
+		go p.Send(tea.ModeReportMsg{Mode: ansi.ModeUnicodeCore, Value: ansi.ModeSet}) // as the answer many terminals, tmux among them, don't give
+	}
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

@@ -47,6 +47,7 @@ type Config struct {
 		Layout       string `toml:"layout"`       // split panes, e.g. "right 50 (*chats, packets)"; empty is one screen
 		ASCII        bool   `toml:"ascii"`        // plain ASCII for terminals without braille or box drawing
 		ChessLayout  string `toml:"chess_layout"` // "both" puts the conversation beside a chess board, "board" shows it alone
+		Flags        string `toml:"flags"`        // auto, emoji or letters: how flags and other regional indicators are drawn
 	} `toml:"ui"`
 	Connection struct {
 		AutoConnect   string `toml:"auto_connect"` // a saved device's name
@@ -89,6 +90,7 @@ func Default() *Config {
 	c.UI.PacketTicker = true
 	c.UI.Beacon = true
 	c.UI.Mouse = true
+	c.UI.Flags = "auto"
 	c.Connection.TimeSyncDrift = 5
 	c.Messages.DMRetries = 3
 	c.Messages.FloodFallback = true
@@ -145,6 +147,11 @@ func Load(path string) (*Config, error) {
 	}
 	if err := CheckKeepDays(c.Messages.KeepDays); err != nil {
 		return c, fmt.Errorf("[messages] keep_days: %w", err)
+	}
+	switch c.UI.Flags {
+	case "", "auto", "emoji", "letters":
+	default:
+		return c, fmt.Errorf("[ui] flags: %q isn't auto, emoji or letters", c.UI.Flags)
 	}
 	if c.Notifications.PerMin < 0 {
 		return c, fmt.Errorf("[notifications] max_per_minute: %d isn't a number of notifications, or 0 for no limit", c.Notifications.PerMin)
