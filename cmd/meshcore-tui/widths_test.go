@@ -48,12 +48,14 @@ func TestMeasureWidths(t *testing.T) {
 		reply string
 		want  widths
 	}{
-		{"a grapheme at a time, a lone letter narrow, as tmux 3.8", report(3, 3, 3, 3, 2), widths{widthsGraphemes, 1}},
-		{"a character at a time", report(2, 4, 5, 5, 2), widths{widthsPerChar, 1}},
-		{"neither: joined, but the symbol drawn wide", report(3, 5, 3, 3, 3), widths{widthsSplit, 2}},
-		{"neither: the sun one cell, the rest joined", report(2, 3, 3, 3, 2), widths{widthsSplit, 1}},
-		{"a key typed first", "q\x1b[A" + report(3, 3, 3, 3, 3), widths{widthsGraphemes, 2}},
-		{"no answer for the lone letter", report(3, 3, 3, 3), widths{widthsGraphemes, 0}},
+		{"a grapheme at a time, a lone letter narrow, as tmux 3.8", report(3, 3, 3, 3, 2, 3), widths{widthsGraphemes, 1, 2}},
+		{"a character at a time", report(2, 4, 5, 5, 2, 3), widths{widthsPerChar, 1, 2}},
+		{"neither: joined, but the symbol drawn wide", report(3, 5, 3, 3, 3, 3), widths{widthsSplit, 2, 2}},
+		{"neither: the sun one cell, the rest joined", report(2, 3, 3, 3, 2, 3), widths{widthsSplit, 1, 2}},
+		{"a flag drawn as one narrow glyph", report(3, 3, 3, 3, 2, 2), widths{widthsGraphemes, 1, 1}},
+		{"a key typed first", "q\x1b[A" + report(3, 3, 3, 3, 3, 3), widths{widthsGraphemes, 2, 2}},
+		{"no answer for the flag", report(3, 3, 3, 3, 2), widths{widthsGraphemes, 1, 0}},
+		{"no answer for either", report(3, 3, 3, 3), widths{widthsGraphemes, 0, 0}},
 		{"silent", "", widths{}},
 		{"stops answering", report(3, 3), widths{}},
 	} {

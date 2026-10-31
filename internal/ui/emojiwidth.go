@@ -49,13 +49,17 @@ func joinsEmoji(r rune) bool {
 // emojiPart is a symbol that can be part of an emoji: ♂, ♀, ⚕, ❤ and the like.
 func emojiPart(r rune) bool { return r >= 0x2190 && r <= 0x2bff }
 
-// loneProbe is a regional indicator on its own, as the width probe draws it.
-const loneProbe = "\U0001F1F7"
+// loneProbe and flagProbe are a regional indicator on its own and a flag, as the width probe draws them.
+const (
+	loneProbe = "\U0001F1F7"
+	flagProbe = "\U0001F1EB\U0001F1F7"
+)
 
-// plainLetters draws each lone regional indicator, one not paired into a flag, as the capital letter it stands
-// for, padded to the cells it was counted as. It's for a terminal that draws them at another width from the
-// app's count; untrusted.Skeleton reads them as those letters, so a name looks alike either way.
-func plainLetters(frame string, counted int) string {
+// plainLetters draws regional indicators as the capital letters they stand for, for a terminal that draws them
+// at another width from the app's count: lone ones padded to the cells each was counted as, and flags as their
+// two letters, which take a flag's two cells. untrusted.Skeleton reads them as those letters, so a name looks
+// alike either way.
+func plainLetters(frame string, lone, flags bool, loneCells int) string {
 	if !strings.ContainsFunc(frame, regionalIndicator) {
 		return frame
 	}
@@ -63,12 +67,16 @@ func plainLetters(frame string, counted int) string {
 	g := uniseg.NewGraphemes(frame)
 	for g.Next() {
 		rs := g.Runes()
-		if len(rs) != 1 || !regionalIndicator(rs[0]) {
+		switch {
+		case len(rs) == 1 && lone && regionalIndicator(rs[0]):
+			b.WriteRune('A' + rs[0] - 0x1F1E6)
+			b.WriteString(strings.Repeat(" ", max(loneCells-1, 0)))
+		case len(rs) == 2 && flags && regionalIndicator(rs[0]) && regionalIndicator(rs[1]):
+			b.WriteRune('A' + rs[0] - 0x1F1E6)
+			b.WriteRune('A' + rs[1] - 0x1F1E6)
+		default:
 			b.WriteString(g.Str())
-			continue
 		}
-		b.WriteRune('A' + rs[0] - 0x1F1E6)
-		b.WriteString(strings.Repeat(" ", max(counted-1, 0)))
 	}
 	return b.String()
 }

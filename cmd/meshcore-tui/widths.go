@@ -27,13 +27,18 @@ var widthProbes = []string{"☀️", "🏊‍♂", "👨‍💻", "👍🏽"}
 
 // loneLetter is a regional indicator on its own, one of the letters two of which make a flag. Counted two
 // cells as a grapheme and one a character at a time, it's drawn either way, as an emoji or as a small letter.
-const loneLetter = "\U0001F1F7"
+// flagProbe is two of them, counted two cells either way, which some terminals draw as one narrow glyph.
+const (
+	loneLetter = "\U0001F1F7"
+	flagProbe  = "\U0001F1EB\U0001F1F7"
+)
 
-// widths is what the probe found: how emoji are counted, and how wide a lone regional indicator is drawn
-// (0 when the terminal didn't say).
+// widths is what the probe found: how emoji are counted, and how wide a lone regional indicator and a flag
+// are drawn (0 when the terminal didn't say).
 type widths struct {
 	mode       widthMode
 	loneLetter int
+	flag       int
 }
 
 // tty is the terminal as the width probe uses it: deadlines keep a silent terminal from holding up startup.
@@ -71,10 +76,18 @@ func measureWidths(t tty, wait time.Duration) widths {
 	case perChar:
 		w.mode = widthsPerChar
 	}
-	if _, err := io.WriteString(t, "\r"+loneLetter+"\x1b[6n"); err == nil {
-		if col, _, ok := readColumn(t, got); ok {
-			w.loneLetter = col - 1
+	for _, m := range []struct {
+		probe string
+		into  *int
+	}{{loneLetter, &w.loneLetter}, {flagProbe, &w.flag}} {
+		if _, err := io.WriteString(t, "\r"+m.probe+"\x1b[6n"); err != nil {
+			break
 		}
+		col, rest, ok := readColumn(t, got)
+		if !ok {
+			break
+		}
+		got, *m.into = rest, col-1
 	}
 	return w
 }
