@@ -116,7 +116,7 @@ func (m *Model) renderBoot() []string {
 	body = append(body, "")
 	for _, l := range b.lines {
 		labelW := 10
-		full := fmt.Sprintf("▸ %-*s %s", labelW, l.label, l.detail)
+		full := truncate(fmt.Sprintf("▸ %-*s %s", labelW, l.label, l.detail), inner-9) // room for the widest tag, "… [WAIT]"
 		shown, typed := full, true
 		if m.level.Allows(motion.Typing) {
 			shown, typed = motion.Typewriter(full, l.at, bootCPS, now)
