@@ -133,26 +133,29 @@ Marked *repeater* where a room server doesn't have it, and *USB only* where it o
 
 | Command | Takes | What it does |
 |---|---|---|
-| `setperm` | `<public key> [0\|1\|2\|3]` | A companion's permission: 0 guest, 1 read-only, 2 read-write, 3 admin. Leaving it out removes the entry. |
+| `setperm` | `<public key> <0\|1\|2\|3>` | Sets a companion's permission: 0 guest, 1 read-only, 2 read-write, 3 admin. |
 | `get acl` |  | *USB only*. The access list. |
 
 #### Regions
 
 | Command | Takes | What it does |
 |---|---|---|
-| `region` |  | *repeater*. The region tree: ^ marks home, F allows flooding. |
-| `region home` | `[name]` | *repeater*. Shows the home region, or sets it. |
-| `region put` | `<name> [parent]` | *repeater*. Adds a region, under another if given. |
-| `region remove` | `<name>` | *repeater*. Removes a region. |
-| `region allowf` | `<name or *>` | *repeater*. Allows flooding in a region. |
-| `region denyf` | `<name or *>` | *repeater*. Stops flooding in a region. |
-| `region save` |  | *repeater*. Saves the region tree, so it survives a restart. |
+| `region` |  | The region tree: ^ marks home, F allows flooding. |
+| `region home` | `[name]` | Shows the home region, or sets it. |
+| `region put` | `<name> [parent]` | Adds a region, under another if given. |
+| `region remove` | `<name>` | Removes a region. |
+| `region allowf` | `<name or *>` | Allows flooding in a region. |
+| `region denyf` | `<name or *>` | Stops flooding in a region. |
+| `region get` | `<name>` | One region, with its parent and whether it allows flooding. |
+| `region default` | `[name\|<null>]` | Shows the default flood scope, or sets it; <null> clears it. A name it doesn't have yet is added. |
+| `region list` | `allowed\|denied` | The regions that allow flooding, or those that don't. |
+| `region save` |  | Saves the region tree, so it survives a restart. |
 
 #### Logging
 
 | Command | Takes | What it does |
 |---|---|---|
-| `log` |  | Reads the packet log. |
+| `log` |  | *USB only*. Reads the packet log. |
 | `log start` |  | Starts logging packets. |
 | `log stop` |  | Stops logging packets. |
 | `log erase` |  | Erases the packet log. |

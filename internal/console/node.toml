@@ -148,8 +148,8 @@ help = "Removes every neighbour whose key starts with this."
 [[command]]
 group = "Access"
 words = "setperm"
-args = "<public key> [0|1|2|3]"
-help = "A companion's permission: 0 guest, 1 read-only, 2 read-write, 3 admin. Leaving it out removes the entry."
+args = "<public key> <0|1|2|3>"
+help = "Sets a companion's permission: 0 guest, 1 read-only, 2 read-write, 3 admin."
 
 [[command]]
 group = "Access"
@@ -160,53 +160,66 @@ help = "The access list."
 [[command]]
 group = "Regions"
 words = "region"
-roles = ["repeater"]
 help = "The region tree: ^ marks home, F allows flooding."
 
 [[command]]
 group = "Regions"
 words = "region home"
 args = "[name]"
-roles = ["repeater"]
 help = "Shows the home region, or sets it."
 
 [[command]]
 group = "Regions"
 words = "region put"
 args = "<name> [parent]"
-roles = ["repeater"]
 help = "Adds a region, under another if given."
 
 [[command]]
 group = "Regions"
 words = "region remove"
 args = "<name>"
-roles = ["repeater"]
 help = "Removes a region."
 
 [[command]]
 group = "Regions"
 words = "region allowf"
 args = "<name or *>"
-roles = ["repeater"]
 help = "Allows flooding in a region."
 
 [[command]]
 group = "Regions"
 words = "region denyf"
 args = "<name or *>"
-roles = ["repeater"]
 help = "Stops flooding in a region."
 
 [[command]]
 group = "Regions"
+words = "region get"
+args = "<name>"
+help = "One region, with its parent and whether it allows flooding."
+
+[[command]]
+group = "Regions"
+words = "region default"
+args = "[name|<null>]"
+help = "Shows the default flood scope, or sets it; <null> clears it. A name it doesn't have yet is added."
+
+[[command]]
+group = "Regions"
+words = "region list"
+args = "allowed|denied"
+values = ["allowed", "denied"]
+help = "The regions that allow flooding, or those that don't."
+
+[[command]]
+group = "Regions"
 words = "region save"
-roles = ["repeater"]
 help = "Saves the region tree, so it survives a restart."
 
 [[command]]
 group = "Logging"
 words = "log"
+serial = true
 help = "Reads the packet log."
 
 [[command]]

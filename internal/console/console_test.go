@@ -29,7 +29,7 @@ func TestSuggest(t *testing.T) {
 		{comp, "", "", "", "", ""},
 		{rep, "get flood.ma", "x", "", "get flood.max · get flood.max.unscoped · get flood.max.advert", ""},
 		{rep, "set repeat ", "", "on|off", "set repeat on · set repeat off", "Repeat packets"},
-		{rep, "reg", "ion", "", "region · region home · region put · region remove · region allowf · region denyf · region save", ""},
+		{rep, "reg", "ion", "", "region · region home · region put · region remove · region allowf · region denyf · region get · region default · region list · region save", ""},
 		{rep, "powersaving", "", "[on|off]", "", "power saving"},
 	} {
 		h := Suggest(c.cmds, c.in)
