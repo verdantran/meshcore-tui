@@ -88,6 +88,32 @@ type Service struct {
 	lastRun time.Time // when the app was last connected to this radio, before this connection
 	live    bool      // connected, so the time is worth keeping
 	seenAt  time.Time
+
+	recent []store.Message // messages received lately, to drop a second copy of one
+}
+
+// repeatWindow is how long after a message an identical one counts as the same message arriving again.
+const repeatWindow = 10 * time.Second
+
+// ErrRepeat is a message already received moments ago, as when another app on the link fetched it too.
+var ErrRepeat = errors.New("the same message arrived twice")
+
+// repeat reports whether m arrived moments ago, remembering it if not.
+func (s *Service) repeat(m store.Message) bool {
+	kept := s.recent[:0]
+	for _, r := range s.recent {
+		if m.RecvAt.Sub(r.RecvAt) <= repeatWindow && m.RecvAt.Sub(r.RecvAt) >= 0 {
+			kept = append(kept, r)
+		}
+	}
+	s.recent = kept
+	for _, r := range s.recent {
+		if r.Convo == m.Convo && r.Sender == m.Sender && r.Text == m.Text && r.SentAt.Equal(m.SentAt) {
+			return true
+		}
+	}
+	s.recent = append(s.recent, m)
+	return false
 }
 
 // summary is a conversation's row in the list: its latest message, and what's unread.
@@ -289,6 +315,9 @@ func (s *Service) Incoming(in radio.Incoming) (store.Message, error) {
 		}
 	} else {
 		m.Convo, m.Sender = store.UnknownConvo(in.From), radio.KeyHex(in.From[:])
+	}
+	if s.repeat(m) {
+		return store.Message{}, ErrRepeat
 	}
 	err := s.store.AddMessage(s.device, &m)
 	s.added(m, err)

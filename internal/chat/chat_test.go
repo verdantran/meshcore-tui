@@ -627,3 +627,29 @@ func TestContactLookups(t *testing.T) {
 		t.Error("a replaced table is looked up afresh")
 	}
 }
+
+func TestTheSameMessageArrivingTwiceIsKeptOnce(t *testing.T) {
+	s := newService(t, 3, true)
+	sent := t0.Add(-time.Minute)
+	in := radio.Incoming{At: t0, Channel: true, ChannelIdx: 1, SentAt: sent, Text: "Carol: morning"}
+	if _, err := s.Incoming(in); err != nil {
+		t.Fatal(err)
+	}
+	in.At = t0.Add(2 * time.Second)
+	if _, err := s.Incoming(in); !errors.Is(err, ErrRepeat) {
+		t.Errorf("second copy: %v", err)
+	}
+	other := in
+	other.SentAt = sent.Add(time.Second)
+	if _, err := s.Incoming(other); err != nil {
+		t.Errorf("the same words sent again: %v", err)
+	}
+	in.At = t0.Add(repeatWindow + time.Second)
+	if _, err := s.Incoming(in); err != nil {
+		t.Errorf("long after: %v", err)
+	}
+	msgs, _ := s.Messages(store.ChannelConvo(1), 10)
+	if len(msgs) != 3 {
+		t.Errorf("kept %d messages, want 3", len(msgs))
+	}
+}

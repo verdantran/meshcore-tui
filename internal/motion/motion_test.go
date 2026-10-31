@@ -89,3 +89,19 @@ func TestHelpers(t *testing.T) {
 		t.Error("allows")
 	}
 }
+
+func TestMarqueeHoldsScrollsAndHolds(t *testing.T) {
+	t0 := time.Unix(0, 0)
+	at := func(d time.Duration) int { return Marquee(16, t0, t0.Add(d)) }
+	for _, c := range []struct {
+		d    time.Duration
+		want int
+	}{{0, 0}, {time.Second, 0}, {marqueeHold + time.Second, 8}, {marqueeHold + 2*time.Second, 16}, {2*marqueeHold + 2*time.Second - time.Millisecond, 16}, {2*marqueeHold + 2*time.Second, 0}} {
+		if got := at(c.d); got != c.want {
+			t.Errorf("after %v: %d, want %d", c.d, got, c.want)
+		}
+	}
+	if Marquee(0, t0, t0.Add(time.Hour)) != 0 || Marquee(5, t0, t0.Add(-time.Second)) != 0 {
+		t.Error("nothing to scroll, or not started")
+	}
+}

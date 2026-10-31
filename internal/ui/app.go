@@ -40,6 +40,7 @@ type Options struct {
 	Motion       motion.Level
 	MotionChosen bool // set by flag or config, so a slow terminal doesn't override it
 	Dial         func(Target) radio.Radio
+	Claim        func(Target) (release func(), err error)            // keeps other copies of the app off the radio
 	Ports        func() []Target                                     // lists serial ports for the connect screen
 	Scan         func(ctx context.Context, found func(Target)) error // looks for Bluetooth radios until ctx ends; nil without Bluetooth
 	Start        *Target                                             // skip the connect screen
@@ -88,6 +89,7 @@ type Model struct {
 	connect connectModel
 	target  Target
 	radio   radio.Radio
+	release func() // gives up this copy's claim on the radio
 	cancel  context.CancelFunc
 
 	boot    bootModel
@@ -275,15 +277,13 @@ func (m *Model) Init() tea.Cmd {
 }
 
 func (m *Model) dial(t Target) tea.Cmd {
-	if m.radio != nil {
-		m.radio.Close()
-	}
+	m.closeRadio()
 	m.target = t
 	if m.adm.local {
 		m.adm.local, m.adm.opened = false, false
 		m.lay, m.tab = m.savedLayout()
 	}
-	m.radio = m.opt.Dial(t)
+	m.radio = m.claimed(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 	m.radio.Start(ctx)
@@ -291,6 +291,29 @@ func (m *Model) dial(t Target) tea.Cmd {
 	m.boot = newBoot(m.now, t)
 	m.linked = linkUp
 	return tea.Batch(waitEvent(m.radio.Events()), m.ensureTick())
+}
+
+// claimed dials t if no other copy of the app has it.
+func (m *Model) claimed(t Target) radio.Radio {
+	if m.opt.Claim == nil {
+		return m.opt.Dial(t)
+	}
+	release, err := m.opt.Claim(t)
+	if err != nil {
+		return radio.Refused(t.Addr, t.Kind, err)
+	}
+	m.release = release
+	return m.opt.Dial(t)
+}
+
+func (m *Model) closeRadio() {
+	if m.radio != nil {
+		m.radio.Close()
+	}
+	if m.release != nil {
+		m.release()
+		m.release = nil
+	}
 }
 
 func waitEvent(ch <-chan radio.Event) tea.Cmd {
@@ -308,9 +331,7 @@ func (m *Model) shutdown() {
 	if m.cancel != nil {
 		m.cancel()
 	}
-	if m.radio != nil {
-		m.radio.Close()
-	}
+	m.closeRadio()
 }
 
 // SlowTerminalMsg says writing frames to the terminal is taking longer than drawing them should.
@@ -447,7 +468,7 @@ func (m *Model) frameEvery() time.Duration {
 const beaconFrame = time.Second / 12
 
 func (m *Model) animating() bool {
-	return m.moving() || m.mapBeaconOn() || m.pulsing() || (m.level != motion.Off && m.toasting())
+	return m.moving() || m.mapBeaconOn() || m.pulsing() || m.bootScrolling() || (m.level != motion.Off && m.toasting())
 }
 
 // pulsePeriod is the slow glow of something waiting on you; it runs on the beacon's slower frame clock.
@@ -742,7 +763,7 @@ func (m *Model) key(k tea.KeyPressMsg) (tea.Cmd, bool) {
 			}
 		case "c":
 			if m.boot.failed && m.opt.Ports != nil {
-				m.radio.Close()
+				m.closeRadio()
 				m.radio = nil
 				m.phase = phaseConnect
 				m.connect = newConnect(m.opt.Ports, m.savedTargets)

@@ -147,3 +147,25 @@ func RampBar(now time.Time, n int) string {
 	}
 	return string(out)
 }
+
+const (
+	marqueeHold  = 1500 * time.Millisecond // at each end
+	marqueeSpeed = 8                       // cells a second
+)
+
+// Marquee is how many cells text over cells too wide for its space has scrolled by now: it holds at the
+// start, scrolls to the end, holds there, and starts again.
+func Marquee(over int, start, now time.Time) int {
+	if over <= 0 || now.Before(start) {
+		return 0
+	}
+	scroll := time.Duration(over) * time.Second / marqueeSpeed
+	t := now.Sub(start) % (2*marqueeHold + scroll)
+	switch {
+	case t < marqueeHold:
+		return 0
+	case t < marqueeHold+scroll:
+		return int((t - marqueeHold) * marqueeSpeed / time.Second)
+	}
+	return over
+}

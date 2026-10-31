@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"slices"
@@ -225,6 +226,9 @@ func (m *Model) chatEvent(e radio.Event) tea.Cmd {
 			return nil // console replies belong to the admin screen
 		}
 		msg, err := m.chat.Incoming(e)
+		if errors.Is(err, chat.ErrRepeat) {
+			return nil
+		}
 		if err != nil {
 			m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 			return nil
