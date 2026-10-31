@@ -2,6 +2,7 @@ package ui
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -176,7 +177,7 @@ func TestBigPruneLeavesTheScreenFree(t *testing.T) {
 		case result = <-done:
 		default:
 			t0 := time.Now()
-			m.Update(eventMsg{radio.Incoming{Channel: true, ChannelIdx: 0, Text: "Bob: still here", At: now, SentAt: now}})
+			m.Update(eventMsg{radio.Incoming{Channel: true, ChannelIdx: 0, Text: fmt.Sprintf("Bob: still here %d", updates), At: now, SentAt: now}})
 			slowest = max(slowest, time.Since(t0))
 			updates++
 		}

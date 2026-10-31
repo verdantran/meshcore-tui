@@ -23,6 +23,7 @@ import (
 	"github.com/verdantran/meshcore-tui/internal/config"
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/radiolock"
 	"github.com/verdantran/meshcore-tui/internal/repeaterserial"
 	"github.com/verdantran/meshcore-tui/internal/sim"
 	"github.com/verdantran/meshcore-tui/internal/store"
@@ -89,6 +90,14 @@ func dial(t ui.Target) radio.Radio {
 		return simRepeater()
 	}
 	return sim.New(time.Now().UnixNano())
+}
+
+// claim keeps other copies of the app off a radio this one is using; the demo is each copy's own.
+func claim(t ui.Target) (func(), error) {
+	if t.Kind == "SIM" {
+		return func() {}, nil
+	}
+	return radiolock.Claim(filepath.Join(config.DataDir(), "locks"), t.Kind, t.Addr)
 }
 
 // simRepeater is a simulated repeater on its USB console.
@@ -202,7 +211,7 @@ func setup(args []string, env func(string) string, sess session, stderr io.Write
 	if oldConsole(goos, env) {
 		notes = append(notes, "CONSOLE  this looks like the old Windows console, which may not draw the map's braille, some symbols or the mouse. Windows Terminal, free from Microsoft, shows everything; --ascii draws in plain ASCII instead.")
 	}
-	opt := ui.Options{Version: version(), Keys: keys, ASCII: *asciiOnly || cfg.UI.ASCII, Notes: notes, Theme: th, Motion: level, Dial: dial, Ports: ports, Scan: scanBLE, Config: cfg, MotionChosen: chosen, Remote: sess.remote, Keychain: admin.SystemOr(passwordFile(*configPath))}
+	opt := ui.Options{Version: version(), Keys: keys, ASCII: *asciiOnly || cfg.UI.ASCII, Notes: notes, Theme: th, Motion: level, Dial: dial, Claim: claim, Ports: ports, Scan: scanBLE, Config: cfg, MotionChosen: chosen, Remote: sess.remote, Keychain: admin.SystemOr(passwordFile(*configPath))}
 	if d, ok := cfg.Device(cfg.Connection.AutoConnect); ok {
 		opt.Start = &ui.Target{Kind: d.Kind, Addr: d.Addr, Saved: d.Name, Mode: d.Mode}
 	}

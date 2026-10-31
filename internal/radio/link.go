@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -92,6 +93,11 @@ func newLink(describe, kind string, t sdkTransport) *Link {
 	l.tap = &tap{inner: t, emit: l.emit}
 	l.client = client.New(l.tap)
 	return l
+}
+
+// Refused is a link that can't be made, for err, shown as the radio at describe would be.
+func Refused(describe, kind string, err error) *Link {
+	return newLink(describe, kind, newStream(func(context.Context) (io.ReadWriteCloser, error) { return nil, err }))
 }
 
 func (l *Link) Events() <-chan Event { return l.events }
@@ -908,19 +914,36 @@ func (l *Link) SendCLI(ctx context.Context, key [32]byte, command string) error 
 	return err
 }
 
-// Channels reads every slot; empty ones are left out.
+// slotTries is how often a slot is asked for when replies for other slots come back instead.
+const slotTries = 3
+
+// Channels reads every slot; empty ones are left out. A reply for another slot is a leftover, as when
+// something else on the link asked too, so it's dropped and the slot asked for again.
 func (l *Link) Channels(ctx context.Context) ([]Channel, error) {
 	var out []Channel
 	for i := 0; i < max(int(l.slots.Load()), 1); i++ {
-		ch, err := l.client.GetChannel(ctx, byte(i))
+		ch, ok, err := l.channel(ctx, i)
 		if err != nil {
 			break
 		}
-		if ch.Name != "" {
-			out = append(out, Channel{Idx: int(ch.ChannelIdx), Name: untrusted.Line(ch.Name), Secret: ch.Secret})
+		if ok && ch.Name != "" {
+			out = append(out, Channel{Idx: i, Name: untrusted.Line(ch.Name), Secret: ch.Secret})
 		}
 	}
 	return out, nil
+}
+
+func (l *Link) channel(ctx context.Context, i int) (companion.ChannelInfoResponse, bool, error) {
+	for range slotTries {
+		ch, err := l.client.GetChannel(ctx, byte(i))
+		if err != nil {
+			return ch, false, err
+		}
+		if int(ch.ChannelIdx) == i {
+			return ch, true, nil
+		}
+	}
+	return companion.ChannelInfoResponse{}, false, nil
 }
 
 func (l *Link) SetChannel(ctx context.Context, c Channel) error {

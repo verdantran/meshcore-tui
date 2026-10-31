@@ -36,7 +36,8 @@ type fakeDevice struct {
 	autoAdd     companion.AutoAddConfigResponse
 	nextAck     uint32
 	exportBytes []byte
-	signing     []byte // what's been fed to the radio to sign
+	signing     []byte        // what's been fed to the radio to sign
+	stale       map[byte]bool // slots whose first reply has the last slot's ahead of it, as when another app on the link asked too
 }
 
 func newFakeDevice() *fakeDevice {
@@ -150,12 +151,20 @@ func (f *fakeDevice) Send(cmd []byte) error {
 		f.mu.Lock()
 		var ch companion.ChannelInfoResponse
 		have := int(c.ChannelIdx) < len(f.channels)
+		var stale []byte
 		if have {
 			ch = f.channels[c.ChannelIdx]
+			if f.stale[c.ChannelIdx] && c.ChannelIdx > 0 {
+				delete(f.stale, c.ChannelIdx)
+				stale = f.channels[c.ChannelIdx-1].ToBytes()
+			}
 		}
 		f.mu.Unlock()
 		switch {
 		case have:
+			if stale != nil {
+				f.push(stale)
+			}
 			f.push(ch.ToBytes())
 		case c.ChannelIdx < 4: // firmware answers every slot it has, named or not
 			f.push(companion.ChannelInfoResponse{ChannelIdx: c.ChannelIdx}.ToBytes())

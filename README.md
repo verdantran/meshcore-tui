@@ -101,7 +101,7 @@ go build -trimpath -o meshcore-tui ./cmd/meshcore-tui
 
 ## Connecting
 
-Run `meshcore-tui` on its own to open the connect screen. It lists your saved devices first, then likely radios among the serial ports. Press `b` to scan for Bluetooth radios, or enter a TCP address for a WiFi companion. Devices are saved once connected, and one can be set to connect automatically.
+Run `meshcore-tui` on its own to open the connect screen. It lists your saved devices first, then likely radios among the serial ports. Press `b` to scan for Bluetooth radios, or enter a TCP address for a WiFi companion. Devices are saved once connected, and one can be set to connect automatically. A radio talks to one app at a time, so a second meshcore-tui window can't connect to a radio another window is using; to see several screens at once, use the panes (`ctrl+w`), or run the app in tmux and attach from more than one terminal.
 
 You can also connect straight away:
 

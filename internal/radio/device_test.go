@@ -158,6 +158,16 @@ func TestChannels(t *testing.T) {
 	}
 }
 
+func TestChannelRepliesForAnotherSlotAreDropped(t *testing.T) {
+	f := newFakeDevice()
+	f.queue, f.stale = nil, map[byte]bool{1: true}
+	l := startLink(t, f)
+	r := next[Ready](t, l, nil)
+	if len(r.ChannelList) != 2 || r.ChannelList[0].Name != "Public" || r.ChannelList[1] != (Channel{Idx: 1, Name: "#bristol", Secret: [16]byte{9}}) {
+		t.Errorf("channels = %+v", r.ChannelList)
+	}
+}
+
 func TestSecretsNeverReachTheFramesPanel(t *testing.T) {
 	key := [64]byte{0xDE, 0xAD, 0xBE, 0xEF}
 	for _, c := range []struct {
