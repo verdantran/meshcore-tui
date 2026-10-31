@@ -96,4 +96,8 @@ func TestFlagsOnScreen(t *testing.T) {
 	if !strings.Contains(h.screen(), "Zed\U0001F1EB\U0001F1F7") {
 		t.Error("drawn as wide as it's counted, it's left alone")
 	}
+	h.m.opt.FlagLetters = true // as [ui] flags = "letters" asks, or tmux in front of a terminal that can't say
+	if !strings.Contains(h.screen(), "ZedFR") {
+		t.Error("asked for letters, flags are drawn as letters whatever the probe found")
+	}
 }

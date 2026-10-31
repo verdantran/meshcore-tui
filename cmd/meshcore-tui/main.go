@@ -247,6 +247,7 @@ func run(args []string, env func(string) string, stderr io.Writer) int {
 	opt.Store = db
 	widths := terminalWidths()
 	opt.SplitEmoji, opt.LoneLetter, opt.Flag = widths.mode == widthsSplit, widths.loneLetter, widths.flag
+	opt.FlagLetters = flagLetters(opt.Config.UI.Flags, sess, widths)
 	out := &timedOutput{File: os.Stdout}
 	p := tea.NewProgram(ui.New(opt), tea.WithOutput(out), tea.WithFPS(motion.FrameRate), tea.WithEnvironment(teaEnv(os.Environ(), sess))) // the app never animates faster
 	out.slow = func() { p.Send(ui.SlowTerminalMsg{}) }

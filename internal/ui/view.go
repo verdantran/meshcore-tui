@@ -52,7 +52,8 @@ func (m *Model) View() tea.View {
 		frame = splitEmoji(frame)
 	}
 	lone, flags := renderWidth.StringWidth(loneProbe), renderWidth.StringWidth(flagProbe)
-	if loneOff, flagsOff := m.opt.LoneLetter != 0 && m.opt.LoneLetter != lone, m.opt.Flag != 0 && m.opt.Flag != flags; loneOff || flagsOff {
+	loneOff := m.opt.FlagLetters || m.opt.LoneLetter != 0 && m.opt.LoneLetter != lone
+	if flagsOff := m.opt.FlagLetters || m.opt.Flag != 0 && m.opt.Flag != flags; loneOff || flagsOff {
 		frame = plainLetters(frame, loneOff, flagsOff, lone)
 	}
 	v := tea.NewView(frame)

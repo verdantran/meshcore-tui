@@ -47,20 +47,21 @@ type Options struct {
 	Config       *config.Config // nil in tests; settings changed in the app are saved here
 	Store        *store.Store   // message history; nil disables chats
 
-	Env        func(string) string // environment lookups for notification detection; nil uses the process's
-	Remote     bool                // the terminal is reached over SSH or mosh, as worked out at startup
-	SplitEmoji bool                // the terminal draws joined emoji neither way the app can count, so they're drawn as their parts
-	LoneLetter int                 // how wide the terminal draws a lone regional indicator; 0 when it didn't say
-	Flag       int                 // how wide the terminal draws a flag, two regional indicators; 0 when it didn't say
-	ExportDir  string              // where :export writes; empty uses the data directory
-	Keychain   admin.Keychain      // node passwords; nil keeps them only while the program runs
-	MapDir     string              // street detail and its download; empty uses the data directory
-	MapIndex   string              // where the street detail's tile list is; empty uses OpenFreeMap
-	MapClient  *http.Client        // fetches street detail; nil uses the default
-	Notes      []string            // warnings from startup, put in the event log
-	ASCII      bool                // plain ASCII in place of braille, box drawing and symbols
-	Keys       config.Keys         // keys.toml: a key pressed does what another does by default
-	Version    string              // meshcore-tui's own release or commit; empty in tests
+	Env         func(string) string // environment lookups for notification detection; nil uses the process's
+	Remote      bool                // the terminal is reached over SSH or mosh, as worked out at startup
+	SplitEmoji  bool                // the terminal draws joined emoji neither way the app can count, so they're drawn as their parts
+	LoneLetter  int                 // how wide the terminal draws a lone regional indicator; 0 when it didn't say
+	Flag        int                 // how wide the terminal draws a flag, two regional indicators; 0 when it didn't say
+	FlagLetters bool                // draw every flag and lone regional indicator as letters, as [ui] flags says or tmux needs
+	ExportDir   string              // where :export writes; empty uses the data directory
+	Keychain    admin.Keychain      // node passwords; nil keeps them only while the program runs
+	MapDir      string              // street detail and its download; empty uses the data directory
+	MapIndex    string              // where the street detail's tile list is; empty uses OpenFreeMap
+	MapClient   *http.Client        // fetches street detail; nil uses the default
+	Notes       []string            // warnings from startup, put in the event log
+	ASCII       bool                // plain ASCII in place of braille, box drawing and symbols
+	Keys        config.Keys         // keys.toml: a key pressed does what another does by default
+	Version     string              // meshcore-tui's own release or commit; empty in tests
 }
 
 type phase int

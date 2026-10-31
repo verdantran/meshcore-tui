@@ -57,10 +57,13 @@ beacon = true              # the rings pulsing around you on the map, at full mo
 mouse = true               # clicks pick screens and panes; off leaves the mouse to the terminal, for selecting text
 layout = ""                # split panes, e.g. "right 50 (*chats, packets)"; * marks the focused one
 ascii = false              # plain ASCII for terminals without braille or box drawing
+flags = "auto"             # auto | emoji | letters: how flags such as 🇫🇷 are drawn
 chess_layout = "both"      # both puts the conversation beside a chess board; board shows the board alone. L switches it
 ```
 
 Over SSH or mosh, motion starts at `reduced`; inside tmux the app asks tmux how you're attached, so a tmux started on the server and attached over SSH counts too. If frames tear inside tmux and your terminal supports synchronized output (iTerm2, kitty, WezTerm, Ghostty, foot, Windows Terminal), tell tmux so with `set -as terminal-features ',xterm*:sync'` (matching your `TERM`), then reattach.
+
+Some terminals draw a flag such as 🇫🇷 as its letters, or as one narrow glyph, rather than as an emoji two cells wide, which pushes the rest of the row out of line. `flags = "letters"` draws every flag as its two letters, `FR`, which line up everywhere, and `"emoji"` always draws flags. Left to `"auto"`, the app checks how the terminal draws one at startup. Inside tmux it can't see the terminal you're looking at, since tmux answers for it, so it draws letters unless tmux says the terminal is one that draws flags properly, such as Ghostty, kitty, WezTerm or iTerm2. Only the screen changes: names and messages keep their flags.
 
 Saved devices are kept as `[[devices]]` entries. They're easiest to manage from the connect screen.
 

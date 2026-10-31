@@ -88,3 +88,29 @@ func TestCursorColumn(t *testing.T) {
 		}
 	}
 }
+
+func TestFlagLetters(t *testing.T) {
+	ghosttyInTmux := session{tmux: true, clientTerm: "ghostty 1.2.3 xterm-ghostty"}
+	windowsInTmux := session{tmux: true, remote: true, clientTerm: "xterm-256color"}
+	for _, c := range []struct {
+		name    string
+		setting string
+		s       session
+		w       widths
+		want    bool
+	}{
+		{"Windows Terminal through tmux: tmux can't say, so letters", "auto", windowsInTmux, widths{flag: 2}, true},
+		{"Ghostty through tmux draws flags", "auto", ghosttyInTmux, widths{flag: 2}, false},
+		{"kitty through tmux, known by its TERM", "", session{tmux: true, clientTerm: "xterm-kitty"}, widths{flag: 2}, false},
+		{"no client known through tmux", "auto", session{tmux: true}, widths{}, true},
+		{"Ghostty itself, measured", "auto", session{}, widths{flag: 2}, false},
+		{"a terminal drawing a flag in one cell, measured", "auto", session{}, widths{flag: 1}, true},
+		{"a silent terminal", "auto", session{}, widths{}, false},
+		{"letters asked for", "letters", ghosttyInTmux, widths{flag: 2}, true},
+		{"emoji asked for", "emoji", windowsInTmux, widths{flag: 1}, false},
+	} {
+		if got := flagLetters(c.setting, c.s, c.w); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}

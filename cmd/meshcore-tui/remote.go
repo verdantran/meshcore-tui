@@ -16,7 +16,8 @@ import (
 type session struct {
 	remote     bool // over SSH or mosh, where every frame crosses the network
 	tmux       bool
-	clientSync bool // tmux says the attached terminal takes synchronised output
+	clientSync bool   // tmux says the attached terminal takes synchronised output
+	clientTerm string // inside tmux, what the attached terminal calls itself and its TERM, lower case
 }
 
 // runTmux asks the tmux this process runs in, giving up quickly so startup never waits on it.
@@ -72,10 +73,12 @@ func detectSession(env func(string) string, tmux func(...string) (string, error)
 	s := session{tmux: env("TMUX") != ""}
 	if s.tmux {
 		// show-environment fails when the variable was never set, so it goes last, after the line we always want.
-		out, err := tmux("display-message", "-p", "#{client_pid} #{client_termfeatures}", ";", "show-environment", "SSH_CONNECTION")
+		out, err := tmux("display-message", "-p", "#{client_pid} #{client_termfeatures}\t#{client_termtype}\t#{client_termname}", ";", "show-environment", "SSH_CONNECTION")
 		var exit *exec.ExitError
 		if lines := strings.Split(strings.TrimRight(out, "\n"), "\n"); out != "" && (err == nil || errors.As(err, &exit)) {
-			f := append(strings.Fields(lines[0]), "", "")
+			head, term, _ := strings.Cut(lines[0], "\t")
+			s.clientTerm = strings.ToLower(strings.TrimSpace(strings.ReplaceAll(term, "\t", " ")))
+			f := append(strings.Fields(head), "", "")
 			s.clientSync = slices.Contains(strings.Split(f[1], ","), "sync")
 			if pid, err := strconv.Atoi(f[0]); err == nil && pid > 0 {
 				if remote, known := overNetwork(pid, parent); known {

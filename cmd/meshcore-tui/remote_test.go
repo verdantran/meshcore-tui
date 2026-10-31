@@ -76,6 +76,10 @@ func TestDetectSessionInsideTmux(t *testing.T) {
 		{"no /proc, never set in tmux: the pane's own variables decide", inTmux(map[string]string{"SSH_CLIENT": "1 2 3"}),
 			reply("900 \n", exitErr(t)), noProc, session{remote: true, tmux: true}},
 		{"no client attached", inTmux(nil), reply(" \n-SSH_CONNECTION\n", nil), noProc, session{tmux: true}},
+		{"the attached terminal names itself", inTmux(nil), reply("900 RGB,sync\tghostty 1.2.3\txterm-ghostty\n-SSH_CONNECTION\n", nil), atDesk,
+			session{tmux: true, clientSync: true, clientTerm: "ghostty 1.2.3 xterm-ghostty"}},
+		{"no features, but a TERM", inTmux(nil), reply("900 \t\txterm-256color\nSSH_CONNECTION=1 2 3 4\n", nil), noProc,
+			session{tmux: true, remote: true, clientTerm: "xterm-256color"}},
 		{"tmux won't answer: fall back to the pane's variables", inTmux(map[string]string{"SSH_TTY": "/dev/pts/3"}),
 			noTmux, overSSH, session{remote: true, tmux: true}},
 	}

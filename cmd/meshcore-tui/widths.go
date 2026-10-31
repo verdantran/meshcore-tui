@@ -4,7 +4,9 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
@@ -143,4 +145,24 @@ func terminalWidths() widths {
 	}
 	defer term.Restore(fd, state)
 	return measureWidths(f, 300*time.Millisecond)
+}
+
+// flagTerminals draw flags two cells wide, as the app counts them.
+var flagTerminals = []string{"ghostty", "kitty", "wezterm", "iterm"}
+
+// flagLetters decides whether flags and lone regional indicators are drawn as letters. Left to auto, they are
+// where the probe finds a flag drawn at a width other than two; and inside tmux, which answers the probe for
+// its own grid while the terminal outside may draw a flag as one narrow glyph, as Windows Terminal does,
+// unless tmux says the attached terminal is one that draws flags.
+func flagLetters(setting string, s session, w widths) bool {
+	switch setting {
+	case "letters":
+		return true
+	case "emoji":
+		return false
+	}
+	if s.tmux {
+		return !slices.ContainsFunc(flagTerminals, func(t string) bool { return strings.Contains(s.clientTerm, t) })
+	}
+	return w.flag != 0 && w.flag != 2
 }

@@ -293,3 +293,14 @@ func TestNotificationLimitAndMutes(t *testing.T) {
 		t.Fatalf("saved: %+v, %v", back.Notifications, err)
 	}
 }
+
+func TestFlagsSetting(t *testing.T) {
+	dir := t.TempDir()
+	for value, ok := range map[string]bool{"auto": true, "emoji": true, "letters": true, "": true, "flags": false, "Emoji": false} {
+		path := filepath.Join(dir, value+"x.toml")
+		os.WriteFile(path, []byte("[ui]\nflags = \""+value+"\"\n"), 0o600)
+		if _, err := Load(path); (err == nil) != ok {
+			t.Errorf("flags = %q: %v", value, err)
+		}
+	}
+}
