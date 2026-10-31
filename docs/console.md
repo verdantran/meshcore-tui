@@ -11,26 +11,41 @@ As you type, the rest of a command shows dimmed after the cursor, and `tab` adds
 
 Commands that take a radio away, could lock you out or change what you can hear ask for confirmation first, and commands carrying a password or PIN are left out of the history.
 
+## Before changing radio settings
+
+Radio rules where you are limit the frequencies you may use, how much power you may transmit and how much of the time you may transmit. **Check your local regulations before changing** any of these, marked *check local regulations* below:
+
+- **Frequency and bandwidth** (`set radio`, `tempradio`, and the presets and radio rows on the Device screen): a signal takes up its frequency plus or minus half the bandwidth, so a wider bandwidth near the edge of a band can spill outside it.
+- **Transmit power** (`set tx`, and the Device screen's TX power): limits usually apply to radiated power, which is the setting plus your antenna's gain.
+- **The front-end amplifier** (`set radio.fem.txgain`, on boards that have one): it adds power on top of the TX setting.
+- **Duty cycle and airtime** (`set dutycycle`, `set af`): some bands limit how much of the time you may transmit.
+- **Listening before transmitting** (`set cad`): some rules accept it in place of a duty cycle limit.
+- **Repeating** (`set repeat` on a repeater): passing on other nodes' packets adds to your airtime.
+
+The app asks before some of these changes, but it doesn't know your local rules.
+
+## The commands
+
 These are the commands of MeshCore firmware v1.18.0, read from its source. Some depend on the board: WiFi commands only answer on WiFi builds, and the FEM gain only on boards with a front-end module. [MeshCore's CLI reference](https://github.com/meshcore-dev/MeshCore/blob/main/docs/cli_commands.md) has more detail on the shared settings.
 
-## Your own radio
+### Your own radio
 
-### Radio
+#### Radio
 
 | Command | Takes | What it does |
 |---|---|---|
-| `get` / `set radio` | `<freq>,<bw>,<sf>,<cr>` | All four at once, in MHz and kHz; takes effect after a reboot. You'll only hear nodes using the same. |
+| `get` / `set radio` | `<freq>,<bw>,<sf>,<cr>` | *check local regulations*. All four at once, in MHz and kHz; takes effect after a reboot. You'll only hear nodes using the same. |
 | `get freq` |  | The frequency in MHz. |
-| `get` / `set tx` | `<dBm>` | Transmit power in dBm, up to what the board allows. |
+| `get` / `set tx` | `<dBm>` | *check local regulations*. Transmit power in dBm, up to what the board allows. |
 | `get` / `set radio.rxgain` | `on\|off` | The LoRa chip's boosted receive gain; some chips say it's unsupported. |
 | `get` / `set radio.fem.rxgain` | `on\|off` | The front-end module's receive amplifier: on hears weaker signals, off can help next to strong transmitters. |
-| `get` / `set af` | `<0–9>` | The airtime factor. |
-| `get` / `set dutycycle` | `<1–100>` | The share of time it may transmit, as a percentage; some regions set a legal limit. |
-| `get` / `set cad` | `on\|off` | Listen before transmitting (channel activity detection). |
+| `get` / `set af` | `<0–9>` | *check local regulations*. The airtime factor. |
+| `get` / `set dutycycle` | `<1–100>` | *check local regulations*. The share of time it may transmit, as a percentage; some regions set a legal limit. |
+| `get` / `set cad` | `on\|off` | *check local regulations*. Listen before transmitting (channel activity detection). |
 | `get` / `set int.thresh` | `<n>` | The interference threshold. |
 | `get` / `set agc.reset.interval` | `<n>` | How often the receiver's gain control resets; the radio rounds it. |
 
-### Timing
+#### Timing
 
 | Command | Takes | What it does |
 |---|---|---|
@@ -38,14 +53,14 @@ These are the commands of MeshCore firmware v1.18.0, read from its source. Some 
 | `get` / `set txdelay` | `<0–2>` | The delay factor before passing on flood packets. |
 | `get` / `set direct.txdelay` | `<0–2>` | The delay factor before passing on direct packets. |
 
-### Messaging
+#### Messaging
 
 | Command | Takes | What it does |
 |---|---|---|
 | `get` / `set path.hash.mode` | `0\|1\|2` | The path hash size: 0, 1 or 2 for 1, 2 or 3 bytes. |
 | `get` / `set multi.acks` | `<n>` | How many extra acks it sends, so fewer messages look undelivered. |
 
-### This radio
+#### This radio
 
 | Command | Takes | What it does |
 |---|---|---|
@@ -58,7 +73,7 @@ These are the commands of MeshCore firmware v1.18.0, read from its source. Some 
 | `poweroff` |  | Switches the radio off; someone has to switch it back on. |
 | `shutdown` |  | The same as poweroff. |
 
-### WiFi
+#### WiFi
 
 | Command | Takes | What it does |
 |---|---|---|
@@ -70,11 +85,11 @@ These are the commands of MeshCore firmware v1.18.0, read from its source. Some 
 | `get wifi.ip` |  | Its address on the network. |
 
 
-## Repeaters and room servers
+### Repeaters and room servers
 
 Marked *repeater* where a room server doesn't have it, and *USB only* where it only answers on the node's own USB console, not over the mesh.
 
-### The node
+#### The node
 
 | Command | Takes | What it does |
 |---|---|---|
@@ -92,12 +107,12 @@ Marked *repeater* where a room server doesn't have it, and *USB only* where it o
 | `start ota` |  | Stops routing and waits for a firmware upload. |
 | `erase` |  | *USB only*. Wipes the node's storage. It can't be undone. |
 | `password` | `<new password>` | The admin password. There's no recovery over the air, so note it down. |
-| `tempradio` | `<freq>,<bw>,<sf>,<cr>,<minutes>` | Tries radio settings for a while, then goes back by itself: safer than set radio. |
+| `tempradio` | `<freq>,<bw>,<sf>,<cr>,<minutes>` | *check local regulations*. Tries radio settings for a while, then goes back by itself: safer than set radio. |
 | `get freq` |  | The frequency in MHz. |
 | `get bootloader.ver` |  | The bootloader's version, on nRF52 boards. |
 | `get` / `set extra.sf` | `<sf>[,<sf>,<sf>]` | Up to three extra spreading factors to listen on, on LR2021 boards. |
 
-### Power
+#### Power
 
 | Command | Takes | What it does |
 |---|---|---|
@@ -106,7 +121,7 @@ Marked *repeater* where a room server doesn't have it, and *USB only* where it o
 | `get pwrmgt.bootmv` |  | The battery voltage when it last started, on boards with power management. |
 | `powersaving` | `[on\|off]` | Shows whether power saving is on, or turns it on or off, on nRF52 boards. |
 
-### Neighbours
+#### Neighbours
 
 | Command | Takes | What it does |
 |---|---|---|
@@ -114,14 +129,14 @@ Marked *repeater* where a room server doesn't have it, and *USB only* where it o
 | `discover.neighbors` |  | *repeater*. Asks nearby nodes to answer, to fill the neighbour list. |
 | `neighbor.remove` | `<key or prefix>` | *repeater*. Removes every neighbour whose key starts with this. |
 
-### Access
+#### Access
 
 | Command | Takes | What it does |
 |---|---|---|
 | `setperm` | `<public key> [0\|1\|2\|3]` | A companion's permission: 0 guest, 1 read-only, 2 read-write, 3 admin. Leaving it out removes the entry. |
 | `get acl` |  | *USB only*. The access list. |
 
-### Regions
+#### Regions
 
 | Command | Takes | What it does |
 |---|---|---|
@@ -133,7 +148,7 @@ Marked *repeater* where a room server doesn't have it, and *USB only* where it o
 | `region denyf` | `<name or *>` | *repeater*. Stops flooding in a region. |
 | `region save` |  | *repeater*. Saves the region tree, so it survives a restart. |
 
-### Logging
+#### Logging
 
 | Command | Takes | What it does |
 |---|---|---|
@@ -142,7 +157,7 @@ Marked *repeater* where a room server doesn't have it, and *USB only* where it o
 | `log stop` |  | Stops logging packets. |
 | `log erase` |  | Erases the packet log. |
 
-### Statistics
+#### Statistics
 
 | Command | Takes | What it does |
 |---|---|---|
@@ -151,7 +166,7 @@ Marked *repeater* where a room server doesn't have it, and *USB only* where it o
 | `stats-radio` |  | *USB only*. Noise floor, signal and airtime. |
 | `stats-packets` |  | *USB only*. Packets sent and received. |
 
-### GPS and sensors
+#### GPS and sensors
 
 | Command | Takes | What it does |
 |---|---|---|
@@ -166,7 +181,7 @@ Marked *repeater* where a room server doesn't have it, and *USB only* where it o
 | `sensor get` | `<key>` | One sensor setting. |
 | `sensor set` | `<key> <value>` | Changes a sensor setting. |
 
-### Settings: Identity
+#### Settings: Identity
 
 | Command | Takes | What it does |
 |---|---|---|
@@ -177,34 +192,34 @@ Marked *repeater* where a room server doesn't have it, and *USB only* where it o
 | `get role` |  | Role |
 | `get public.key` |  | Public key |
 
-### Settings: Radio
+#### Settings: Radio
 
 | Command | Takes | What it does |
 |---|---|---|
-| `get` / `set radio` | `<freq>,<bw>,<sf>,<cr>` | Radio: Frequency MHz, bandwidth kHz, spreading factor, coding rate. A wrong value strands the node off-frequency: try `tempradio` first. |
-| `get` / `set tx` | `<1–22 dBm>` | Transmit power: Less power shortens its reach: nodes that hear it now, and your way in to it, may lose it. |
+| `get` / `set radio` | `<freq>,<bw>,<sf>,<cr>` | *check local regulations*. Radio: Frequency MHz, bandwidth kHz, spreading factor, coding rate. A wrong value strands the node off-frequency: try `tempradio` first. |
+| `get` / `set tx` | `<1–22 dBm>` | *check local regulations*. Transmit power: Less power shortens its reach: nodes that hear it now, and your way in to it, may lose it. |
 | `get` / `set radio.rxgain` | `on\|off` | Boosted receive gain: Off, it can't hear weaker signals, and yours may be one of them. |
 | `get` / `set radio.fem.rxgain` | `on\|off` | Front-end receive amplifier: Only on boards with an external front-end module. Off, it can't hear weaker signals, and yours may be one of them. |
-| `get` / `set radio.fem.txgain` | `on\|off` | Front-end transmit amplifier: Only on boards with an external front-end module. Off, its reach shrinks, and your way in to it may go. |
+| `get` / `set radio.fem.txgain` | `on\|off` | *check local regulations*. Front-end transmit amplifier: Only on boards with an external front-end module. Off, its reach shrinks, and your way in to it may go. |
 
-### Settings: Routing
+#### Settings: Routing
 
 | Command | Takes | What it does |
 |---|---|---|
-| `get` / `set repeat` | `on\|off` | *repeater*. Repeat packets: Off, it stops passing on other nodes' packets, so every link through it breaks. |
+| `get` / `set repeat` | `on\|off` | *repeater*, *check local regulations*. Repeat packets: Off, it stops passing on other nodes' packets, so every link through it breaks. |
 | `get` / `set path.hash.mode` | `0\|1\|2` | Path hash size: 0, 1 or 2 for 1-, 2- or 3-byte hashes in advert paths. Older firmware only reads 1-byte hashes, so a larger size can cut the node off from nodes running it. |
 | `get` / `set loop.detect` | `off\|minimal\|moderate\|strict` | Flood loop detection |
 | `get` / `set txdelay` | `<0–2>` | Flood retransmit delay |
 | `get` / `set direct.txdelay` | `<0–2>` | Direct retransmit delay |
 | `get` / `set rxdelay` | `<0–20>` | Weak-signal receive delay: Experimental. |
-| `get` / `set dutycycle` | `<1–100 %>` | Duty cycle limit |
-| `get` / `set af` | `<0–9>` | Airtime factor (deprecated): Replaced by the duty cycle limit. |
+| `get` / `set dutycycle` | `<1–100 %>` | *check local regulations*. Duty cycle limit |
+| `get` / `set af` | `<0–9>` | *check local regulations*. Airtime factor (deprecated): Replaced by the duty cycle limit. |
 | `get` / `set int.thresh` | `<0–255>` | Interference threshold |
-| `get` / `set cad` | `on\|off` | Listen before transmitting |
+| `get` / `set cad` | `on\|off` | *check local regulations*. Listen before transmitting |
 | `get` / `set agc.reset.interval` | `<0–1020 s>` | AGC reset interval: Multiples of 4 seconds; 0 turns it off. |
 | `get` / `set multi.acks` | `0\|1` | Multiple acks |
 
-### Settings: Flood
+#### Settings: Flood
 
 | Command | Takes | What it does |
 |---|---|---|
@@ -214,20 +229,20 @@ Marked *repeater* where a room server doesn't have it, and *USB only* where it o
 | `get` / `set flood.advert.interval` | `<3–168 h>` | Flood advert interval |
 | `get` / `set advert.interval` | `<60–240 min>` | Zero-hop advert interval |
 
-### Settings: Access
+#### Settings: Access
 
 | Command | Takes | What it does |
 |---|---|---|
 | `get` / `set guest.password` | `<password>` | Guest password |
 
-### Settings: Power
+#### Settings: Power
 
 | Command | Takes | What it does |
 |---|---|---|
 | `get` / `set adc.multiplier` | `<0–10>` | Battery reading multiplier: 0 uses the board's own calibration. |
 | `get pwrmgt.source` |  | Power source |
 
-### Settings: Bridge
+#### Settings: Bridge
 
 | Command | Takes | What it does |
 |---|---|---|
@@ -239,7 +254,7 @@ Marked *repeater* where a room server doesn't have it, and *USB only* where it o
 | `get` / `set bridge.secret` | `<password>` | ESP-NOW secret: Shared by every node on the bridge. |
 | `get` / `set bridge.baud` | `<9600–115200 baud>` | Serial bridge speed: Only on firmware built with a serial (RS232) bridge. |
 
-### Room servers only
+#### Room servers only
 
 | Command | Takes | What it does |
 |---|---|---|

@@ -25,13 +25,28 @@ As you type, the rest of a command shows dimmed after the cursor, and ` + "`tab`
 
 Commands that take a radio away, could lock you out or change what you can hear ask for confirmation first, and commands carrying a password or PIN are left out of the history.
 
+## Before changing radio settings
+
+Radio rules where you are limit the frequencies you may use, how much power you may transmit and how much of the time you may transmit. **Check your local regulations before changing** any of these, marked *check local regulations* below:
+
+- **Frequency and bandwidth** (` + "`set radio`" + `, ` + "`tempradio`" + `, and the presets and radio rows on the Device screen): a signal takes up its frequency plus or minus half the bandwidth, so a wider bandwidth near the edge of a band can spill outside it.
+- **Transmit power** (` + "`set tx`" + `, and the Device screen's TX power): limits usually apply to radiated power, which is the setting plus your antenna's gain.
+- **The front-end amplifier** (` + "`set radio.fem.txgain`" + `, on boards that have one): it adds power on top of the TX setting.
+- **Duty cycle and airtime** (` + "`set dutycycle`" + `, ` + "`set af`" + `): some bands limit how much of the time you may transmit.
+- **Listening before transmitting** (` + "`set cad`" + `): some rules accept it in place of a duty cycle limit.
+- **Repeating** (` + "`set repeat`" + ` on a repeater): passing on other nodes' packets adds to your airtime.
+
+The app asks before some of these changes, but it doesn't know your local rules.
+
+## The commands
+
 These are the commands of MeshCore firmware v1.18.0, read from its source. Some depend on the board: WiFi commands only answer on WiFi builds, and the FEM gain only on boards with a front-end module. [MeshCore's CLI reference](https://github.com/meshcore-dev/MeshCore/blob/main/docs/cli_commands.md) has more detail on the shared settings.
 
-## Your own radio
+### Your own radio
 
 `)
 	writeTable(&b, Companion())
-	b.WriteString("\n## Repeaters and room servers\n\nMarked *repeater* where a room server doesn't have it, and *USB only* where it only answers on the node's own USB console, not over the mesh.\n\n")
+	b.WriteString("\n### Repeaters and room servers\n\nMarked *repeater* where a room server doesn't have it, and *USB only* where it only answers on the node's own USB console, not over the mesh.\n\n")
 	rep := Node(radio.TypeRepeater)
 	writeTable(&b, rep)
 	var roomOnly []Command
@@ -55,7 +70,7 @@ func writeTable(b *strings.Builder, cmds []Command) {
 		}
 	}
 	for _, g := range groups {
-		fmt.Fprintf(b, "### %s\n\n| Command | Takes | What it does |\n|---|---|---|\n", g)
+		fmt.Fprintf(b, "#### %s\n\n| Command | Takes | What it does |\n|---|---|---|\n", g)
 		var in []Command
 		for _, c := range cmds {
 			if c.Group == g {
@@ -81,6 +96,9 @@ func writeTable(b *strings.Builder, cmds []Command) {
 			if c.Serial {
 				marks = append(marks, "*USB only*")
 			}
+			if regulated(c.Words) {
+				marks = append(marks, "*check local regulations*")
+			}
 			if len(marks) > 0 {
 				help = strings.Join(marks, ", ") + ". " + help
 			}
@@ -88,4 +106,17 @@ func writeTable(b *strings.Builder, cmds []Command) {
 		}
 		b.WriteString("\n")
 	}
+}
+
+// regulated reports whether a command changes something radio rules limit: frequency, bandwidth, power or airtime.
+func regulated(words string) bool {
+	key, ok := strings.CutPrefix(words, "set ")
+	if !ok {
+		return words == "tempradio"
+	}
+	switch key {
+	case "radio", "freq", "bw", "tx", "radio.fem.txgain", "dutycycle", "af", "cad", "repeat":
+		return true
+	}
+	return false
 }
