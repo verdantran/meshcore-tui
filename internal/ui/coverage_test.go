@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -623,5 +624,47 @@ func TestARadioAnotherWindowHasIsntDialled(t *testing.T) {
 	m.shutdown()
 	if held != 0 {
 		t.Errorf("still held after closing: %d", held)
+	}
+}
+
+func TestALongBootStepScrollsAlongItsLine(t *testing.T) {
+	t.Parallel()
+	for _, level := range []motion.Level{motion.Full, motion.Reduced} {
+		c := &clock{t: time.Date(2026, 10, 14, 10, 0, 0, 0, time.UTC)}
+		m := New(Options{Theme: theme.Neon, Motion: level, Clock: c.now, Start: &Target{Kind: "TCP", Addr: "10.0.0.4"},
+			Dial: func(Target) radio.Radio { return &stubRadio{ch: make(chan radio.Event)} }})
+		m.Init()
+		m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+		long := "the radio said something far too long to fit on one line of the link sequence, ending here"
+		send(m, c, 0, radio.BootStep{Key: "link", Label: "LINK", Detail: long, State: radio.StepFail})
+		send(m, c, 0, radio.Fatal{Err: errors.New(long)})
+		line := func() string {
+			for _, l := range strings.Split(plain(screen(t, m)), "\n") {
+				if strings.Contains(l, "▸ LINK") {
+					return l
+				}
+			}
+			return ""
+		}
+		tick(m, c, time.Minute) // typed out, and somewhere in the scroll
+		if line() == "" {
+			t.Fatalf("no step line:\n%s", plain(screen(t, m)))
+		}
+		var seen []string
+		for range 40 {
+			tick(m, c, 250*time.Millisecond)
+			if l := line(); !slices.Contains(seen, l) {
+				seen = append(seen, l)
+			}
+		}
+		for _, l := range seen {
+			if !strings.Contains(l, "[FAIL]") {
+				t.Errorf("%v: the tag went: %q", level, l)
+			}
+		}
+		ended := slices.ContainsFunc(seen, func(l string) bool { return strings.Contains(l, "ending here") })
+		if scrolls := level == motion.Full; ended != scrolls || m.bootScrolling() != scrolls {
+			t.Errorf("%v: the end shown %v, scrolling %v; lines %q", level, ended, m.bootScrolling(), seen)
+		}
 	}
 }

@@ -468,7 +468,7 @@ func (m *Model) frameEvery() time.Duration {
 const beaconFrame = time.Second / 12
 
 func (m *Model) animating() bool {
-	return m.moving() || m.mapBeaconOn() || m.pulsing() || (m.level != motion.Off && m.toasting())
+	return m.moving() || m.mapBeaconOn() || m.pulsing() || m.bootScrolling() || (m.level != motion.Off && m.toasting())
 }
 
 // pulsePeriod is the slow glow of something waiting on you; it runs on the beacon's slower frame clock.

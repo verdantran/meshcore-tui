@@ -106,20 +106,48 @@ func (b *bootModel) completed() int {
 	return n
 }
 
+// bootTagW leaves room on a step's line for the widest tag, "… [WAIT]", and a space.
+const bootTagW = 9
+
+func (m *Model) bootInner() int { return min(max(m.w-8, 40), 76) - 4 }
+
+func bootHead(l bootLine) string { return fmt.Sprintf("▸ %-10s ", l.label) }
+
+// bootOver is how many cells of a step's text don't fit its line.
+func bootOver(l bootLine, inner int) int {
+	return visibleWidth(bootHead(l)+l.detail) - (inner - bootTagW)
+}
+
+// bootScrolling is a step too long for its line scrolling along it.
+func (m *Model) bootScrolling() bool {
+	if m.phase != phaseBoot || !m.level.Allows(motion.Ambient) {
+		return false
+	}
+	for _, l := range m.boot.lines {
+		if bootOver(l, m.bootInner()) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // render draws the boot log as a centred panel; it types each line as it appears.
 func (m *Model) renderBoot() []string {
 	th, now, b := m.th, m.now, &m.boot
-	width := min(max(m.w-8, 40), 76)
-	inner := width - 4
+	inner := m.bootInner()
 	var body []string
 
 	body = append(body, "")
 	for _, l := range b.lines {
-		labelW := 10
-		full := truncate(fmt.Sprintf("▸ %-*s %s", labelW, l.label, l.detail), inner-9) // room for the widest tag, "… [WAIT]"
+		head, over := bootHead(l), bootOver(l, inner)
+		full := truncate(head+l.detail, inner-bootTagW)
 		shown, typed := full, true
 		if m.level.Allows(motion.Typing) {
 			shown, typed = motion.Typewriter(full, l.at, bootCPS, now)
+		}
+		if typed && over > 0 && m.level.Allows(motion.Ambient) {
+			off := motion.Marquee(over, l.at.Add(motion.TypeDur(full, bootCPS)), now)
+			shown = head + renderWidth.Truncate(renderWidth.TruncateLeft(l.detail, off, ""), inner-bootTagW-visibleWidth(head), "") // WcWidth.Cut ignores left
 		}
 		var tag string
 		switch {
@@ -201,7 +229,7 @@ func (m *Model) renderBoot() []string {
 	if b.failed {
 		border = th.Red
 	}
-	box := m.panel("LINK SEQUENCE", body, width, len(body)+2, border, true)
+	box := m.panel("LINK SEQUENCE", body, inner+4, len(body)+2, border, true)
 	logo := m.logo(b.start)
 	block := append(logo, "")
 	block = append(block, box...)
