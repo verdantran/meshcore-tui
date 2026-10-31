@@ -67,6 +67,22 @@ func TestLookalikeSenders(t *testing.T) {
 		t.Errorf("tags after the flag: %q", v)
 	}
 
+	// Where joined emoji are drawn as their parts, ♀ for ♂ or another skin tone doesn't show, so neither hides a look-alike.
+	h.m.pin("🏊\u200d♂ Zed", zed.pub)
+	for _, fake := range []string{"🏊\u200d♀ Zed", "🏊 Zed"} {
+		h.clk.t = h.clk.t.Add(time.Minute)
+		h.say(1, fake, "trust me")
+		if v := h.verdict(); v != "⚠ looks like 🏊\u200d♂ Zed" {
+			t.Errorf("%q: %q", fake, v)
+		}
+	}
+	h.m.pin("👍🏽 Zed", zed.pub)
+	h.clk.t = h.clk.t.Add(time.Minute)
+	h.say(1, "👍🏿 Zed", "trust me")
+	if v := h.verdict(); v != "⚠ looks like 👍🏽 Zed" {
+		t.Errorf("another skin tone: %q", v)
+	}
+
 	// Even signed, a look-alike is flagged; K asks before pinning one.
 	mallory := newSigner("mallory")
 	h.m.contacts.heard = append(h.m.contacts.heard, heardNode{radio.Contact{Key: mallory.pub, Name: "Zеd"}, h.clk.t})

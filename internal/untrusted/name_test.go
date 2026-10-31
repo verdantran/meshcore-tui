@@ -80,3 +80,29 @@ func TestSkeletonLookalikes(t *testing.T) {
 		}
 	}
 }
+
+func TestSkeletonMatchesSplitEmoji(t *testing.T) {
+	// Where joined emoji are drawn as their parts, the narrow symbol and the skin tone don't show.
+	for _, same := range [][]string{
+		{"🏊‍♂ Bob", "🏊‍♀ Bob", "🏊 Bob", "🏊♂ Bob"},
+		{"👍🏽 Bob", "👍🏿 Bob", "👍 Bob"},
+		{"🧑‍⚕️ Ann", "🧑 Ann"},
+	} {
+		for _, s := range same[1:] {
+			if Skeleton(s) != Skeleton(same[0]) {
+				t.Errorf("%q should look like %q", s, same[0])
+			}
+		}
+	}
+	for _, s := range []string{"Bob ↑", "Bob ↑↓", "👩‍🚀 Ada"} {
+		if Skeleton(s) == Skeleton("Bob") || Skeleton("👩‍🚀 Ada") == Skeleton("👩 Ada") {
+			t.Errorf("%q: only narrow symbols after an emoji go", s)
+		}
+	}
+	if Skeleton("Bob ↑") == Skeleton("Bob ↑↓") {
+		t.Error("arrows after text aren't emoji parts")
+	}
+	if Name("🏊‍♂ Bob") != "🏊‍♂ Bob" || Name("👍🏽 Bob") != "👍🏽 Bob" {
+		t.Error("Name keeps every character")
+	}
+}
