@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -48,20 +49,24 @@ func TestMeasureWidths(t *testing.T) {
 		reply string
 		want  widths
 	}{
-		{"a grapheme at a time, a lone letter narrow, as tmux 3.8", report(3, 3, 3, 3, 2, 3, 3), widths{widthsGraphemes, 1, 2, 2}},
-		{"a character at a time", report(2, 4, 5, 5, 2, 3, 2), widths{widthsPerChar, 1, 2, 1}},
-		{"neither: joined, but the symbol drawn wide", report(3, 5, 3, 3, 3, 3, 3), widths{widthsSplit, 2, 2, 2}},
-		{"neither: the sun one cell, the rest joined", report(2, 3, 3, 3, 2, 3, 2), widths{widthsSplit, 1, 2, 1}},
-		{"a flag drawn as one narrow glyph", report(3, 3, 3, 3, 2, 2, 3), widths{widthsGraphemes, 1, 1, 2}},
-		{"a key typed first", "q\x1b[A" + report(3, 3, 3, 3, 3, 3, 2), widths{widthsGraphemes, 2, 2, 1}},
-		{"no answer for the text emoji", report(3, 3, 3, 3, 2, 3), widths{widthsGraphemes, 1, 2, 0}},
-		{"no answer for the flag", report(3, 3, 3, 3, 2), widths{widthsGraphemes, 1, 0, 0}},
-		{"no answer for any of those", report(3, 3, 3, 3), widths{widthsGraphemes, 0, 0, 0}},
+		{"a grapheme at a time, a lone letter narrow, as tmux 3.8", report(3, 3, 3, 3, 2, 3, 3), widths{mode: widthsGraphemes, loneLetter: 1, flag: 2, textEmoji: 2}},
+		{"a character at a time", report(2, 4, 5, 5, 2, 3, 2), widths{mode: widthsPerChar, loneLetter: 1, flag: 2, textEmoji: 1}},
+		{"neither: joined, but the symbol drawn wide", report(3, 5, 3, 3, 3, 3, 3), widths{mode: widthsSplit, loneLetter: 2, flag: 2, textEmoji: 2}},
+		{"neither: the sun one cell, the rest joined", report(2, 3, 3, 3, 2, 3, 2), widths{mode: widthsSplit, loneLetter: 1, flag: 2, textEmoji: 1}},
+		{"a flag drawn as one narrow glyph", report(3, 3, 3, 3, 2, 2, 3), widths{mode: widthsGraphemes, loneLetter: 1, flag: 1, textEmoji: 2}},
+		{"a key typed first", "q\x1b[A" + report(3, 3, 3, 3, 3, 3, 2), widths{mode: widthsGraphemes, loneLetter: 2, flag: 2, textEmoji: 1}},
+		{"no answer for the text emoji", report(3, 3, 3, 3, 2, 3), widths{mode: widthsGraphemes, loneLetter: 1, flag: 2, textEmoji: 0}},
+		{"no answer for the flag", report(3, 3, 3, 3, 2), widths{mode: widthsGraphemes, loneLetter: 1, flag: 0, textEmoji: 0}},
+		{"no answer for any of those", report(3, 3, 3, 3), widths{mode: widthsGraphemes, loneLetter: 0, flag: 0, textEmoji: 0}},
 		{"silent", "", widths{}},
 		{"stops answering", report(3, 3), widths{}},
 	} {
 		f := &fakeTTY{reply: c.reply}
-		if got := measureWidths(f, time.Second); got != c.want {
+		got := measureWidths(f, time.Second)
+		if c.want.mode != widthsUnknown && len(got.probes) != len(widthProbes) {
+			t.Errorf("%s: kept %v for the report", c.name, got.probes)
+		}
+		if got.probes = nil; !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s: got %+v, want %+v", c.name, got, c.want)
 		}
 		if w := f.written.String(); !strings.Contains(w, widthProbes[0]+"\x1b[6n") || !strings.HasSuffix(w, "\r\x1b[K") {
@@ -72,7 +77,7 @@ func TestMeasureWidths(t *testing.T) {
 
 func TestMeasureWidthsNeedsADeadline(t *testing.T) {
 	f := &fakeTTY{reply: "\x1b[1;3R", noDeadline: true}
-	if measureWidths(f, time.Second) != (widths{}) || f.written.Len() > 0 {
+	if !reflect.DeepEqual(measureWidths(f, time.Second), widths{}) || f.written.Len() > 0 {
 		t.Errorf("probed a terminal it couldn't stop waiting for: wrote %q", f.written.String())
 	}
 }

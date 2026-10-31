@@ -100,6 +100,7 @@ func simRepeater() radio.Radio {
 var (
 	errUsage   = errors.New("usage")
 	errVersion = errors.New("version")
+	errWidths  = errors.New("widths")
 )
 
 // stdout is where --version prints; tests replace it.
@@ -144,11 +145,19 @@ func setup(args []string, env func(string) string, sess session, stderr io.Write
 	themeFlag := fs.String("theme", "", strings.Join(theme.Names(), " | "))
 	configPath := fs.String("config", filepath.Join(config.Dir(), "config.toml"), "config file")
 	showVersion := fs.Bool("version", false, "print the version and exit")
+	showWidths := fs.Bool("widths", false, "measure how the terminal draws emoji and flags, say what the app does about it, and exit")
 	if err := fs.Parse(args); err != nil {
 		return ui.Options{}, errUsage
 	}
 	if *showVersion {
 		return ui.Options{}, errVersion
+	}
+	if *showWidths {
+		cfg, err := config.Load(*configPath)
+		if err != nil {
+			cfg = config.Default()
+		}
+		return ui.Options{Config: cfg}, errWidths
 	}
 
 	cfg, err := config.Load(*configPath)
@@ -232,6 +241,10 @@ func run(args []string, env func(string) string, stderr io.Writer) int {
 	}
 	if errors.Is(err, errVersion) {
 		fmt.Fprintln(stdout, "meshcore-tui "+version())
+		return 0
+	}
+	if errors.Is(err, errWidths) {
+		widthReport(stdout, sess, terminalWidths(), opt.Config.UI.Flags)
 		return 0
 	}
 	if err != nil {

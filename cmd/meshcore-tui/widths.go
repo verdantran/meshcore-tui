@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"regexp"
@@ -45,6 +46,7 @@ type widths struct {
 	loneLetter int
 	flag       int
 	textEmoji  int
+	probes     []int // how wide each of widthProbes was drawn, for --widths
 }
 
 // tty is the terminal as the width probe uses it: deadlines keep a silent terminal from holding up startup.
@@ -63,6 +65,7 @@ func measureWidths(t tty, wait time.Duration) widths {
 	defer io.WriteString(t, "\r\x1b[K")
 	perChar, graphemes := true, true
 	var got []byte
+	var w widths
 	for _, p := range widthProbes {
 		if _, err := io.WriteString(t, "\r"+p+"\x1b[6n"); err != nil {
 			return widths{}
@@ -72,10 +75,11 @@ func measureWidths(t tty, wait time.Duration) widths {
 			return widths{}
 		}
 		got = rest
+		w.probes = append(w.probes, col-1)
 		perChar = perChar && col-1 == ansi.WcWidth.StringWidth(p)
 		graphemes = graphemes && col-1 == ansi.GraphemeWidth.StringWidth(p)
 	}
-	w := widths{mode: widthsSplit}
+	w.mode = widthsSplit
 	switch {
 	case graphemes:
 		w.mode = widthsGraphemes
@@ -169,4 +173,43 @@ func flagLetters(setting string, s session, w widths) bool {
 		return !slices.ContainsFunc(flagTerminals, func(t string) bool { return strings.Contains(s.clientTerm, t) })
 	}
 	return w.flag != 0 && w.flag != 2
+}
+
+// widthReport says what the probe found and what the app does about it, for meshcore-tui --widths.
+func widthReport(out io.Writer, s session, w widths, setting string) {
+	fmt.Fprintln(out, "meshcore-tui "+version())
+	if s.tmux {
+		client := s.clientTerm
+		if client == "" {
+			client = "not known"
+		}
+		fmt.Fprintf(out, "inside tmux, which answers for its own grid; the terminal attached: %s\n", client)
+	}
+	if len(w.probes) < len(widthProbes) {
+		fmt.Fprintln(out, "couldn't measure: the terminal didn't say where the cursor landed, or reads from it can't be timed out (as on macOS), so nothing is changed")
+		return
+	}
+	row := func(what, s string, drawn int) {
+		fmt.Fprintf(out, "  %-34s %-3s drawn %d, counted %d a character at a time, %d as a grapheme\n", what, s, drawn, ansi.WcWidth.StringWidth(s), ansi.GraphemeWidth.StringWidth(s))
+	}
+	for i, p := range widthProbes {
+		row([]string{"emoji with a variation selector", "joined emoji ending in a symbol", "two joined emoji", "skin tone"}[i], p, w.probes[i])
+	}
+	for _, m := range []struct {
+		what, s string
+		drawn   int
+	}{{"lone regional indicator", loneLetter, w.loneLetter}, {"flag", flagProbe, w.flag}, {"emoji that shows as text", textEmoji, w.textEmoji}} {
+		if m.drawn != 0 {
+			row(m.what, m.s, m.drawn)
+		}
+	}
+	mode := map[widthMode]string{widthsGraphemes: "a grapheme at a time", widthsPerChar: "a character at a time", widthsSplit: "a character at a time, joined emoji drawn as their parts"}[w.mode]
+	fmt.Fprintf(out, "counting: %s\n", mode)
+	counted := ansi.WcWidth
+	if w.mode == widthsGraphemes {
+		counted = ansi.GraphemeWidth
+	}
+	yesNo := map[bool]string{true: "yes", false: "no"}
+	fmt.Fprintf(out, "flags drawn as letters ([ui] flags = %q): %s\n", setting, yesNo[flagLetters(setting, s, w)])
+	fmt.Fprintf(out, "room made after emoji that show as text: %s\n", yesNo[w.textEmoji > counted.StringWidth(textEmoji)])
 }
