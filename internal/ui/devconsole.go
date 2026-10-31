@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/verdantran/meshcore-tui/internal/admin"
+	"github.com/verdantran/meshcore-tui/internal/console"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 )
 
@@ -19,6 +20,7 @@ type radioConsole struct {
 	history []string
 	histAt  int
 	busy    bool
+	tab     completer
 }
 
 type cliRanMsg struct {
@@ -108,6 +110,9 @@ func maskSecret(cmd string) string {
 
 func (m *Model) radioConsoleKey(s string) tea.Cmd {
 	c := &m.device.con
+	if s != "tab" && s != "shift+tab" {
+		c.tab.reset()
+	}
 	switch s {
 	case "enter":
 		cmd := strings.TrimSpace(c.input.text)
@@ -137,8 +142,8 @@ func (m *Model) radioConsoleKey(s string) tea.Cmd {
 		} else {
 			c.histAt, c.input = len(c.history), lineEdit{}
 		}
-	case "tab":
-		c.input.set(completeWords(c.input.text, companionWords))
+	case "tab", "shift+tab":
+		c.tab.tab(console.Companion(), &c.input, s == "shift+tab")
 	default:
 		c.input.key(s)
 	}
@@ -197,38 +202,6 @@ func (m *Model) consoleMsg(msg cliRanMsg) tea.Cmd {
 	return nil
 }
 
-// companionWords are the console commands of companion firmware v1.18.0: its own, the shared radio
-// settings, and the board-specific FEM gain. WiFi ones only answer on WiFi builds.
-var companionWords = []string{"ver", "board", "reboot", "poweroff", "shutdown",
-	"get name", "set name", "set pin", "get tz.offset", "set tz.offset",
-	"get radio", "set radio", "get freq", "get tx", "set tx", "get radio.rxgain", "set radio.rxgain on", "set radio.rxgain off",
-	"get radio.fem.rxgain", "set radio.fem.rxgain on", "set radio.fem.rxgain off",
-	"get af", "set af", "get dutycycle", "set dutycycle", "get cad", "set cad on", "set cad off", "get int.thresh", "set int.thresh",
-	"get rxdelay", "set rxdelay", "get txdelay", "set txdelay", "get direct.txdelay", "set direct.txdelay",
-	"get agc.reset.interval", "set agc.reset.interval", "get path.hash.mode", "set path.hash.mode", "get multi.acks", "set multi.acks",
-	"get wifi.ssid", "set wifi.ssid", "get wifi.pwd", "set wifi.pwd", "set wifi.clear", "get wifi.enabled", "set wifi.enabled",
-	"get wifi.status", "get wifi.ip"}
-
-// completeWords extends the line to the longest prefix its matching words share.
-func completeWords(in string, words []string) string {
-	var cands []string
-	for _, w := range words {
-		if strings.HasPrefix(w, in) {
-			cands = append(cands, w)
-		}
-	}
-	if len(cands) == 0 {
-		return in
-	}
-	common := cands[0]
-	for _, c := range cands[1:] {
-		for !strings.HasPrefix(c, common) {
-			common = common[:len(common)-1]
-		}
-	}
-	return common
-}
-
 func (m *Model) devConsoleLines(w, rows int) []string {
 	th, c := m.th, &m.device.con
 	out := []string{th.Fg(th.Muted, true).Render("RADIO CONSOLE") + th.Fg(th.Dim, false).Render(clip("  ·  "+m.ready.Device.Firmware+" · enter send · ↑↓ history · tab complete · esc close", w-13)), ""}
@@ -246,7 +219,7 @@ func (m *Model) devConsoleLines(w, rows int) []string {
 			lines = append(lines, m.consoleRow(ll, w))
 		}
 	}
-	if room := rows - 5; len(lines) > room {
+	if room := rows - 6; len(lines) > room {
 		lines = lines[len(lines)-max(room, 0):]
 	}
 	if len(lines) == 0 {
@@ -256,10 +229,9 @@ func (m *Model) devConsoleLines(w, rows int) []string {
 		}
 	}
 	out = append(out, lines...)
-	prompt := th.Fg(th.Magenta, true).Render("radio▸ ")
-	prompt += c.input.render(th, w-visibleWidth(prompt), false)
+	wait := ""
 	if c.busy {
-		prompt += "  " + m.waiting("waiting for a reply")
+		wait = m.waiting("waiting for a reply")
 	}
-	return append(out, "", clip(prompt, w))
+	return append(append(out, ""), m.consolePrompt(th.Fg(th.Magenta, true).Render("radio▸ "), c.input, console.Companion(), c.tab, wait, w)...)
 }

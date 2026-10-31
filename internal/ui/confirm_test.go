@@ -116,7 +116,7 @@ func TestConsoleKeepsSecretsOut(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
 	h.keys("5")
-	_, sess := h.login("Dundry", "password")
+	ct, sess := h.login("Dundry", "password")
 	h.idle(sess)
 	h.start(h.m.setPane(paneConsole))
 	h.typeLine("password hunter2")
@@ -127,13 +127,14 @@ func TestConsoleKeepsSecretsOut(t *testing.T) {
 	h.idle(sess)
 	h.typeLine("ver")
 	h.idle(sess)
-	for _, c := range h.m.adm.history {
+	hist := h.m.adm.history[ct.Key]
+	for _, c := range hist {
 		if strings.Contains(c, "hunter2") {
 			t.Errorf("history keeps %q", c)
 		}
 	}
-	if len(h.m.adm.history) != 1 {
-		t.Errorf("history = %q", h.m.adm.history)
+	if len(hist) != 1 {
+		t.Errorf("history = %q", hist)
 	}
 	if scr := h.screen(); strings.Contains(scr, "hunter2") || strings.Contains(plainConsole(sess), "hunter2") {
 		t.Errorf("the password shows:\n%s", scr)
