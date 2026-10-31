@@ -187,6 +187,7 @@ func widthReport(out io.Writer, s session, w widths, setting string) {
 	}
 	if len(w.probes) < len(widthProbes) {
 		fmt.Fprintln(out, "couldn't measure: the terminal didn't say where the cursor landed, or reads from it can't be timed out (as on macOS), so nothing is changed")
+		textEmojiChart(out)
 		return
 	}
 	row := func(what, s string, drawn int) {
