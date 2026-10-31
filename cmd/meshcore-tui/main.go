@@ -245,11 +245,13 @@ func run(args []string, env func(string) string, stderr io.Writer) int {
 	}
 	defer db.Close()
 	opt.Store = db
+	widths := terminalWidths()
+	opt.SplitEmoji = widths == widthsSplit
 	out := &timedOutput{File: os.Stdout}
 	p := tea.NewProgram(ui.New(opt), tea.WithOutput(out), tea.WithFPS(motion.FrameRate), tea.WithEnvironment(teaEnv(os.Environ(), sess))) // the app never animates faster
 	out.slow = func() { p.Send(ui.SlowTerminalMsg{}) }
-	if sess.tmux && terminalDrawsGraphemes() {
-		go p.Send(tea.ModeReportMsg{Mode: ansi.ModeUnicodeCore, Value: ansi.ModeSet}) // as the answer tmux doesn't give
+	if widths == widthsGraphemes {
+		go p.Send(tea.ModeReportMsg{Mode: ansi.ModeUnicodeCore, Value: ansi.ModeSet}) // as the answer many terminals, tmux among them, don't give
 	}
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(stderr, err)

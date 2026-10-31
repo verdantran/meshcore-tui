@@ -48,6 +48,8 @@ func (m *Model) View() tea.View {
 	frame := drawable(strings.Join(lines, "\n"))
 	if m.opt.ASCII {
 		frame = toASCII(frame)
+	} else if m.opt.SplitEmoji {
+		frame = splitEmoji(frame)
 	}
 	v := tea.NewView(frame)
 	v.AltScreen = true
