@@ -1,11 +1,11 @@
 name: CI
 
-# Pull requests are tested as they are, and pushes only when they land on main or are a release tag: a push to a
-# pull request's branch would otherwise run everything twice. A change only to the docs runs nothing.
+# Pull requests are tested as they are, and pushes only when they land on main: a push to a pull request's branch
+# would otherwise run everything twice. A release tag is left to the Release workflow, since it's only put on a
+# commit that has passed here already. A change only to the docs runs nothing.
 on:
   push:
     branches: [main]
-    tags: ["v*"]
     paths-ignore: ["**.md", "docs/**", "LICENSE"]
   pull_request:
     paths-ignore: ["**.md", "docs/**", "LICENSE"]
