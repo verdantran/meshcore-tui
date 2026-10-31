@@ -12,6 +12,7 @@ import (
 	meshcore "github.com/OwlShack/meshcore-go"
 
 	"github.com/verdantran/meshcore-tui/internal/admin"
+	"github.com/verdantran/meshcore-tui/internal/console"
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/repeaterserial"
@@ -426,7 +427,7 @@ func TestAdminPanes(t *testing.T) {
 	}
 	h.keys("get flood.ad")
 	h.key(tea.KeyTab)
-	if h.m.adm.console.text != "get flood.advert.interval " {
+	if h.m.adm.console.text != "get flood.advert.interval" {
 		t.Errorf("completion: %q", h.m.adm.console.text)
 	}
 	h.key(tea.KeyEscape)
@@ -584,8 +585,12 @@ func TestConsoleHelpers(t *testing.T) {
 			t.Errorf("dangerous(%q)", cmd)
 		}
 	}
-	if completeConsole("zz", radio.TypeRepeater) != "zz" || completeConsole("get nope", radio.TypeRepeater) != "get nope" {
-		t.Error("no matches leave the line alone")
+	for _, in := range []string{"zz", "get nope"} {
+		var c completer
+		e := newLine(in)
+		if c.tab(console.Node(radio.TypeRepeater), &e, false); e.text != in {
+			t.Errorf("no matches leave %q alone, not %q", in, e.text)
+		}
 	}
 	if purposeOf("get tx") != "get tx" || purposeOf("get nope") != "" || purposeOf("set tx 1") != "" || purposeOf("region") != "region" {
 		t.Error("purposes")
@@ -1045,5 +1050,42 @@ func TestConfirmTypesNameWithoutEmoji(t *testing.T) {
 	h.idle(sess)
 	if strings.Contains(h.m.log[len(h.m.log)-1].text, "NOT CONFIRMED") {
 		t.Error("typing the name without its emoji should confirm")
+	}
+}
+
+func TestConsoleHistoryStaysWithItsNode(t *testing.T) {
+	h := newHarness(t)
+	a, b := radio.Contact{Key: [32]byte{1}, Type: radio.TypeRepeater}, radio.Contact{Key: [32]byte{2}, Type: radio.TypeRepeater}
+	sess := &admin.Session{Admin: true}
+	h.m.adm.history = map[[32]byte][]string{a.Key: {"set name Hilltop"}}
+	h.m.consoleKey("up", b, sess)
+	if h.m.adm.console.text != "" {
+		t.Errorf("another node's command came up: %q", h.m.adm.console.text)
+	}
+	h.m.consoleKey("up", a, sess)
+	if h.m.adm.console.text != "set name Hilltop" {
+		t.Errorf("the node's own history: %q", h.m.adm.console.text)
+	}
+}
+
+func TestConsoleShowsCompletions(t *testing.T) {
+	h := newHarness(t)
+	h.keys("5")
+	_, sess := h.login("Dundry", "password")
+	h.idle(sess)
+	h.start(h.m.setPane(paneConsole))
+	h.keys("get flood.ma")
+	if scr := h.screen(); !strings.Contains(scr, "get flood.max · get flood.max.unscoped") || !strings.Contains(scr, "get flood.max") {
+		t.Fatalf("the matches show under the prompt:\n%s", scr)
+	}
+	h.key(tea.KeyTab)
+	h.key(tea.KeyTab)
+	if h.m.adm.console.text != "get flood.max.unscoped" {
+		t.Errorf("tab steps to the next match: %q", h.m.adm.console.text)
+	}
+	h.key(tea.KeyEscape)
+	h.keys("set repeat ")
+	if scr := h.screen(); !strings.Contains(scr, "on|off") || !strings.Contains(scr, "Repeat packets") {
+		t.Errorf("a setting's values and help show:\n%s", scr)
 	}
 }

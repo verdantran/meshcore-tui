@@ -315,3 +315,36 @@ func (e lineEdit) render(th theme.Theme, w int, mask bool) string {
 	return th.Fg(th.Dim, false).Render(lead) + text.Render(strings.Join(before, "")) +
 		th.Block(th.Bg, th.Text).Render(cur) + text.Render(strings.Join(after, ""))
 }
+
+// renderGhost is render with what tab would add shown dim after the text, the cursor on its first letter, and
+// then any arguments still to type. The ghost only shows with the cursor at the end, where tab adds it.
+func (e lineEdit) renderGhost(th theme.Theme, w int, ghost, args string) string {
+	if e.pos != len(e.text) || ghost == "" && args == "" {
+		return e.render(th, w, false)
+	}
+	rest := ghost
+	if args != "" {
+		if rest != "" {
+			rest += " "
+		}
+		rest += args
+	}
+	g := uniseg.NewGraphemes(rest)
+	g.Next()
+	cur, after := g.Str(), rest[len(g.Str()):]
+	if ghost == "" && !strings.HasSuffix(e.text, " ") {
+		cur, after = " ", rest // the cursor stands for the space before the arguments
+	}
+	var cells []string
+	for t := uniseg.NewGraphemes(e.text); t.Next(); {
+		cells = append(cells, t.Str())
+	}
+	room := max(w-visibleWidth(cur)-min(visibleWidth(after), w/2), 2)
+	lead := ""
+	for visibleWidth(strings.Join(cells, "")) > room-1 && len(cells) > 0 {
+		cells, lead = cells[1:], "…"
+	}
+	after = renderWidth.Truncate(after, max(w-visibleWidth(lead+strings.Join(cells, ""))-visibleWidth(cur), 0), "…")
+	return th.Fg(th.Dim, false).Render(lead) + th.Fg(th.Text, false).Render(strings.Join(cells, "")) +
+		th.Block(th.Bg, th.Dim).Render(cur) + th.Fg(th.Dim, false).Render(after)
+}

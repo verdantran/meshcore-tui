@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/verdantran/meshcore-tui/internal/console"
 )
 
 func (h *harness) consoleSays(want string) {
@@ -34,10 +36,13 @@ func TestRadioConsole(t *testing.T) {
 	h.consoleSays("> on")
 	h.keys("set radio.fem.r")
 	h.key(tea.KeyTab)
-	if got := h.m.device.con.input.text; got != "set radio.fem.rxgain o" {
+	if got := h.m.device.con.input.text; got != "set radio.fem.rxgain " {
 		t.Errorf("tab completes to %q", got)
 	}
-	h.keys("ff")
+	if !strings.Contains(h.screen(), "on|off") || !strings.Contains(h.screen(), "receive amplifier") {
+		t.Errorf("the choices and what it does show:\n%s", h.screen())
+	}
+	h.keys("off")
 	h.key(tea.KeyEnter)
 	h.consoleSays("RX gain off")
 	h.typeLine("frobnicate")
@@ -119,17 +124,36 @@ func TestRadioConsoleNeedsNewFirmware(t *testing.T) {
 }
 
 func TestRadioConsoleCompletes(t *testing.T) {
+	cmds := console.Companion()
 	for in, want := range map[string]string{
-		"get dut":    "get dutycycle",
-		"set ca":     "set cad o",
-		"get dir":    "get direct.txdelay",
-		"set wifi.c": "set wifi.clear",
-		"get agc":    "get agc.reset.interval",
-		"zzz":        "zzz",
-		"get radio":  "get radio",
+		"get dut": "get dutycycle", "set ca": "set cad ", "get dir": "get direct.txdelay", "set wifi.c": "set wifi.clear",
+		"zzz": "zzz", "set radio.fem.r": "set radio.fem.rxgain ", "set radio.fem.rxgain of": "set radio.fem.rxgain off",
 	} {
-		if got := completeWords(in, companionWords); got != want {
-			t.Errorf("%q completes to %q, want %q", in, got, want)
+		var c completer
+		e := newLine(in)
+		c.tab(cmds, &e, false)
+		if e.text != want {
+			t.Errorf("tab on %q gives %q, want %q", in, e.text, want)
+		}
+	}
+
+	var c completer
+	e := newLine("get rad")
+	for _, want := range []string{"get radio", "get radio.rxgain", "get radio.fem.rxgain", "get radio"} {
+		c.tab(cmds, &e, false)
+		if e.text != want {
+			t.Fatalf("tab gives %q, want %q", e.text, want)
+		}
+	}
+	if c.tab(cmds, &e, true); e.text != "get radio.fem.rxgain" {
+		t.Errorf("shift+tab steps back to %q", e.text)
+	}
+	c.reset()
+	e = newLine("set cad ")
+	for _, want := range []string{"set cad on", "set cad off", "set cad on"} {
+		c.tab(cmds, &e, false)
+		if e.text != want {
+			t.Fatalf("tab through the values gives %q, want %q", e.text, want)
 		}
 	}
 }

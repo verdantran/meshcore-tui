@@ -1,0 +1,269 @@
+# The console commands of companion firmware v1.18.0, from its source: the companion's own, the radio settings
+# every firmware shares, and the FEM gain that boards with a front-end module add.
+#
+# words: what's typed; args: what follows, as shown; values: what the argument can be, when it's a short list.
+
+[[command]]
+group = "Radio"
+words = "get radio"
+help = "The frequency, bandwidth, spreading factor and coding rate."
+
+[[command]]
+group = "Radio"
+words = "set radio"
+args = "<freq>,<bw>,<sf>,<cr>"
+help = "All four at once, in MHz and kHz; takes effect after a reboot. You'll only hear nodes using the same."
+
+[[command]]
+group = "Radio"
+words = "get freq"
+help = "The frequency in MHz."
+
+[[command]]
+group = "Radio"
+words = "get tx"
+help = "Transmit power in dBm."
+
+[[command]]
+group = "Radio"
+words = "set tx"
+args = "<dBm>"
+help = "Transmit power in dBm, up to what the board allows."
+
+[[command]]
+group = "Radio"
+words = "get radio.rxgain"
+help = "Whether the LoRa chip's boosted receive gain is on."
+
+[[command]]
+group = "Radio"
+words = "set radio.rxgain"
+args = "on|off"
+values = ["on", "off"]
+help = "The LoRa chip's boosted receive gain; some chips say it's unsupported."
+
+[[command]]
+group = "Radio"
+words = "get radio.fem.rxgain"
+help = "Whether the front-end module's receive amplifier is on, on boards that have one, such as the Heltec V4."
+
+[[command]]
+group = "Radio"
+words = "set radio.fem.rxgain"
+args = "on|off"
+values = ["on", "off"]
+help = "The front-end module's receive amplifier: on hears weaker signals, off can help next to strong transmitters."
+
+[[command]]
+group = "Radio"
+words = "get af"
+help = "The airtime factor."
+
+[[command]]
+group = "Radio"
+words = "set af"
+args = "<0–9>"
+help = "The airtime factor."
+
+[[command]]
+group = "Radio"
+words = "get dutycycle"
+help = "The share of time it may transmit."
+
+[[command]]
+group = "Radio"
+words = "set dutycycle"
+args = "<1–100>"
+help = "The share of time it may transmit, as a percentage; some regions set a legal limit."
+
+[[command]]
+group = "Radio"
+words = "get cad"
+help = "Whether it listens before transmitting (channel activity detection)."
+
+[[command]]
+group = "Radio"
+words = "set cad"
+args = "on|off"
+values = ["on", "off"]
+help = "Listen before transmitting (channel activity detection)."
+
+[[command]]
+group = "Radio"
+words = "get int.thresh"
+help = "The interference threshold."
+
+[[command]]
+group = "Radio"
+words = "set int.thresh"
+args = "<n>"
+help = "The interference threshold."
+
+[[command]]
+group = "Radio"
+words = "get agc.reset.interval"
+help = "How often the receiver's gain control resets."
+
+[[command]]
+group = "Radio"
+words = "set agc.reset.interval"
+args = "<n>"
+help = "How often the receiver's gain control resets; the radio rounds it."
+
+[[command]]
+group = "Timing"
+words = "get rxdelay"
+help = "The receive delay base."
+
+[[command]]
+group = "Timing"
+words = "set rxdelay"
+args = "<0–20>"
+help = "The receive delay base."
+
+[[command]]
+group = "Timing"
+words = "get txdelay"
+help = "The delay factor before passing on flood packets."
+
+[[command]]
+group = "Timing"
+words = "set txdelay"
+args = "<0–2>"
+help = "The delay factor before passing on flood packets."
+
+[[command]]
+group = "Timing"
+words = "get direct.txdelay"
+help = "The delay factor before passing on direct packets."
+
+[[command]]
+group = "Timing"
+words = "set direct.txdelay"
+args = "<0–2>"
+help = "The delay factor before passing on direct packets."
+
+[[command]]
+group = "Messaging"
+words = "get path.hash.mode"
+help = "The path hash size: 0, 1 or 2 for 1, 2 or 3 bytes."
+
+[[command]]
+group = "Messaging"
+words = "set path.hash.mode"
+args = "0|1|2"
+values = ["0", "1", "2"]
+help = "The path hash size: 0, 1 or 2 for 1, 2 or 3 bytes."
+
+[[command]]
+group = "Messaging"
+words = "get multi.acks"
+help = "How many extra acks it sends."
+
+[[command]]
+group = "Messaging"
+words = "set multi.acks"
+args = "<n>"
+help = "How many extra acks it sends, so fewer messages look undelivered."
+
+[[command]]
+group = "This radio"
+words = "ver"
+help = "The firmware version and build date."
+
+[[command]]
+group = "This radio"
+words = "board"
+help = "The board's name."
+
+[[command]]
+group = "This radio"
+words = "get name"
+help = "The radio's name."
+
+[[command]]
+group = "This radio"
+words = "set name"
+args = "<name>"
+help = "The radio's name, as other nodes see it."
+
+[[command]]
+group = "This radio"
+words = "set pin"
+args = "<6 digits>"
+help = "The Bluetooth pairing PIN; anything paired will need to pair again."
+
+[[command]]
+group = "This radio"
+words = "get tz.offset"
+help = "The time zone offset, for boards with a screen."
+
+[[command]]
+group = "This radio"
+words = "set tz.offset"
+args = "<hours>"
+help = "The time zone offset, for boards with a screen."
+
+[[command]]
+group = "This radio"
+words = "reboot"
+help = "Restarts the radio; the link reconnects by itself."
+
+[[command]]
+group = "This radio"
+words = "poweroff"
+help = "Switches the radio off; someone has to switch it back on."
+
+[[command]]
+group = "This radio"
+words = "shutdown"
+help = "The same as poweroff."
+
+[[command]]
+group = "WiFi"
+words = "get wifi.ssid"
+help = "The WiFi network's name. WiFi commands only answer on WiFi builds."
+
+[[command]]
+group = "WiFi"
+words = "set wifi.ssid"
+args = "<name>"
+help = "The WiFi network to join; set wifi.pwd too, then reboot."
+
+[[command]]
+group = "WiFi"
+words = "get wifi.pwd"
+help = "The WiFi password, in full."
+
+[[command]]
+group = "WiFi"
+words = "set wifi.pwd"
+args = "<password>"
+help = "The WiFi password."
+
+[[command]]
+group = "WiFi"
+words = "set wifi.clear"
+help = "Forgets the WiFi network."
+
+[[command]]
+group = "WiFi"
+words = "get wifi.enabled"
+help = "Whether WiFi is on."
+
+[[command]]
+group = "WiFi"
+words = "set wifi.enabled"
+args = "0|1"
+values = ["0", "1"]
+help = "WiFi off or on; takes effect after a reboot."
+
+[[command]]
+group = "WiFi"
+words = "get wifi.status"
+help = "Whether it's connected."
+
+[[command]]
+group = "WiFi"
+words = "get wifi.ip"
+help = "Its address on the network."

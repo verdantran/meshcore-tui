@@ -15,6 +15,7 @@ import (
 	"github.com/verdantran/meshcore-tui/internal/admin"
 	"github.com/verdantran/meshcore-tui/internal/chat"
 	"github.com/verdantran/meshcore-tui/internal/config"
+	"github.com/verdantran/meshcore-tui/internal/console"
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 )
@@ -90,9 +91,11 @@ type adminModel struct {
 
 	setSel, aclSel, regSel, nbSel int
 
-	console lineEdit
-	history []string
-	histAt  int
+	console  lineEdit
+	history  map[[32]byte][]string // each node's console history, kept apart so one node's commands never come up on another
+	histAt   int
+	histNode [32]byte // the node histAt is a place in
+	tab      completer
 
 	applied   []admin.Change
 	appliedAt time.Time
@@ -1064,6 +1067,16 @@ func consoleLine(cmd string) string { return strings.Join(strings.Fields(strings
 
 func (m *Model) consoleKey(s string, ct radio.Contact, sess *admin.Session) (tea.Cmd, bool) {
 	a := &m.adm
+	if a.history == nil {
+		a.history = map[[32]byte][]string{}
+	}
+	hist := a.history[ct.Key]
+	if a.histNode != ct.Key || a.histAt > len(hist) {
+		a.histNode, a.histAt = ct.Key, len(hist)
+	}
+	if s != "tab" && s != "shift+tab" {
+		a.tab.reset()
+	}
 	switch s {
 	case "esc":
 		if a.console.text == "" && a.local {
@@ -1083,9 +1096,9 @@ func (m *Model) consoleKey(s string, ct radio.Contact, sess *admin.Session) (tea
 			return nil, true
 		}
 		if !admin.Secret(cmd) {
-			a.history = append(a.history, cmd)
+			a.history[ct.Key] = append(hist, cmd)
 		}
-		a.histAt, a.console = len(a.history), lineEdit{}
+		a.histAt, a.console = len(a.history[ct.Key]), lineEdit{}
 		if why := dangerous(cmd); why != "" {
 			m.askConfirm(confirmAction{title: strings.ToUpper(cmd) + " ON " + strings.ToUpper(ct.Name), warning: why, commands: []string{cmd}})
 			return nil, true
@@ -1098,17 +1111,17 @@ func (m *Model) consoleKey(s string, ct radio.Contact, sess *admin.Session) (tea
 	case "up":
 		if a.histAt > 0 {
 			a.histAt--
-			a.console.set(a.history[a.histAt])
+			a.console.set(hist[a.histAt])
 		}
 	case "down":
-		if a.histAt < len(a.history)-1 {
+		if a.histAt < len(hist)-1 {
 			a.histAt++
-			a.console.set(a.history[a.histAt])
+			a.console.set(hist[a.histAt])
 		} else {
-			a.histAt, a.console = len(a.history), lineEdit{}
+			a.histAt, a.console = len(hist), lineEdit{}
 		}
-	case "tab":
-		a.console.set(completeConsole(a.console.text, sess.Type))
+	case "tab", "shift+tab":
+		a.tab.tab(console.Node(sess.Type), &a.console, s == "shift+tab")
 	default:
 		a.console.key(s)
 	}
@@ -1127,43 +1140,6 @@ func purposeOf(cmd string) string {
 		return "region"
 	}
 	return ""
-}
-
-var consoleWords = []string{"get", "set", "ver", "board", "clock", "clock sync", "advert", "advert.zerohop", "neighbors", "reboot",
-	"log start", "log stop", "log erase", "clear stats", "region", "region home", "region put", "region remove", "region allowf",
-	"region denyf", "region save", "setperm", "password", "tempradio", "start ota", "powersaving", "powersaving on",
-	"powersaving off", "gps", "gps on", "gps off", "gps sync", "gps setloc", "gps advert", "neighbors", "neighbor.remove",
-	"discover.neighbors", "stats-core", "stats-radio", "stats-packets", "get acl", "log"}
-
-// completeConsole extends the line to the longest prefix its matches share: commands, then setting keys after get/set.
-func completeConsole(in string, t radio.ContactType) string {
-	var cands []string
-	if verb, rest, ok := strings.Cut(in, " "); ok && (verb == "get" || verb == "set") && !strings.Contains(rest, " ") {
-		for _, st := range admin.Settings(t) {
-			if strings.HasPrefix(st.Key, rest) {
-				cands = append(cands, verb+" "+st.Key)
-			}
-		}
-	} else {
-		for _, w := range consoleWords {
-			if strings.HasPrefix(w, in) {
-				cands = append(cands, w)
-			}
-		}
-	}
-	if len(cands) == 0 {
-		return in
-	}
-	common := cands[0]
-	for _, c := range cands[1:] {
-		for !strings.HasPrefix(c, common) {
-			common = common[:len(common)-1]
-		}
-	}
-	if len(cands) == 1 {
-		common += " "
-	}
-	return common
 }
 
 func (m *Model) adminPromptKey(s string) tea.Cmd {

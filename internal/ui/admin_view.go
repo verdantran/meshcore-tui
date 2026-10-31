@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/verdantran/meshcore-tui/internal/admin"
+	"github.com/verdantran/meshcore-tui/internal/console"
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 )
@@ -790,19 +791,19 @@ func (m *Model) consoleLines(sess *admin.Session, w, rows int) []string {
 			lines = append(lines, m.consoleRow(ll, w))
 		}
 	}
-	room := rows - 3
+	room := rows - 4
 	if len(lines) > room {
 		lines = lines[len(lines)-room:]
 	}
 	if len(lines) == 0 {
 		lines = append(lines, th.Fg(th.Dim, false).Render("Commands go to the node as you'd type them on its serial console. Try ver, get name, or neighbors."))
 	}
-	prompt := th.Fg(th.Magenta, true).Render(strings.ToLower(clip(sess.Name, 16)) + "▸ ")
-	prompt += m.adm.console.render(th, w-visibleWidth(prompt), false)
+	wait := ""
 	if sess.Busy() {
-		prompt += "  " + m.waiting("waiting for a reply")
+		wait = m.waiting("waiting for a reply")
 	}
-	return append(lines, "", clip(prompt, w))
+	prompt := th.Fg(th.Magenta, true).Render(strings.ToLower(clip(sess.Name, 16)) + "▸ ")
+	return append(append(lines, ""), m.consolePrompt(prompt, m.adm.console, console.Node(sess.Type), m.adm.tab, wait, w)...)
 }
 
 // clip shortens styled text to w cells, keeping its colours.
