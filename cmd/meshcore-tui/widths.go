@@ -212,4 +212,22 @@ func widthReport(out io.Writer, s session, w widths, setting string) {
 	yesNo := map[bool]string{true: "yes", false: "no"}
 	fmt.Fprintf(out, "flags drawn as letters ([ui] flags = %q): %s\n", setting, yesNo[flagLetters(setting, s, w)])
 	fmt.Fprintf(out, "room made after emoji that show as text: %s\n", yesNo[w.textEmoji > counted.StringWidth(textEmoji)])
+	textEmojiChart(out)
+}
+
+// textEmojiChart draws one line per way the app could draw an emoji that shows as text, each meant to be the
+// same width as the first. The lines whose last bar lines up with the first, with "ab" whole, show the ways
+// this terminal draws as the app means them.
+func textEmojiChart(out io.Writer) {
+	fmt.Fprintln(out, "\nwhich of these line up with the first, with \"ab\" whole? (inside tmux, run it there)")
+	for i, l := range []struct{ name, line string }{
+		{"a two-cell gap", "|ab..cd|"},
+		{"plain, one cell, then a space", "|ab" + textEmoji + " cd|"},
+		{"plain, two cells", "|ab" + textEmoji + "cd|"},
+		{"with the emoji selector", "|ab" + textEmoji + "\ufe0fcd|"},
+		{"with the text selector, then a space", "|ab" + textEmoji + "\ufe0e cd|"},
+		{"an ASCII stand-in, then a space", "|ab* cd|"},
+	} {
+		fmt.Fprintf(out, "  %d  %s    %s\n", i+1, l.line, l.name)
+	}
 }
