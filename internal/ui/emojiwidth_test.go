@@ -42,7 +42,7 @@ func TestSplitEmojiOnScreen(t *testing.T) {
 	pub, _ := h.channel("Public")
 	h.m.opt.SplitEmoji = true
 	h.m.jumpToConvo(store.ChannelConvo(pub.Idx))
-	h.m.Update(eventMsg{radio.Incoming{At: h.m.now, Channel: true, ChannelIdx: pub.Idx, SentAt: h.m.now, Text: "LVNC 🐸🏊‍♂: hello"}})
+	h.m.Update(eventMsg{radio.Incoming{At: h.m.now, Channel: true, ChannelIdx: pub.Idx, SentAt: h.m.now, Text: "Zed 🐸🏊‍♂: hello"}})
 	h.settle()
 	if scr := h.screen(); !strings.Contains(scr, "🏊 ") || strings.Contains(scr, "‍") {
 		t.Fatalf("joined emoji are drawn as their parts:\n%s", scr)
@@ -104,7 +104,7 @@ func TestFlagsOnScreen(t *testing.T) {
 
 func TestStandInTextEmoji(t *testing.T) {
 	for in, want := range map[string]string{
-		"The Don\U0001F574   |":          "The Don*   |",
+		"Zed\U0001F574   |":              "Zed*   |",
 		"\U0001F590|":                    "*|",
 		"\x1b[33mDon\U0001F574\x1b[0m |": "\x1b[33mDon*\x1b[0m |",
 		"\U0001F574\ufe0f|":              "\U0001F574\ufe0f|", // asked to be an emoji, it's counted two already
@@ -149,7 +149,7 @@ func TestTextEmojiOnScreen(t *testing.T) {
 
 func TestPlainSymbols(t *testing.T) {
 	for in, want := range map[string]string{
-		"@Andy\u270c\ufe0f|":           "@Andy\u270c |",
+		"@Zed\u270c\ufe0f|":            "@Zed\u270c |",
 		"\u2600\ufe0f sun|":            "\u2600  sun|",
 		"\x1b[33m\u270c\ufe0f\x1b[0m|": "\x1b[33m\u270c \x1b[0m|",
 		"\u270c|":                      "\u270c|",           // already plain

@@ -12,6 +12,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/term"
+
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 // widthMode is how the terminal draws emoji that are more than one character: what the app counts them as.
@@ -185,7 +187,7 @@ func knownBehindTmux(s session) bool {
 func widthReport(out io.Writer, s session, w widths, setting string) {
 	fmt.Fprintln(out, "meshcore-tui "+version())
 	if s.tmux {
-		client := s.clientTerm
+		client := untrusted.Line(s.clientTerm) // as the terminal reported itself to tmux
 		if client == "" {
 			client = "not known"
 		}

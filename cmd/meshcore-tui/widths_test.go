@@ -120,3 +120,11 @@ func TestFlagLetters(t *testing.T) {
 		}
 	}
 }
+
+func TestWidthReportCleansTheTerminalName(t *testing.T) {
+	var out strings.Builder
+	widthReport(&out, session{tmux: true, clientTerm: "evil\x1b]0;title\a\x1b[2J"}, widths{}, "auto")
+	if strings.ContainsRune(out.String(), 0x1b) || strings.ContainsRune(out.String(), '\a') {
+		t.Errorf("control characters reached the output: %q", out.String())
+	}
+}
