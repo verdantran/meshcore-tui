@@ -146,3 +146,40 @@ func TestTextEmojiOnScreen(t *testing.T) {
 		t.Error("drawn as wide as it's counted, it's left alone")
 	}
 }
+
+func TestPlainSymbols(t *testing.T) {
+	for in, want := range map[string]string{
+		"@Andy\u270c\ufe0f|":           "@Andy\u270c |",
+		"\u2600\ufe0f sun|":            "\u2600  sun|",
+		"\x1b[33m\u270c\ufe0f\x1b[0m|": "\x1b[33m\u270c \x1b[0m|",
+		"\u270c|":                      "\u270c|",           // already plain
+		"\U0001F574\ufe0f|":            "\U0001F574\ufe0f|", // a newer emoji
+		"1\ufe0f\u20e3|":               "1\ufe0f\u20e3|",    // a keycap
+		"\U0001F1EB\U0001F1F7|":        "\U0001F1EB\U0001F1F7|",
+	} {
+		got := plainSymbols(in)
+		if got != want {
+			t.Errorf("plainSymbols(%q) = %q, want %q", in, got, want)
+		}
+		if ansi.GraphemeWidth.StringWidth(got) != ansi.GraphemeWidth.StringWidth(in) {
+			t.Errorf("%q: the row's width changed", in)
+		}
+	}
+}
+
+func TestPlainSymbolsOnScreen(t *testing.T) {
+	defer setRenderWidth(renderWidth)
+	setRenderWidth(ansi.GraphemeWidth)
+	h := newHarness(t)
+	pub, _ := h.channel("Public")
+	h.m.opt.PlainSymbols = true
+	h.m.jumpToConvo(store.ChannelConvo(pub.Idx))
+	h.m.Update(eventMsg{radio.Incoming{At: h.m.now, Channel: true, ChannelIdx: pub.Idx, SentAt: h.m.now, Text: "Zed\u270c\ufe0f: hello"}})
+	h.settle()
+	if scr := strings.Join(screen(t, h.m), "\n"); !strings.Contains(scr, "Zed\u270c ") || strings.Contains(scr, "\ufe0f") {
+		t.Fatalf("drawn plain, then a space:\n%s", ansi.Strip(scr))
+	}
+	if msg := h.m.chats.msgs[len(h.m.chats.msgs)-1]; msg.Sender != "Zed\u270c\ufe0f" {
+		t.Errorf("the sender keeps it: %q", msg.Sender)
+	}
+}

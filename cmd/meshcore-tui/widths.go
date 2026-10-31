@@ -170,9 +170,15 @@ func flagLetters(setting string, s session, w widths) bool {
 		return false
 	}
 	if s.tmux {
-		return !slices.ContainsFunc(flagTerminals, func(t string) bool { return strings.Contains(s.clientTerm, t) })
+		return !knownBehindTmux(s)
 	}
 	return w.flag != 0 && w.flag != 2
+}
+
+// knownBehindTmux reports whether tmux says the attached terminal is one known to draw emoji and flags as wide
+// as the app counts them.
+func knownBehindTmux(s session) bool {
+	return slices.ContainsFunc(flagTerminals, func(t string) bool { return strings.Contains(s.clientTerm, t) })
 }
 
 // widthReport says what the probe found and what the app does about it, for meshcore-tui --widths.
@@ -212,4 +218,5 @@ func widthReport(out io.Writer, s session, w widths, setting string) {
 	yesNo := map[bool]string{true: "yes", false: "no"}
 	fmt.Fprintf(out, "flags drawn as letters ([ui] flags = %q): %s\n", setting, yesNo[flagLetters(setting, s, w)])
 	fmt.Fprintf(out, "emoji that show as text drawn as *: %s\n", yesNo[w.textEmoji > counted.StringWidth(textEmoji)])
+	fmt.Fprintf(out, "older symbols with the emoji selector drawn plain, then a space: %s\n", yesNo[s.tmux && !knownBehindTmux(s) && w.mode == widthsGraphemes])
 }

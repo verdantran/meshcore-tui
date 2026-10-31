@@ -112,3 +112,25 @@ func standInTextEmoji(frame string) string {
 func textDefaultEmoji(r rune) bool {
 	return r >= 0x1F000 && !regionalIndicator(r) && ansi.WcWidth.StringWidth(string(r)) == 1
 }
+
+// plainSymbols draws each older symbol given the emoji variation selector, such as ✌️ or ☀️, as the plain symbol
+// and a space. Inside tmux, before a terminal it can't name, tmux and the terminal can disagree on whether such a
+// symbol is one cell or two, and differ from one symbol to the next, so no probe catches them all. The plain
+// symbol is one cell to both, and with the space the two cells the app counts, so the row keeps its width.
+// untrusted.Skeleton ignores a space after a symbol, so the space makes no name look like another.
+func plainSymbols(frame string) string {
+	if !strings.ContainsRune(frame, '\ufe0f') {
+		return frame
+	}
+	var b strings.Builder
+	g := uniseg.NewGraphemes(frame)
+	for g.Next() {
+		if rs := g.Runes(); len(rs) == 2 && rs[1] == '\ufe0f' && rs[0] < 0x10000 && ansi.WcWidth.StringWidth(string(rs[0])) == 1 && rs[0] > 0x7f {
+			b.WriteRune(rs[0])
+			b.WriteByte(' ')
+			continue
+		}
+		b.WriteString(g.Str())
+	}
+	return b.String()
+}

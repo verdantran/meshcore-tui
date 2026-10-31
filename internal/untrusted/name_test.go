@@ -127,3 +127,12 @@ func TestSkeletonReadsTextEmojiAsStar(t *testing.T) {
 		t.Error("Name keeps it")
 	}
 }
+
+func TestSkeletonIgnoresASpaceAfterASymbol(t *testing.T) {
+	if Skeleton("Bob✌️x") != Skeleton("Bob✌ x") || Skeleton("☀ Zed") != Skeleton("☀Zed") {
+		t.Error("a symbol drawn plain with a space after it looks like the symbol and the space")
+	}
+	if Skeleton("Bob x") == Skeleton("Bobx") {
+		t.Error("only a space after a symbol goes")
+	}
+}

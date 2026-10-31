@@ -99,6 +99,14 @@ func TestLookalikeSenders(t *testing.T) {
 		t.Errorf("another emoji that shows as text: %q", v)
 	}
 
+	// Inside tmux an older symbol with the emoji selector can be drawn plain with a space after it.
+	h.m.pin("Zed\u270c\ufe0fx", zed.pub)
+	h.clk.t = h.clk.t.Add(time.Minute)
+	h.say(1, "Zed\u270c x", "trust me")
+	if v := h.verdict(); v != "⚠ looks like Zed\u270c\ufe0fx" {
+		t.Errorf("a symbol and a space: %q", v)
+	}
+
 	// Even signed, a look-alike is flagged; K asks before pinning one.
 	mallory := newSigner("mallory")
 	h.m.contacts.heard = append(h.m.contacts.heard, heardNode{radio.Contact{Key: mallory.pub, Name: "Zеd"}, h.clk.t})

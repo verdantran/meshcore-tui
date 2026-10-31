@@ -51,6 +51,9 @@ func (m *Model) View() tea.View {
 	} else if m.opt.SplitEmoji {
 		frame = splitEmoji(frame)
 	}
+	if m.opt.PlainSymbols && renderWidth == ansi.GraphemeWidth {
+		frame = plainSymbols(frame)
+	}
 	if m.opt.TextEmoji > renderWidth.StringWidth(textEmojiProbe) {
 		frame = standInTextEmoji(frame)
 	}
