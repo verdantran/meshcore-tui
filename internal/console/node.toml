@@ -1,0 +1,302 @@
+# The console commands of repeater and room server firmware v1.18.0 that aren't a setting; the settings
+# themselves, `get <key>` and `set <key> <value>`, come from internal/admin/settings.toml.
+#
+# words: what's typed; args: what follows, as shown; values: what the argument can be, when it's a short list.
+# roles: repeater, room; empty means both. serial: only on the node's own USB console, not over the mesh.
+
+[[command]]
+group = "The node"
+words = "ver"
+help = "The firmware version and build date."
+
+[[command]]
+group = "The node"
+words = "board"
+help = "The board's name."
+
+[[command]]
+group = "The node"
+words = "clock"
+help = "The node's clock."
+
+[[command]]
+group = "The node"
+words = "clock sync"
+help = "Sets the node's clock from the time this message was sent."
+
+[[command]]
+group = "The node"
+words = "time"
+args = "<epoch seconds>"
+help = "Sets the node's clock; it only moves forwards."
+
+[[command]]
+group = "The node"
+words = "advert"
+help = "Sends an advert across the mesh now."
+
+[[command]]
+group = "The node"
+words = "advert.zerohop"
+help = "Sends an advert to direct neighbours only."
+
+[[command]]
+group = "The node"
+words = "reboot"
+help = "Restarts the node; it's off the mesh until it's back."
+
+[[command]]
+group = "The node"
+words = "clkreboot"
+help = "Resets the node's clock, then restarts it."
+
+[[command]]
+group = "The node"
+words = "poweroff"
+help = "Switches the node off; someone has to switch it back on."
+
+[[command]]
+group = "The node"
+words = "shutdown"
+help = "The same as poweroff."
+
+[[command]]
+group = "The node"
+words = "start ota"
+help = "Stops routing and waits for a firmware upload."
+
+[[command]]
+group = "The node"
+words = "erase"
+serial = true
+help = "Wipes the node's storage. It can't be undone."
+
+[[command]]
+group = "The node"
+words = "password"
+args = "<new password>"
+help = "The admin password. There's no recovery over the air, so note it down."
+
+[[command]]
+group = "The node"
+words = "tempradio"
+args = "<freq>,<bw>,<sf>,<cr>,<minutes>"
+help = "Tries radio settings for a while, then goes back by itself: safer than set radio."
+
+[[command]]
+group = "The node"
+words = "get freq"
+help = "The frequency in MHz."
+
+[[command]]
+group = "The node"
+words = "get bootloader.ver"
+help = "The bootloader's version, on nRF52 boards."
+
+[[command]]
+group = "The node"
+words = "get extra.sf"
+help = "The extra spreading factors it listens on, on LR2021 boards."
+
+[[command]]
+group = "The node"
+words = "set extra.sf"
+args = "<sf>[,<sf>,<sf>]"
+help = "Up to three extra spreading factors to listen on, on LR2021 boards."
+
+[[command]]
+group = "Power"
+words = "get pwrmgt.support"
+help = "Whether the board has power management."
+
+[[command]]
+group = "Power"
+words = "get pwrmgt.bootreason"
+help = "Why the node last reset and last shut down."
+
+[[command]]
+group = "Power"
+words = "get pwrmgt.bootmv"
+help = "The battery voltage when it last started, on boards with power management."
+
+[[command]]
+group = "Power"
+words = "powersaving"
+args = "[on|off]"
+values = ["on", "off"]
+help = "Shows whether power saving is on, or turns it on or off, on nRF52 boards."
+
+[[command]]
+group = "Neighbours"
+words = "neighbors"
+roles = ["repeater"]
+help = "The nodes it hears directly, with their signal."
+
+[[command]]
+group = "Neighbours"
+words = "discover.neighbors"
+roles = ["repeater"]
+help = "Asks nearby nodes to answer, to fill the neighbour list."
+
+[[command]]
+group = "Neighbours"
+words = "neighbor.remove"
+args = "<key or prefix>"
+roles = ["repeater"]
+help = "Removes every neighbour whose key starts with this."
+
+[[command]]
+group = "Access"
+words = "setperm"
+args = "<public key> [0|1|2|3]"
+help = "A companion's permission: 0 guest, 1 read-only, 2 read-write, 3 admin. Leaving it out removes the entry."
+
+[[command]]
+group = "Access"
+words = "get acl"
+serial = true
+help = "The access list."
+
+[[command]]
+group = "Regions"
+words = "region"
+roles = ["repeater"]
+help = "The region tree: ^ marks home, F allows flooding."
+
+[[command]]
+group = "Regions"
+words = "region home"
+args = "[name]"
+roles = ["repeater"]
+help = "Shows the home region, or sets it."
+
+[[command]]
+group = "Regions"
+words = "region put"
+args = "<name> [parent]"
+roles = ["repeater"]
+help = "Adds a region, under another if given."
+
+[[command]]
+group = "Regions"
+words = "region remove"
+args = "<name>"
+roles = ["repeater"]
+help = "Removes a region."
+
+[[command]]
+group = "Regions"
+words = "region allowf"
+args = "<name or *>"
+roles = ["repeater"]
+help = "Allows flooding in a region."
+
+[[command]]
+group = "Regions"
+words = "region denyf"
+args = "<name or *>"
+roles = ["repeater"]
+help = "Stops flooding in a region."
+
+[[command]]
+group = "Regions"
+words = "region save"
+roles = ["repeater"]
+help = "Saves the region tree, so it survives a restart."
+
+[[command]]
+group = "Logging"
+words = "log"
+help = "Reads the packet log."
+
+[[command]]
+group = "Logging"
+words = "log start"
+help = "Starts logging packets."
+
+[[command]]
+group = "Logging"
+words = "log stop"
+help = "Stops logging packets."
+
+[[command]]
+group = "Logging"
+words = "log erase"
+help = "Erases the packet log."
+
+[[command]]
+group = "Statistics"
+words = "clear stats"
+help = "Resets the counters."
+
+[[command]]
+group = "Statistics"
+words = "stats-core"
+serial = true
+help = "Uptime, battery and queue."
+
+[[command]]
+group = "Statistics"
+words = "stats-radio"
+serial = true
+help = "Noise floor, signal and airtime."
+
+[[command]]
+group = "Statistics"
+words = "stats-packets"
+serial = true
+help = "Packets sent and received."
+
+[[command]]
+group = "GPS and sensors"
+words = "gps"
+help = "GPS status, on boards with GPS."
+
+[[command]]
+group = "GPS and sensors"
+words = "gps on"
+help = "Turns the GPS on."
+
+[[command]]
+group = "GPS and sensors"
+words = "gps off"
+help = "Turns the GPS off."
+
+[[command]]
+group = "GPS and sensors"
+words = "gps sync"
+help = "Sets the clock from the GPS."
+
+[[command]]
+group = "GPS and sensors"
+words = "gps setloc"
+help = "Sets the node's location from the GPS."
+
+[[command]]
+group = "GPS and sensors"
+words = "gps advert"
+args = "[none|share|prefs]"
+values = ["none", "share", "prefs"]
+help = "Whether adverts carry the GPS location."
+
+[[command]]
+group = "GPS and sensors"
+words = "gps diag"
+help = "GPS diagnostics."
+
+[[command]]
+group = "GPS and sensors"
+words = "sensor list"
+help = "The sensors' settings."
+
+[[command]]
+group = "GPS and sensors"
+words = "sensor get"
+args = "<key>"
+help = "One sensor setting."
+
+[[command]]
+group = "GPS and sensors"
+words = "sensor set"
+args = "<key> <value>"
+help = "Changes a sensor setting."
