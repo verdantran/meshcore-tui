@@ -293,19 +293,34 @@ func (m *Model) boardKey(s string) (tea.Cmd, bool) {
 			return m.sendChess(chess.Msg{Game: id, Kind: chess.KindResign})
 		})
 	case "S":
-		if g == nil || g.Problem == nil {
-			b.note = "Your boards agree, so there's no position to send"
+		// Not only when the boards disagree: their side can lose the game while yours still looks fine (a
+		// new device, a cleared database), and the position is how it catches up.
+		if g == nil || g.Mine == chess.NoColour || g.End != nil {
+			b.note = "There's no game going to send"
 			return nil, true
 		}
 		id, fen := g.ID, g.Pos.FEN()
-		m.ask("Send your position? Their board is replaced with yours", "send it", func() tea.Cmd {
+		what := "Send your position? Their board is replaced with yours"
+		if g.Problem == nil {
+			what = "Send your whole position? Their board is replaced with yours, for a device that missed moves"
+		}
+		m.ask(what, "send it", func() tea.Cmd {
 			return m.sendChess(chess.Msg{Game: id, Kind: chess.KindSync, FEN: fen})
 		})
 	case "r":
 		if msg, ok := m.failedMove(); ok {
 			return m.retry(msg), true
 		}
-		b.note = "No move of yours needs sending again"
+		// A receipt only says their radio got it: their app can still lose it, so send it again on request.
+		p, ok := m.lastMove()
+		if !ok || g.End != nil {
+			b.note = "No move of yours to send again"
+			return nil, true
+		}
+		mv := chess.Msg{Game: g.ID, Kind: chess.KindMove, Ply: p.Ply, SAN: p.SAN, Check: p.Check}
+		m.ask("Send "+p.Label()+" again? It got a receipt, so only if their side lost it", "send it", func() tea.Cmd {
+			return m.sendChess(mv)
+		})
 	case "L":
 		m.toggleChessLayout()
 	case "tab":
@@ -476,6 +491,20 @@ func (m *Model) sendChess(msg chess.Msg) tea.Cmd {
 	}
 	m.refreshChats()
 	return m.sendCmd(send)
+}
+
+// lastMove is your latest move in the game on the board.
+func (m *Model) lastMove() (chess.Played, bool) {
+	b := m.chats.board
+	if b.game == nil {
+		return chess.Played{}, false
+	}
+	for i := len(b.game.Played) - 1; i >= 0; i-- {
+		if p := b.game.Played[i]; p.Mine {
+			return p, true
+		}
+	}
+	return chess.Played{}, false
 }
 
 // failedMove is your latest move, if it never got a receipt.

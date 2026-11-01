@@ -19,8 +19,8 @@ When a pawn reaches the far side by cursor or mouse, you pick what it becomes: `
 | `f` | turn the board round |
 | `d` | offer a draw, or accept the one they offered; making a move turns an offer down |
 | `R` | resign, once you've confirmed it |
-| `S` | send your position, when your boards don't match |
-| `r` | send your latest move again, if it never got a receipt |
+| `S` | send your whole position: when your boards don't match, or their side lost the game |
+| `r` | send your latest move again: if it never got a receipt, or their side lost it anyway |
 | `n` | pick a side for a new game: `w` or `b` |
 | `L` | the board alone, or with the conversation beside it |
 | `tab` | between the board and the conversation beside it |

@@ -372,3 +372,46 @@ func TestEscLeavesTheBoardOpen(t *testing.T) {
 		t.Error("c goes back to it")
 	}
 }
+
+// A receipt only says their radio got a move: their app can still lose it (a new device, a cleared database), so
+// r sends a delivered move again and S sends the whole position, both on request.
+func TestResendingADeliveredMoveAndThePosition(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.chessWith("Alice")
+	h.key(tea.KeyEnter)
+	h.keys("kk")
+	h.key(tea.KeyEnter)
+	h.until("Alice's reply", func() bool { return h.gamePly() == 2 })
+	h.until("the receipt", func() bool { return strings.Contains(h.screen(), "✓ Alice's radio got 1. e4") })
+	count := func(suffix string) int {
+		msgs, _ := h.m.chat.ChessMessages(h.m.chats.board.convo)
+		n := 0
+		for _, msg := range msgs {
+			if msg.Out && strings.Contains(msg.Text, suffix) {
+				n++
+			}
+		}
+		return n
+	}
+
+	h.keys("r")
+	if !strings.Contains(h.screen(), "SEND 1. E4 AGAIN?") {
+		t.Fatalf("r on a delivered move asks first:\n%s", h.screen())
+	}
+	h.keys("y")
+	h.until("the move sent again", func() bool { return count(" 1. e4 #") == 2 })
+	if g := h.m.chats.board.game; g.Ply != 2 || g.Problem != nil {
+		t.Fatalf("the same move twice is one move: ply %d, problem %v", g.Ply, g.Problem)
+	}
+
+	h.keys("S")
+	if !strings.Contains(h.screen(), "SEND YOUR WHOLE POSITION?") {
+		t.Fatalf("S with the boards agreeing still offers the position:\n%s", h.screen())
+	}
+	h.keys("y")
+	h.until("the position sent", func() bool { return count(" sync ") == 1 })
+	if g := h.m.chats.board.game; g.Ply != 2 || g.Problem != nil {
+		t.Fatalf("after sending the position: ply %d, problem %v", g.Ply, g.Problem)
+	}
+}
