@@ -275,6 +275,20 @@ func (s *Service) AttachPath(c store.Convo, sender, text string, since time.Time
 	return m.ID, true, err
 }
 
+// AddCopy keeps a heard copy of a message with its signal.
+func (s *Service) AddCopy(id int64, c store.Copy) error {
+	err := s.store.AddCopy(s.device, id, c)
+	s.touch(id, err, func(l *store.Message) {
+		if l.Out && (!l.HasEcho || c.SNR > l.EchoSNR) {
+			l.EchoSNR, l.HasEcho = c.SNR, true
+		}
+	})
+	return err
+}
+
+// Copies are the copies heard of a message, in the order they came.
+func (s *Service) Copies(id int64) ([]store.Copy, error) { return s.store.Copies(s.device, id) }
+
 // AwaitingSig lists a channel's received messages sent at a time that have no signature yet.
 func (s *Service) AwaitingSig(idx int, sentAt time.Time) ([]store.Message, error) {
 	return s.store.AwaitingSig(s.device, store.ChannelConvo(idx), sentAt)

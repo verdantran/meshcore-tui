@@ -57,12 +57,24 @@ type Message struct {
 	Attempts int
 	RTT      time.Duration
 	Flood    bool
-	Repeats  int    // copies of an outgoing channel message heard coming back from repeaters
-	Path     []byte // the repeaters a received message came through, from its packet; empty if not known
+	Repeats  int     // copies of an outgoing channel message heard coming back from repeaters
+	Path     []byte  // the repeaters a received message came through, from its packet; empty if not known
+	PathHash int     // bytes per repeater in Path
+	Sig      Sig     // a channel message's signature, when one came with it
+	SigKey   []byte  // the signer's public key; for a key we don't know, just the 8 bytes the signature named
+	Author   []byte  // a room post's writer, as the room server names them: the first 4 bytes of their key
+	EchoSNR  float32 // the best SNR among the repeats heard of an outgoing message
+	HasEcho  bool
+}
+
+// Copy is one copy of a message heard on air: for a received message, the copy the radio took and any
+// repeats of it; for one we sent, each repeater passing it on.
+type Copy struct {
+	At       time.Time
+	SNR      float32
+	RSSI     int
+	Path     []byte // the repeaters it came through, the last nearest us
 	PathHash int    // bytes per repeater in Path
-	Sig      Sig    // a channel message's signature, when one came with it
-	SigKey   []byte // the signer's public key; for a key we don't know, just the 8 bytes the signature named
-	Author   []byte // a room post's writer, as the room server names them: the first 4 bytes of their key
 }
 
 // Sig is what a channel message's signature showed. Whether a valid one is the sender's pinned key is
@@ -99,11 +111,16 @@ CREATE TABLE IF NOT EXISTS messages (
 	hops INTEGER NOT NULL, snr REAL NOT NULL, has_snr INTEGER NOT NULL, signed INTEGER NOT NULL,
 	state INTEGER NOT NULL, ack INTEGER NOT NULL, attempts INTEGER NOT NULL, rtt_ms INTEGER NOT NULL, flood INTEGER NOT NULL,
 	repeats INTEGER NOT NULL DEFAULT 0, path BLOB, path_hash INTEGER NOT NULL DEFAULT 0,
-	sig INTEGER NOT NULL DEFAULT 0, sig_key BLOB, author BLOB);
+	sig INTEGER NOT NULL DEFAULT 0, sig_key BLOB, author BLOB, echo_snr REAL);
 CREATE INDEX IF NOT EXISTS messages_convo ON messages (device, convo, id);
 CREATE INDEX IF NOT EXISTS messages_sent ON messages (device, convo, sent_at);
 CREATE INDEX IF NOT EXISTS messages_recv ON messages (device, recv_at);
 CREATE INDEX IF NOT EXISTS messages_unfinished ON messages (device) WHERE out = 1 AND state IN (1, 2);
+CREATE TABLE IF NOT EXISTS copies (
+	device TEXT NOT NULL, msg INTEGER NOT NULL, at INTEGER NOT NULL, snr REAL NOT NULL, rssi INTEGER NOT NULL,
+	path BLOB, path_hash INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS copies_msg ON copies (device, msg);
+CREATE INDEX IF NOT EXISTS copies_at ON copies (at);
 CREATE TABLE IF NOT EXISTS seen (
 	device TEXT PRIMARY KEY, at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS reads (
@@ -180,6 +197,7 @@ func migrate(db *sql.DB) error {
 		{"sig", "INTEGER NOT NULL DEFAULT 0"},
 		{"sig_key", "BLOB"},
 		{"author", "BLOB"},
+		{"echo_snr", "REAL"},
 	} {
 		var n int
 		if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name = ?`, col.name).Scan(&n); err != nil {
@@ -336,6 +354,9 @@ func (s *Store) UpdateDelivery(m Message) error {
 }
 
 func (s *Store) DeleteMessage(id int64) error {
+	if _, err := s.db.Exec(`DELETE FROM copies WHERE msg = ?`, id); err != nil {
+		return err
+	}
 	_, err := s.db.Exec(`DELETE FROM messages WHERE id = ?`, id)
 	return err
 }
@@ -483,6 +504,42 @@ func (s *Store) Unrouted(device string, c Convo, sender, text string, since time
 	return msgs[0], true, nil
 }
 
+// AddCopy keeps a heard copy of a message, and for one we sent, its best SNR so far.
+func (s *Store) AddCopy(device string, id int64, c Copy) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`INSERT INTO copies VALUES (?,?,?,?,?,?,?)`, device, id, c.At.UnixMilli(), c.SNR, c.RSSI, c.Path, c.PathHash); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE messages SET echo_snr = MAX(COALESCE(echo_snr, ?), ?) WHERE id = ? AND out = 1`, c.SNR, c.SNR, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// Copies are the copies heard of a message, in the order they came.
+func (s *Store) Copies(device string, id int64) ([]Copy, error) {
+	rows, err := s.db.Query(`SELECT at, snr, rssi, path, path_hash FROM copies WHERE device = ? AND msg = ? ORDER BY at, rowid`, device, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Copy
+	for rows.Next() {
+		var c Copy
+		var at int64
+		if err := rows.Scan(&at, &c.SNR, &c.RSSI, &c.Path, &c.PathHash); err != nil {
+			return nil, err
+		}
+		c.At = time.UnixMilli(at)
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 // AddRepeat counts one more copy of an outgoing message heard from a repeater, and returns the total.
 func (s *Store) AddRepeat(id int64) (int, error) {
 	var n int
@@ -490,7 +547,7 @@ func (s *Store) AddRepeat(id int64) (int, error) {
 	return n, err
 }
 
-const messageCols = `id, convo, out, sender, text, sent_at, recv_at, hops, snr, has_snr, signed, state, ack, attempts, rtt_ms, flood, repeats, path, path_hash, sig, sig_key, author`
+const messageCols = `id, convo, out, sender, text, sent_at, recv_at, hops, snr, has_snr, signed, state, ack, attempts, rtt_ms, flood, repeats, path, path_hash, sig, sig_key, author, echo_snr`
 
 // scanMessage reads messageCols, plus any extra columns that follow them.
 func scanMessage(sc interface{ Scan(...any) error }, extra ...any) (Message, error) {
@@ -498,11 +555,13 @@ func scanMessage(sc interface{ Scan(...any) error }, extra ...any) (Message, err
 	var convo string
 	var out, hasSNR, signed, state, flood int
 	var sent, recv, rtt int64
-	dest := []any{&m.ID, &convo, &out, &m.Sender, &m.Text, &sent, &recv, &m.Hops, &m.SNR, &hasSNR, &signed, &state, &m.Ack, &m.Attempts, &rtt, &flood, &m.Repeats, &m.Path, &m.PathHash, &m.Sig, &m.SigKey, &m.Author}
+	var echo sql.NullFloat64
+	dest := []any{&m.ID, &convo, &out, &m.Sender, &m.Text, &sent, &recv, &m.Hops, &m.SNR, &hasSNR, &signed, &state, &m.Ack, &m.Attempts, &rtt, &flood, &m.Repeats, &m.Path, &m.PathHash, &m.Sig, &m.SigKey, &m.Author, &echo}
 	err := sc.Scan(append(dest, extra...)...)
 	m.Sender, m.Text = untrusted.Line(m.Sender), untrusted.Text(m.Text)
 	m.Convo, m.Out, m.HasSNR, m.Signed, m.State, m.Flood = Convo(convo), out == 1, hasSNR == 1, signed == 1, State(state), flood == 1
 	m.SentAt, m.RecvAt, m.RTT = time.UnixMilli(sent), time.UnixMilli(recv), time.Duration(rtt)*time.Millisecond
+	m.EchoSNR, m.HasEcho = float32(echo.Float64), echo.Valid
 	return m, err
 }
 
@@ -569,6 +628,9 @@ func (s *Store) DeleteConvo(device string, c Convo) error {
 		return err
 	}
 	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM copies WHERE device = ? AND msg IN (SELECT id FROM messages WHERE device = ? AND convo = ?)`, device, device, string(c)); err != nil {
+		return err
+	}
 	for _, q := range []string{`DELETE FROM messages WHERE device = ? AND convo = ?`, `DELETE FROM reads WHERE device = ? AND convo = ?`} {
 		if _, err := tx.Exec(q, device, string(c)); err != nil {
 			return err
@@ -749,6 +811,15 @@ func (s *Store) PruneMessages(ctx context.Context, cutoff time.Time) (int, error
 			if gone < int64(pruneBatch) {
 				break
 			}
+		}
+	}
+	for {
+		r, err := s.db.ExecContext(ctx, `DELETE FROM copies WHERE rowid IN (SELECT rowid FROM copies WHERE at < ? LIMIT ?)`, cutoff.UnixMilli(), pruneBatch)
+		if err != nil {
+			return n, err
+		}
+		if gone, _ := r.RowsAffected(); gone < int64(pruneBatch) {
+			break
 		}
 	}
 	return n, nil

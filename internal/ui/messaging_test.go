@@ -236,7 +236,7 @@ func TestNarrowMessageHeaderKeepsTheSender(t *testing.T) {
 		if strings.Contains(l, "Ali") && strings.Contains(l, ":") && !strings.Contains(l, "Alice") {
 			t.Errorf("the sender is cut: %q", l)
 		}
-		if strings.Contains(l, "Alice") && strings.Contains(l, "SNR") && !strings.HasSuffix(strings.TrimRight(l, " ┃│|"), "…") && !strings.Contains(l, "SNR +9.50") {
+		if strings.Contains(l, "Alice") && strings.Contains(l, "hop") && !strings.HasSuffix(strings.TrimRight(l, " ┃│|"), "…") && !strings.Contains(l, "2 hops A3·1E") {
 			t.Errorf("the detail is cut without …: %q", l)
 		}
 	}

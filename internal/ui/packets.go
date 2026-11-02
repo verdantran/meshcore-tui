@@ -15,6 +15,7 @@ import (
 	"github.com/verdantran/meshcore-tui/internal/motion"
 	"github.com/verdantran/meshcore-tui/internal/packets"
 	"github.com/verdantran/meshcore-tui/internal/radio"
+	"github.com/verdantran/meshcore-tui/internal/store"
 	"github.com/verdantran/meshcore-tui/internal/theme"
 )
 
@@ -174,9 +175,10 @@ func (m *Model) heardPacket(p radio.Packet) {
 	}
 	shown := m.shown(dec)
 	in.mesh.add(dec, p.SNR, first, shown, m.now)
-	m.messagePacket(dec, p.Raw, p.SNR)
+	heard := store.Copy{At: m.now, SNR: p.SNR, RSSI: int(p.RSSI), Path: dec.Path, PathHash: dec.HashSize}
+	m.messagePacket(dec, p.Raw, heard)
 	if dec.Decrypted && dec.Type == "GRP_TXT" {
-		m.heardEcho(dec) // every copy is another repeater passing it on
+		m.heardEcho(dec, heard) // every copy is another repeater passing it on
 	}
 	if !shown {
 		if first {

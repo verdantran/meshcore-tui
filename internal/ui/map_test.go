@@ -51,7 +51,7 @@ func TestMapScreen(t *testing.T) {
 	h := newHarness(t)
 	h.openMap()
 	scr := h.screen()
-	for _, want := range []string{"MAP · 19 NODES PLACED · 0 ROUTES", "◉", "Dundry", "press d to download street detail from OpenFreeMap: 12 map tiles, up to about 2.0 MB", "Natural Earth",
+	for _, want := range []string{"MAP · 16 NODES PLACED · 0 ROUTES", "◉", "Dundry", "press d to download street detail from OpenFreeMap: 12 map tiles, up to about 2.0 MB", "Natural Earth",
 		"Adverts and messages" /* in the help below */} {
 		if want == "Adverts and messages" {
 			continue
@@ -315,8 +315,7 @@ func TestMessagePaths(t *testing.T) {
 	h.key(tea.KeyUp)
 	h.key(tea.KeyUp)
 	scr = h.screen()
-	if c.msgs[h.m.picked()].Text != "where are you" || !strings.Contains(scr, "↑↓ messages · r reply · M route on the map") ||
-		!strings.Contains(scr, "r reply · M route") {
+	if c.msgs[h.m.picked()].Text != "where are you" || !strings.Contains(scr, "↑↓ messages · r reply · i signal · M route on the map") {
 		t.Fatalf("picked Bob's message:\n%s", scr)
 	}
 	h.keys("M")
@@ -330,6 +329,30 @@ func TestMessagePaths(t *testing.T) {
 	h.key(tea.KeyEscape)
 	if h.m.tab != 0 || !c.reading {
 		t.Error("esc comes back to the picked message")
+	}
+
+	// i shows its signal: both copies heard, the first the way it came.
+	h.keys("i")
+	scr = h.screen()
+	for _, want := range []string{"SIGNAL", "SNR +6.0  RSSI -90", "via 77", "the way it came", "via A3", "SNR +2.0", "P its packets"} {
+		if !strings.Contains(scr, want) {
+			t.Errorf("the signal panel lacks %q:\n%s", want, scr)
+		}
+	}
+	h.key(tea.KeyDown) // Carol's: its packet came after it
+	if scr = h.screen(); !strings.Contains(scr, "Carol · ") || !strings.Contains(scr, "RSSI -90") || strings.Contains(scr, "via A3") {
+		t.Errorf("the panel follows the picked message:\n%s", scr)
+	}
+	h.key(tea.KeyUp)
+	h.keys("P")
+	if h.m.tab != 3 || h.m.inspector.filter.text != "where are you" || c.info {
+		t.Errorf("P opens its packets: tab %d, filter %q", h.m.tab, h.m.inspector.filter.text)
+	}
+	h.m.setTab(0)
+	h.keys("i")
+	h.key(tea.KeyEscape)
+	if c.info || !c.reading {
+		t.Error("esc closes the panel, still picking")
 	}
 
 	// r replies, mentioning them.

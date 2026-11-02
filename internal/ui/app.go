@@ -1051,6 +1051,8 @@ func (m *Model) screenKeys() []string {
 			key("paste", "pastes into whatever you're typing in; in Chats it starts a message"),
 			key("S", "sign your messages on the open channel, or stop; ctrl+s while writing flips it for one message"),
 			key("K", "on a picked signed message, pin its key to the sender's name, or unpin it; replacing a pin asks first"),
+			key("i", "on a picked message, its signal: SNR and RSSI, and every copy heard of it or, for one you sent, each repeat; P opens its packets"),
+			key("▁ weak", "a message that came in, or whose repeats came back, below 0 dB SNR; i has the figures"),
 			key("M", "show on the map the route of the picked message, or the newest received"),
 			key("R", "send your newest failed message again; on a picked one, R or enter sends that one"),
 			key("L", "log in to or out of the room server whose conversation is open"),

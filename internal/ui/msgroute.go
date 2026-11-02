@@ -29,17 +29,31 @@ type heardMessage struct {
 	from         int // a direct message's sender's first key byte, or -1
 	path         []byte
 	hashSize     int
-	snr          float32
 	at           time.Time
+	copies       []store.Copy // every copy heard, the first the way it came
+	id           int64        // the message, once matched
+}
+
+// copiesKept is how many copies of one message are kept: past this, a busy mesh adds nothing to read.
+const copiesKept = 32
+
+// keepCopy saves a heard copy with its message.
+func (m *Model) keepCopy(id int64, c store.Copy) {
+	if err := m.chat.AddCopy(id, c); err != nil {
+		m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
+	}
+	if m.chats.infoID == id {
+		m.chats.infoID = 0 // read again when drawn
+	}
 }
 
 // messagePacket notes the packet of a channel message we can read, or of a direct message to us, and gives its
 // path to the message if that has already arrived. Nothing here is shown on Packets or the map.
-func (m *Model) messagePacket(dec packets.Decoded, raw []byte, snr float32) {
+func (m *Model) messagePacket(dec packets.Decoded, raw []byte, heard store.Copy) {
 	if m.chat == nil || dec.Err != nil || !dec.Flood || dec.HashSize == 0 {
 		return
 	}
-	h := heardMessage{from: -1, path: dec.Path, hashSize: dec.HashSize, snr: snr, at: m.now}
+	h := heardMessage{from: -1, path: dec.Path, hashSize: dec.HashSize, at: m.now, copies: []store.Copy{heard}}
 	switch {
 	case dec.Type == "GRP_TXT" && dec.Decrypted:
 		ch, ok := m.packetChannel(dec)
@@ -66,9 +80,17 @@ func (m *Model) messagePacket(dec packets.Decoded, raw []byte, snr float32) {
 	default:
 		return
 	}
-	for _, c := range m.chats.heard {
+	for i := range m.chats.heard {
+		c := &m.chats.heard[i]
 		if c.convo == h.convo && c.from == h.from && c.sender == h.sender && c.text == h.text && m.now.Sub(c.at) < directWindow {
-			return // a repeat of one already heard: the first copy is the way it came
+			// A repeat of one already heard: the first copy is the way it came, but its signal is worth keeping.
+			if len(c.copies) < copiesKept {
+				c.copies = append(c.copies, heard)
+				if c.id != 0 {
+					m.keepCopy(c.id, heard)
+				}
+			}
+			return
 		}
 	}
 	m.chats.heard = append(m.chats.heard, h)
@@ -80,11 +102,13 @@ func (m *Model) messagePacket(dec packets.Decoded, raw []byte, snr float32) {
 		if h.from >= 0 {
 			window = directWindow
 		}
-		_, ok, err := m.chat.AttachPath(c, h.sender, h.text, m.now.Add(-window), h.path, h.hashSize)
+		id, ok, err := m.chat.AttachPath(c, h.sender, h.text, m.now.Add(-window), h.path, h.hashSize)
 		if err != nil {
 			m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 		}
 		if ok {
+			m.chats.heard[len(m.chats.heard)-1].id = id
+			m.keepCopy(id, heard)
 			m.chatsChanged(c)
 			return
 		}
@@ -121,6 +145,12 @@ func (m *Model) routeArrived(msg store.Message) {
 		if match {
 			if _, _, err := m.chat.AttachPath(msg.Convo, msg.Sender, msg.Text, msg.RecvAt.Add(-time.Second), h.path, h.hashSize); err != nil {
 				m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
+			}
+			if h.id == 0 {
+				m.chats.heard[i].id = msg.ID
+				for _, c := range h.copies {
+					m.keepCopy(msg.ID, c)
+				}
 			}
 			return
 		}

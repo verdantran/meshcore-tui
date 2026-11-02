@@ -47,6 +47,10 @@ type chatsModel struct {
 	reading bool  // moving through the open conversation's messages, to reply to one or see its route
 	cur     int64 // the message picked while reading
 
+	info       bool         // i: the picked message's signal shows
+	infoID     int64        // the message infoCopies are of; 0 to read them again
+	infoCopies []store.Copy // its heard copies
+
 	board       *boardView // chess open in the conversation, or nil
 	boardLayout string     // "board" or "both", once changed; until then the config's
 
@@ -619,7 +623,15 @@ func (m *Model) readingKey(s string) (tea.Cmd, bool) {
 		c.reading = false
 		return nil, false
 	}
+	if c.info {
+		if cmd, ok := m.infoKey(s, c.msgs[i]); ok {
+			return cmd, true
+		}
+	}
 	switch s {
+	case "i":
+		c.info = true
+		return nil, true
 	case "up", "k":
 		i = max(i-1, 0)
 	case "down", "j":
@@ -927,6 +939,7 @@ func (m *Model) convoPane(w, rows int) []string {
 		compose = fit(th.Paint(th.Magenta, true, "▸ ")+th.Paint(th.Text, false, "↑↓ messages · ")+
 			th.Paint(th.Cyan, true, "r")+th.Paint(th.Text, false, " reply · ")+
 			m.retryHint()+
+			th.Paint(th.Cyan, true, "i")+th.Paint(th.Text, false, " signal · ")+
 			th.Paint(th.Cyan, true, "M")+th.Paint(th.Text, false, " route on the map · ")+
 			th.Paint(th.Cyan, true, "y")+th.Paint(th.Text, false, " copy · ")+
 			m.joinHint()+
@@ -1106,10 +1119,7 @@ func (m *Model) messageMeta(msg store.Message) string {
 		default:
 			parts = append(parts, plural(msg.Hops, "hop"))
 		}
-		meta := th.Paint(th.Dim, false, strings.Join(parts, " "))
-		if msg.HasSNR {
-			meta += th.Paint(th.Dim, false, " · ") + th.Paint(th.SNR(float64(msg.SNR)), false, fmt.Sprintf("SNR %+.2f", msg.SNR))
-		}
+		meta := th.Paint(th.Dim, false, strings.Join(parts, " ")) + m.weakMark(msg)
 		if msg.Signed {
 			meta += m.roomAuthor(msg)
 		}
@@ -1134,9 +1144,9 @@ func (m *Model) messageMeta(msg store.Message) string {
 	case store.Sent:
 		if strings.HasPrefix(string(msg.Convo), "ch:") {
 			if b := m.sigBadge(msg); b != "" {
-				return b + th.Paint(th.Dim, false, " · ") + m.repeatsMeta(msg)
+				return b + th.Paint(th.Dim, false, " · ") + m.repeatsMeta(msg) + m.weakMark(msg)
 			}
-			return m.repeatsMeta(msg)
+			return m.repeatsMeta(msg) + m.weakMark(msg)
 		}
 		how := "direct"
 		if msg.Flood {
@@ -1197,17 +1207,20 @@ func (m *Model) repeatsMeta(msg store.Message) string {
 	return th.Paint(th.Yellow, false, "sent · no repeats heard")
 }
 
-// heardEcho counts a heard copy of a channel message we sent.
-func (m *Model) heardEcho(dec packets.Decoded) {
+// heardEcho counts a heard copy of a channel message we sent, and keeps its signal.
+func (m *Model) heardEcho(dec packets.Decoded, heard store.Copy) {
 	ch, ok := m.packetChannel(dec)
 	if !ok {
 		return
 	}
-	id, _, ok, err := m.chat.Echo(ch.Idx, dec.Sender, dec.Text, m.now)
+	id, repeats, ok, err := m.chat.Echo(ch.Idx, dec.Sender, dec.Text, m.now)
 	if err != nil {
 		m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 	}
 	if ok {
+		if repeats <= copiesKept { // anyone with the channel's key can replay it; the count goes on, the rows don't
+			m.keepCopy(id, heard)
+		}
 		flash(m.chats.echoed, id, m.now, popDur)
 		m.chatsChanged(store.ChannelConvo(ch.Idx))
 	}

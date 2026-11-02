@@ -174,10 +174,13 @@ func TestChatsReceiveSendAndDeliver(t *testing.T) {
 	if strings.Contains(got, "unread") {
 		t.Errorf("opening the conversation should clear unread:\n%s", got)
 	}
-	for _, want := range []string{"are you on the mesh tonight?", "direct · 2 hops A3·1E", "SNR +9.50"} {
+	for _, want := range []string{"are you on the mesh tonight?", "direct · 2 hops A3·1E"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("conversation missing %q:\n%s", want, got)
 		}
+	}
+	if strings.Contains(got, "SNR") || strings.Contains(got, "weak") {
+		t.Errorf("a good signal shows on the message:\n%s", got)
 	}
 
 	key(m, tea.KeyEnter)
@@ -356,8 +359,38 @@ func TestChannelRepeatsAreHeard(t *testing.T) {
 	}
 	// It's saved: a fresh read of the conversation still has the count.
 	msgs, _ := h.m.chat.Messages(store.ChannelConvo(pub.Idx), 5)
-	if msgs[len(msgs)-1].Repeats == 0 {
+	sent := msgs[len(msgs)-1]
+	if sent.Repeats == 0 {
 		t.Error("repeats are stored")
+	}
+	// Each repeat's signal is kept with it, and the best is on the message for the weak mark.
+	if cs, _ := h.m.chat.Copies(sent.ID); len(cs) != sent.Repeats || !sent.HasEcho {
+		t.Errorf("%d repeats, %d copies kept, best known %v", sent.Repeats, len(cs), sent.HasEcho)
+	}
+
+	// A replayed message can't grow the history without end: the count goes on, the copies kept stop.
+	for range copiesKept + 5 {
+		h.m.heardEcho(packets.Decoded{Decrypted: true, ChannelIdx: pub.Idx, ChannelSecret: pub.Secret, Sender: "MeshCore-k4", Text: "testing from the shed"}, store.Copy{At: h.m.now})
+	}
+	msgs, _ = h.m.chat.Messages(store.ChannelConvo(pub.Idx), 5)
+	if cs, _ := h.m.chat.Copies(sent.ID); len(cs) > copiesKept || msgs[len(msgs)-1].Repeats <= copiesKept {
+		t.Errorf("after a replay: %d copies kept, %d repeats counted", len(cs), msgs[len(msgs)-1].Repeats)
+	}
+
+	for _, c := range []struct {
+		msg  store.Message
+		weak bool
+	}{
+		{store.Message{SNR: -0.5, HasSNR: true}, true},
+		{store.Message{SNR: 0, HasSNR: true}, false},
+		{store.Message{}, false},
+		{store.Message{Out: true, EchoSNR: -7, HasEcho: true}, true},
+		{store.Message{Out: true, EchoSNR: 3, HasEcho: true}, false},
+		{store.Message{Out: true, SNR: -9, HasSNR: true}, false},
+	} {
+		if got := strings.Contains(ansi.Strip(h.m.weakMark(c.msg)), "weak"); got != c.weak {
+			t.Errorf("%+v: weak %v, want %v", c.msg, got, c.weak)
+		}
 	}
 
 	now := h.m.now
@@ -375,7 +408,7 @@ func TestChannelRepeatsAreHeard(t *testing.T) {
 		}
 	}
 	h.m.chat = nil
-	h.m.heardEcho(packets.Decoded{Decrypted: true, Sender: "MeshCore-k4", Text: "x"}) // no chat service: nothing to count
+	h.m.heardEcho(packets.Decoded{Decrypted: true, Sender: "MeshCore-k4", Text: "x"}, store.Copy{}) // no chat service: nothing to count
 }
 
 func TestBracketMentionsAreHighlighted(t *testing.T) {

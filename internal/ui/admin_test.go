@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -70,7 +71,7 @@ func TestAdminLoginAndStatus(t *testing.T) {
 	h := newHarness(t)
 	h.keys("5")
 	scr := h.screen()
-	for _, want := range []string{"ADMIN · 12 NODES · 0 SIGNED IN", "Dundry", "Clifton Room", "signed out"} {
+	for _, want := range []string{"ADMIN · 11 NODES · 0 SIGNED IN", "Dundry", "Clifton Room", "signed out"} {
 		if !strings.Contains(scr, want) {
 			t.Fatalf("node list lacks %q:\n%s", want, scr)
 		}
@@ -1038,7 +1039,9 @@ func TestConfirmTypesNameWithoutEmoji(t *testing.T) {
 			t.Errorf("typeable(%q) = %q, want %q", name, got, want)
 		}
 	}
-	h := newHarness(t)
+	s := sim.New(5).Fast().Lossless().Quiet()
+	s.SaveContact(context.Background(), radio.Contact{Key: [32]byte{0x91, 0x15}, Name: "Aust 🌉", Type: radio.TypeRepeater, PathLen: -1})
+	h := newHarnessWith(t, s)
 	h.keys("5")
 	_, sess := h.login("Aust 🌉", "password")
 	h.idle(sess)
