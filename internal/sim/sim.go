@@ -554,6 +554,10 @@ func (s *Sim) SendText(ctx context.Context, to [32]byte, text string) (radio.Sen
 	s.ack++
 	ack := s.ack
 	lost := s.rng.Float64() < s.loss
+	wait := time.Duration(float64(4*time.Second) / s.speed)
+	if s.loss == 0 {
+		wait = 4 * time.Second // every ack comes, so a slow machine, such as one checking for races, mustn't time it out first
+	}
 	rtt := time.Duration(600+s.rng.Intn(1900)) * time.Millisecond
 	if _, scripted := dms[name]; scripted && s.rng.Float64() < 0.5 {
 		s.pending[name]++
@@ -579,7 +583,7 @@ func (s *Sim) SendText(ctx context.Context, to [32]byte, text string) (radio.Sen
 			s.emit(radio.Acked{Ack: ack, RTT: rtt})
 		}()
 	}
-	return radio.Sent{Ack: ack, Timeout: time.Duration(float64(4*time.Second) / s.speed)}, nil
+	return radio.Sent{Ack: ack, Timeout: wait}, nil
 }
 
 func (s *Sim) SendChannelAt(ctx context.Context, idx int, text string) (uint32, error) {
