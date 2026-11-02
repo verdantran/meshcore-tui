@@ -482,9 +482,10 @@ func TestTwoBytePaths(t *testing.T) {
 // Each room server keeps its own posts.
 func TestRoomsKeepTheirOwnPosts(t *testing.T) {
 	s := New(8).Fast()
-	s.Login(context.Background(), key(0x2B, "🍺 Harbourside Room"), roomPassword)
+	s.SaveContact(context.Background(), radio.Contact{Key: key(0x9C, "Portishead Room"), Name: "Portishead Room", Type: radio.TypeRoom})
+	s.Login(context.Background(), key(0x9C, "Portishead Room"), roomPassword)
 	waitFor[radio.LoginResult](t, s)
-	if first := waitFor[radio.Incoming](t, s); !strings.Contains(first.Text, "Harbourside room is up") {
-		t.Errorf("first Harbourside post = %q", first.Text)
+	if first := waitFor[radio.Incoming](t, s); !strings.Contains(first.Text, "Portishead room is up") {
+		t.Errorf("first Portishead post = %q", first.Text)
 	}
 }
