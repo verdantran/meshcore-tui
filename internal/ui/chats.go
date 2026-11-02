@@ -1213,12 +1213,14 @@ func (m *Model) heardEcho(dec packets.Decoded, heard store.Copy) {
 	if !ok {
 		return
 	}
-	id, _, ok, err := m.chat.Echo(ch.Idx, dec.Sender, dec.Text, m.now)
+	id, repeats, ok, err := m.chat.Echo(ch.Idx, dec.Sender, dec.Text, m.now)
 	if err != nil {
 		m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 	}
 	if ok {
-		m.keepCopy(id, heard)
+		if repeats <= copiesKept { // anyone with the channel's key can replay it; the count goes on, the rows don't
+			m.keepCopy(id, heard)
+		}
 		flash(m.chats.echoed, id, m.now, popDur)
 		m.chatsChanged(store.ChannelConvo(ch.Idx))
 	}

@@ -368,6 +368,15 @@ func TestChannelRepeatsAreHeard(t *testing.T) {
 		t.Errorf("%d repeats, %d copies kept, best known %v", sent.Repeats, len(cs), sent.HasEcho)
 	}
 
+	// A replayed message can't grow the history without end: the count goes on, the copies kept stop.
+	for range copiesKept + 5 {
+		h.m.heardEcho(packets.Decoded{Decrypted: true, ChannelIdx: pub.Idx, ChannelSecret: pub.Secret, Sender: "MeshCore-k4", Text: "testing from the shed"}, store.Copy{At: h.m.now})
+	}
+	msgs, _ = h.m.chat.Messages(store.ChannelConvo(pub.Idx), 5)
+	if cs, _ := h.m.chat.Copies(sent.ID); len(cs) > copiesKept || msgs[len(msgs)-1].Repeats <= copiesKept {
+		t.Errorf("after a replay: %d copies kept, %d repeats counted", len(cs), msgs[len(msgs)-1].Repeats)
+	}
+
 	for _, c := range []struct {
 		msg  store.Message
 		weak bool

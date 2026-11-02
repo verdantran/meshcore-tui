@@ -8,6 +8,7 @@ import (
 
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/store"
+	"github.com/verdantran/meshcore-tui/internal/untrusted"
 )
 
 // weakSNR is below where the app's signal colours turn red.
@@ -47,7 +48,7 @@ func (m *Model) packetsFor(msg store.Message) {
 	}
 	in := &m.inspector
 	in.filter, in.filtering, in.sel = lineEdit{}, false, 0
-	in.filter.set(msg.Text)
+	in.filter.set(untrusted.Line(msg.Text))
 	m.chats.info = false
 	m.setTab(3)
 }
