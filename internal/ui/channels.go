@@ -87,7 +87,7 @@ func (m *Model) addChannel(name, secret string) (tea.Cmd, error) {
 	if err != nil {
 		return nil, err
 	}
-	what := map[string]string{"hashtag": "JOINED  ", "private": "JOINED  ", "new": "CREATED  "}[p.Kind] + p.Channel.Name
+	what := map[string]string{"hashtag": "JOINED  ", "public": "JOINED  ", "private": "JOINED  ", "new": "CREATED  "}[p.Kind] + p.Channel.Name
 	return m.writeChannel(p.Channel, what, store.ChannelConvo(p.Channel.Idx), p.Kind == "new"), nil
 }
 
@@ -132,7 +132,7 @@ func (m *Model) channelKey(s string) (tea.Cmd, bool) {
 			c.chanStage = chanNone
 		case "enter":
 			in := strings.TrimSpace(c.chanInput.text)
-			if c.chanStage == chanName && !strings.HasPrefix(in, "#") && !strings.HasPrefix(in, chat.ChannelLinkPrefix) && in != "" {
+			if c.chanStage == chanName && !strings.HasPrefix(in, "#") && !strings.HasPrefix(in, chat.ChannelLinkPrefix) && in != "" && !chat.IsPublicName(in) {
 				if len(untrusted.Name(in)) > 31 {
 					m.fail("CHANNEL  a channel name is at most 31 bytes") // said now, not after the secret's typed
 					return nil, true
@@ -269,6 +269,8 @@ func (m *Model) channelLines(w, rows int) []string {
 	case chanName:
 		out := []string{th.Fg(th.Muted, true).Render("ADD A CHANNEL") + th.Fg(th.Dim, false).Render(fmt.Sprintf("  ·  %d of %d slots used", len(m.chat.Channels()), m.slots())), "", field("channel"), ""}
 		out = append(out, wrap("#name joins a public hashtag channel: everyone who types the same name meets there, so it's open to anyone who guesses it.")...)
+		out = append(out, "")
+		out = append(out, wrap("Public rejoins the Public channel every radio starts with.")...)
 		out = append(out, "")
 		out = append(out, wrap("A plain name joins or makes a private channel; you'll be asked for its secret next. A pasted "+chat.ChannelLinkPrefix+"… link joins straight away.")...)
 		return append(out, "", th.Fg(th.Dim, false).Render("enter continue · esc cancel"))

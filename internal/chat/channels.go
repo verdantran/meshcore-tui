@@ -27,12 +27,13 @@ var ErrNoSlot = errors.New("every channel slot on the radio is in use; remove a 
 // ChannelPlan is a channel ready to write to the radio, and how it came about.
 type ChannelPlan struct {
 	Channel radio.Channel
-	Kind    string // "hashtag", "private" or "new"
+	Kind    string // "hashtag", "public", "private" or "new"
 }
 
 // PlanChannel works out the channel to add from what was typed. A name starting # is a hashtag
-// channel, whose secret comes from its name; a link carries its own; a name with a secret joins a
-// private channel; a name alone makes a new private channel with a random secret.
+// channel, whose secret comes from its name; Public is the Public channel; a link carries its own
+// secret; a name with a secret joins a private channel; a name alone makes a new private channel with
+// a random secret.
 func (s *Service) PlanChannel(name, secret string, slots int) (ChannelPlan, error) {
 	name, secret = strings.TrimSpace(name), strings.TrimSpace(secret)
 	if !strings.HasPrefix(name, ChannelLinkPrefix) {
@@ -46,7 +47,9 @@ func (s *Service) PlanChannel(name, secret string, slots int) (ChannelPlan, erro
 			return p, err
 		}
 		p = ChannelPlan{radio.Channel{Name: n, Secret: sec}, "private"}
-		if strings.HasPrefix(n, "#") {
+		if isPublicNamed(p.Channel) {
+			p = ChannelPlan{PublicChannel(), "public"}
+		} else if strings.HasPrefix(n, "#") {
 			if sec != meshcore.DeriveHashtagPSK(n) {
 				return p, fmt.Errorf("that link's secret isn't %s's, so it would look open when it isn't", n)
 			}
@@ -61,6 +64,8 @@ func (s *Service) PlanChannel(name, secret string, slots int) (ChannelPlan, erro
 		p = ChannelPlan{radio.Channel{Name: name, Secret: meshcore.DeriveHashtagPSK(name)}, "hashtag"}
 	case name == "":
 		return p, errors.New("a channel needs a name")
+	case IsPublicName(name) && secret == "":
+		p = ChannelPlan{PublicChannel(), "public"}
 	case secret == "":
 		var sec [16]byte
 		rand.Read(sec[:])
@@ -71,7 +76,9 @@ func (s *Service) PlanChannel(name, secret string, slots int) (ChannelPlan, erro
 			return p, err
 		}
 		p = ChannelPlan{radio.Channel{Name: name, Secret: sec}, "private"}
-		if err := guessable(p.Channel); err != nil {
+		if isPublicNamed(p.Channel) {
+			p = ChannelPlan{PublicChannel(), "public"}
+		} else if err := guessable(p.Channel); err != nil {
 			return p, err
 		}
 	}
@@ -86,6 +93,9 @@ func (s *Service) PlanChannel(name, secret string, slots int) (ChannelPlan, erro
 	if c, ok := s.ChannelNamed(p.Channel.Name, -1); ok {
 		return p, fmt.Errorf("you already have a channel called %s; give this one another name", c.Name)
 	}
+	if IsPublicName(p.Channel.Name) && !IsPublic(p.Channel) {
+		return p, errors.New("that name is the Public channel's, so this one would pass for it; give it another name")
+	}
 	idx, ok := s.freeSlot(slots)
 	if !ok {
 		return p, ErrNoSlot
@@ -99,7 +109,7 @@ func (s *Service) PlanChannel(name, secret string, slots int) (ChannelPlan, erro
 func guessable(c radio.Channel) error {
 	switch {
 	case IsPublic(c):
-		return errors.New("that secret is the Public channel's, which every radio has, so the channel wouldn't be private")
+		return errors.New("that secret is the Public channel's, which every radio has, so the channel wouldn't be private; to join Public, call it Public")
 	case derived(c):
 		return fmt.Errorf("that secret is #%s's, which anyone can work out from the name; join #%s instead, or use another secret", c.Name, c.Name)
 	case IsOpen(c):
@@ -165,6 +175,20 @@ func ParseChannelLink(link string) (string, [16]byte, error) {
 	sec, err = ParseSecret(q.Get("secret"))
 	return name, sec, err
 }
+
+// IsPublicName reports whether a name asks for the Public channel.
+func IsPublicName(name string) bool {
+	return strings.EqualFold(untrusted.Name(name), "Public") || untrusted.Skeleton(name) == untrusted.Skeleton("Public")
+}
+
+// PublicChannel is the Public channel every radio starts with, not yet in a slot.
+func PublicChannel() radio.Channel {
+	c := radio.Channel{Name: "Public"}
+	copy(c.Secret[:], meshcore.PublicChannel().PSK)
+	return c
+}
+
+func isPublicNamed(c radio.Channel) bool { return IsPublic(c) && IsPublicName(c.Name) }
 
 // IsPublic reports whether a channel is the well-known Public one, which anyone can read.
 func IsPublic(c radio.Channel) bool {

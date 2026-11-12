@@ -231,3 +231,35 @@ func TestHistoryFollowsChannelsBetweenSlots(t *testing.T) {
 		t.Errorf("Public, back in slot 2, has %q", got)
 	}
 }
+
+func TestPublicCanBeRejoined(t *testing.T) {
+	s := newService(t, 3, true)
+	pub := PublicChannel()
+	pubHex, pubB64 := hex.EncodeToString(pub.Secret[:]), "izOH6cXN6mrJ5e26oRXNcg=="
+	s.channels[0].Secret = pub.Secret
+	if _, err := s.PlanChannel("Public", "", 4); err == nil || !strings.Contains(err.Error(), "already in that channel, as Public") {
+		t.Errorf("while in it: %v", err)
+	}
+	s.ReplaceChannels([]radio.Channel{{Idx: 1, Name: "#bristol", Secret: meshcore.DeriveHashtagPSK("#bristol")}})
+	for _, c := range []struct{ name, secret string }{
+		{"Public", ""}, {"public", ""}, {" PUBLIC ", ""}, {"Public", pubHex}, {"public", pubB64},
+		{ChannelLink(radio.Channel{Name: "public", Secret: pub.Secret}), ""},
+	} {
+		p, err := s.PlanChannel(c.name, c.secret, 4)
+		if err != nil || p.Kind != "public" || p.Channel.Name != "Public" || !IsPublic(p.Channel) || p.Channel.Idx != 0 {
+			t.Errorf("%q %q = %+v %v", c.name, c.secret, p, err)
+		}
+	}
+	other := hex.EncodeToString(strong[:])
+	for _, c := range []struct{ name, secret, msg string }{
+		{"Family", pubHex, "Public channel's"},
+		{ChannelLink(radio.Channel{Name: "Family", Secret: pub.Secret}), "", "Public channel's"},
+		{"Public", other, "pass for it"},
+		{"Рublic", other, "pass for it"},
+		{ChannelLink(radio.Channel{Name: "Public", Secret: strong}), "", "pass for it"},
+	} {
+		if _, err := s.PlanChannel(c.name, c.secret, 4); err == nil || !strings.Contains(err.Error(), c.msg) {
+			t.Errorf("%q %q: %v", c.name, c.secret, err)
+		}
+	}
+}
