@@ -161,6 +161,13 @@ func (s *Service) Ready(r radio.Ready) error {
 	if err := s.store.SaveContacts(s.device, r.ContactList); err != nil {
 		return err
 	}
+	was, err := s.store.Channels(s.device)
+	if err != nil {
+		return err
+	}
+	if err := s.follow(was, r.ChannelList); err != nil {
+		return err
+	}
 	if err := s.store.SaveChannels(s.device, r.ChannelList); err != nil {
 		return err
 	}
@@ -622,7 +629,7 @@ func (s *Service) Conversations(open store.Convo) ([]Info, error) {
 	}
 	direct := len(out)
 	for c, x := range s.sums {
-		if c.IsChannel() {
+		if c.IsChannel() || c.IsParked() {
 			continue
 		}
 		last := x.last

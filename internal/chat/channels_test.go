@@ -3,6 +3,7 @@ package chat
 import (
 	"encoding/hex"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -172,5 +173,61 @@ func TestChannelNamesAreCleaned(t *testing.T) {
 	}
 	if _, err := s.PlanChannel(ChannelLinkPrefix+"name=%E2%80%8B&secret="+secret, "", 4); err == nil {
 		t.Error("a blank name is refused")
+	}
+}
+
+// A channel removed in another app can move the rest down a slot. Each channel's history goes with it,
+// and the gone channel's is set aside until it's back (issue #22).
+func TestHistoryFollowsChannelsBetweenSlots(t *testing.T) {
+	s := newService(t, 3, true)
+	tag := func(n string) [16]byte { return meshcore.DeriveHashtagPSK(n) }
+	pub, jokes, ham := radio.Channel{Idx: 0, Name: "Public"}, radio.Channel{Idx: 1, Name: "#jokes", Secret: tag("#jokes")}, radio.Channel{Idx: 2, Name: "#hamradio", Secret: tag("#hamradio")}
+	copy(pub.Secret[:], meshcore.PublicChannel().PSK)
+	if err := s.ReplaceChannels([]radio.Channel{pub, jokes, ham}); err != nil {
+		t.Fatal(err)
+	}
+	for i, text := range []string{"Carol: public", "Carol: a joke", "Carol: 73"} {
+		s.Incoming(radio.Incoming{At: t0, Channel: true, ChannelIdx: i, Text: text})
+	}
+	texts := func(c store.Convo) []string {
+		msgs, _ := s.store.Messages(s.device, c, 10)
+		var out []string
+		for _, m := range msgs {
+			out = append(out, m.Text)
+		}
+		return out
+	}
+
+	// Public went, the rest moved down, and the app learns of it on connecting.
+	jokes.Idx, ham.Idx = 0, 1
+	if err := s.Ready(radio.Ready{Self: radio.SelfInfo{Name: "MeshCore-k4", PubKey: [32]byte{0xC0}}, ChannelList: []radio.Channel{jokes, ham}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := texts(store.ChannelConvo(0)); !reflect.DeepEqual(got, []string{"a joke"}) {
+		t.Errorf("#jokes, now in slot 0, has %q", got)
+	}
+	if got := texts(store.ChannelConvo(1)); !reflect.DeepEqual(got, []string{"73"}) {
+		t.Errorf("#hamradio, now in slot 1, has %q", got)
+	}
+	if got := texts(store.ChannelConvo(2)); len(got) != 0 {
+		t.Errorf("the empty slot 2 has %q", got)
+	}
+	infos, _ := s.Conversations("")
+	for _, info := range infos {
+		if info.Convo.IsParked() {
+			t.Errorf("set-aside history listed as %+v", info)
+		}
+	}
+	if found, _ := s.store.Search(s.device, "public", "", 10); len(found) != 0 {
+		t.Errorf("search all finds set-aside history: %+v", found)
+	}
+
+	// Public comes back, in another slot.
+	pub.Idx = 2
+	if err := s.ReplaceChannels([]radio.Channel{jokes, ham, pub}); err != nil {
+		t.Fatal(err)
+	}
+	if got := texts(store.ChannelConvo(2)); !reflect.DeepEqual(got, []string{"public"}) {
+		t.Errorf("Public, back in slot 2, has %q", got)
 	}
 }

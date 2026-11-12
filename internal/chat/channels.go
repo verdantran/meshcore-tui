@@ -205,8 +205,44 @@ var commonHashtags = func() map[[16]byte]bool {
 
 // ReplaceChannels takes the radio's channel list after a change.
 func (s *Service) ReplaceChannels(cs []radio.Channel) error {
+	if err := s.follow(s.channels, cs); err != nil {
+		return err
+	}
 	s.channels = cs
 	return s.store.SaveChannels(s.device, cs)
+}
+
+// follow keeps each channel's history with the channel, known by its secret, when the radio's channels
+// change slots, as removing one in another app can make them do. Without it a channel would show the
+// history of whichever channel had its slot before. The history of a channel no longer on the radio is
+// set aside under its secret, and comes back if the channel does: a list cut short by a failed read
+// then loses nothing.
+func (s *Service) follow(was, now []radio.Channel) error {
+	at := map[[16]byte]int{}
+	for _, c := range now {
+		if _, dup := at[c.Secret]; !dup && c.Secret != ([16]byte{}) {
+			at[c.Secret] = c.Idx
+		}
+	}
+	moves := map[store.Convo]store.Convo{}
+	for _, c := range was {
+		if c.Secret == ([16]byte{}) {
+			continue
+		}
+		from := store.ChannelConvo(c.Idx)
+		switch idx, ok := at[c.Secret]; {
+		case !ok:
+			moves[from] = store.ParkedConvo(c.Secret)
+		case idx != c.Idx:
+			moves[from] = store.ChannelConvo(idx)
+		}
+	}
+	for secret, idx := range at {
+		moves[store.ParkedConvo(secret)] = store.ChannelConvo(idx) // a no-op unless it was set aside
+	}
+	err := s.store.MoveConvos(s.device, moves)
+	s.sums = nil
+	return err
 }
 
 // ForgetChannel deletes a removed channel's history, so a channel added to the same slot later starts empty.

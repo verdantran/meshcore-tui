@@ -21,14 +21,17 @@ import (
 )
 
 // Convo identifies a conversation: "ch:<idx>" for a channel, "dm:<key hex>" for a contact,
-// or "dm?:<prefix hex>" for a sender we don't have as a contact.
+// or "dm?:<prefix hex>" for a sender we don't have as a contact. "chx:<secret hex>" holds the history of
+// a channel no longer on the radio, set aside until it comes back.
 type Convo string
 
 func ChannelConvo(idx int) Convo { return Convo(fmt.Sprintf("ch:%d", idx)) }
 
-func (c Convo) IsChannel() bool       { return strings.HasPrefix(string(c), "ch:") }
-func ContactConvo(key [32]byte) Convo { return Convo("dm:" + radio.KeyHex(key[:])) }
-func UnknownConvo(p [6]byte) Convo    { return Convo("dm?:" + radio.KeyHex(p[:])) }
+func (c Convo) IsChannel() bool         { return strings.HasPrefix(string(c), "ch:") }
+func ParkedConvo(secret [16]byte) Convo { return Convo("chx:" + hex.EncodeToString(secret[:])) }
+func (c Convo) IsParked() bool          { return strings.HasPrefix(string(c), "chx:") }
+func ContactConvo(key [32]byte) Convo   { return Convo("dm:" + radio.KeyHex(key[:])) }
+func UnknownConvo(p [6]byte) Convo      { return Convo("dm?:" + radio.KeyHex(p[:])) }
 
 type State int
 
@@ -621,6 +624,39 @@ func (s *Store) UnreadMentioning(device string, c Convo) ([]string, error) {
 	return out, rows.Err()
 }
 
+// MoveConvos renames conversations, each from to moves[from], in one transaction. The moves may swap or
+// chain; two moving to the same place merge.
+func (s *Store) MoveConvos(device string, moves map[Convo]Convo) error {
+	if len(moves) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	step := func(from, to Convo) error {
+		for _, q := range []string{`UPDATE messages SET convo = ? WHERE device = ? AND convo = ?`,
+			`UPDATE OR REPLACE reads SET convo = ? WHERE device = ? AND convo = ?`} {
+			if _, err := tx.Exec(q, string(to), device, string(from)); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for from, to := range moves { // out of the way first, so a move never lands on history still to leave
+		if err := step(from, "mv:"+to); err != nil {
+			return err
+		}
+	}
+	for _, to := range moves {
+		if err := step("mv:"+to, to); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // DeleteConvo removes a conversation's history, for a channel whose slot is being freed.
 func (s *Store) DeleteConvo(device string, c Convo) error {
 	tx, err := s.db.Begin()
@@ -683,7 +719,7 @@ func (s *Store) SearchContext(ctx context.Context, device, q string, c Convo, li
 		return nil, nil
 	}
 	if c == "" {
-		return s.queryMessagesContext(ctx, `SELECT `+messageCols+` FROM messages NOT INDEXED WHERE device = ? AND (text LIKE ? ESCAPE '\' OR sender LIKE ? ESCAPE '\') ORDER BY id DESC LIMIT ?`,
+		return s.queryMessagesContext(ctx, `SELECT `+messageCols+` FROM messages NOT INDEXED WHERE device = ? AND convo NOT LIKE 'chx:%' AND (text LIKE ? ESCAPE '\' OR sender LIKE ? ESCAPE '\') ORDER BY id DESC LIMIT ?`,
 			device, likePattern(q), likePattern(q), limit)
 	}
 	return s.queryMessagesContext(ctx, `SELECT `+messageCols+` FROM messages INDEXED BY messages_convo WHERE device = ? AND convo = ? AND (text LIKE ? ESCAPE '\' OR sender LIKE ? ESCAPE '\') ORDER BY id DESC LIMIT ?`,
