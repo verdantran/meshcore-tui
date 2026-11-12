@@ -428,3 +428,25 @@ func TestFinderJoinsAndAddsChannels(t *testing.T) {
 		t.Error("add a channel opens the form")
 	}
 }
+
+func TestRejoinPublic(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	pub, _ := h.channel("Public")
+	h.m.jumpToConvo(store.ChannelConvo(pub.Idx))
+	h.keys("xy")
+	h.until("left", func() bool { _, ok := h.channel("Public"); return !ok })
+	h.keys("n")
+	if !strings.Contains(h.screen(), "Public rejoins the Public channel") {
+		t.Fatalf("add prompt:\n%s", h.screen())
+	}
+	h.typeLine("public")
+	h.until("rejoined", func() bool { _, ok := h.channel("Public"); return ok })
+	back, _ := h.channel("Public")
+	if !chat.IsPublic(back) || back.Idx != pub.Idx || !strings.Contains(h.lastLog(), "JOINED  Public") {
+		t.Errorf("rejoined = %+v, log %s", back, h.lastLog())
+	}
+	if strings.Contains(h.screen(), "SECRET FOR") {
+		t.Error("no secret is asked for")
+	}
+}
