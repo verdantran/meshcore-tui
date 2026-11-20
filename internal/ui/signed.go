@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"maps"
@@ -144,6 +145,124 @@ func (m *Model) toggleChannelSigning() {
 type signedSentMsg struct {
 	send    chat.Send
 	signErr error
+	key     []byte // the key the message is signed with: the radio's, or a v2 signing key
+}
+
+// unlocking is the composer asking for the signing key's passphrase. The typed message waits here.
+type unlocking struct {
+	text  string
+	convo store.Convo
+	pass  lineEdit
+	busy  bool
+	err   string
+}
+
+type unlockedMsg struct {
+	priv  ed25519.PrivateKey
+	err   error
+	text  string
+	convo store.Convo
+}
+
+func (m *Model) keyfilePath() string {
+	if m.opt.Config == nil {
+		return ""
+	}
+	return m.opt.Config.Messages.SigningKey
+}
+
+func (m *Model) unlockKey(s string) (tea.Cmd, bool) {
+	u := m.chats.unlock
+	if u.busy {
+		return nil, true
+	}
+	switch s {
+	case "esc":
+		m.chats.input = lineEdit{}
+		m.chats.input.insert(u.text)
+		m.chats.unlock = nil
+	case "enter":
+		u.busy, u.err = true, ""
+		pass, path, text, convo := u.pass.text, m.keyfilePath(), u.text, u.convo
+		u.pass = lineEdit{}
+		return func() tea.Msg {
+			k, err := signing.LoadKeyfile(path)
+			if err != nil {
+				return unlockedMsg{err: err, text: text, convo: convo}
+			}
+			priv, err := k.UnlockPassphrase(pass)
+			return unlockedMsg{priv: priv, err: err, text: text, convo: convo}
+		}, true
+	default:
+		u.pass.key(s)
+	}
+	return nil, true
+}
+
+// unlocked composes and sends the waiting message once the key has opened, or asks again.
+func (m *Model) unlocked(r unlockedMsg) tea.Cmd {
+	u := m.chats.unlock
+	if u == nil { // gave up meanwhile
+		signing.Wipe(r.priv)
+		return nil
+	}
+	if r.err != nil {
+		u.busy, u.err = false, r.err.Error()
+		return nil
+	}
+	m.chats.unlock = nil
+	_, send, err := m.chat.Compose(r.convo, r.text, m.now)
+	if err != nil {
+		signing.Wipe(r.priv)
+		m.fail(err.Error())
+		return nil
+	}
+	m.chats.input, m.chats.scroll, m.chats.signFlip, m.chats.emoji = lineEdit{}, 0, false, nil
+	m.refreshChats()
+	title := m.chat.Title(r.convo)
+	return m.signedSendV2Cmd(send, title, r.priv)
+}
+
+// signedSendV2Cmd sends a channel message signed with an unlocked v2 key, which it wipes after. Before the
+// first signed message on a channel each day, the radio's binding for the key goes out, so listeners can
+// check it.
+func (m *Model) signedSendV2Cmd(s chat.Send, channel string, priv ed25519.PrivateKey) tea.Cmd {
+	signer, _ := m.radio.(radio.Signer)
+	self := m.ready.Self.PubKey
+	pub := [32]byte(priv.Public().(ed25519.PublicKey))
+	if m.chats.bindSent == nil {
+		m.chats.bindSent = map[int]time.Time{}
+	}
+	bind := m.now.Sub(m.chats.bindSent[s.Idx]) > 24*time.Hour
+	if bind {
+		m.chats.bindSent[s.Idx] = m.now
+	}
+	bindTS := uint32(m.now.Unix())
+	if err := m.chat.BindSigKey(store.SigKey{Key: pub, Radio: self, TS: bindTS}); err == nil {
+		m.chats.sigKeys = nil // so our own signatures, and our radio's, read right here too
+	}
+	return func() tea.Msg {
+		defer signing.Wipe(priv)
+		ctx, cancel := context.WithTimeout(context.Background(), sendLimit)
+		defer cancel()
+		if bind {
+			rsig, err := signer.Sign(ctx, signing.BindInput(self, pub, bindTS))
+			if err == nil {
+				err = signer.SendChannelData(ctx, s.Idx, signing.DataType, signing.Binding{Key: pub, TS: bindTS, Sig: rsig}.Bytes())
+			}
+			if err != nil {
+				return sendResultMsg{send: s, err: fmt.Errorf("the radio didn't vouch for the signing key: %w", err)}
+			}
+		}
+		ts, err := signer.SendChannelAt(ctx, s.Idx, s.Text)
+		if err != nil {
+			return sendResultMsg{send: s, err: err}
+		}
+		d := signing.DatagramV2{TS: ts, KeyID: [8]byte(pub[:8])}
+		copy(d.Sig[:], ed25519.Sign(priv, signing.CanonicalV2(self, channel, ts, s.Text)))
+		err = signer.SendChannelData(ctx, s.Idx, signing.DataType, d.Bytes())
+		return signedSentMsg{s, err, pub[:]}
+	}
 }
 
 // signedSendCmd sends a channel message, then its signature: the radio signs the message with its own key.
@@ -160,7 +279,7 @@ func (m *Model) signedSendCmd(s chat.Send, channel string) tea.Cmd {
 		if err == nil {
 			err = signer.SendChannelData(ctx, s.Idx, signing.DataType, signing.Datagram{TS: ts, Sig: sig, KeyID: [8]byte(m.ready.Self.PubKey[:8])}.Bytes())
 		}
-		return signedSentMsg{s, err}
+		return signedSentMsg{s, err, m.ready.Self.PubKey[:]}
 	}
 }
 
@@ -170,7 +289,7 @@ func (m *Model) signedSent(r signedSentMsg) tea.Cmd {
 		m.addLog(m.now, "SENT UNSIGNED  the message went, but its signature didn't: "+radio.Explain(r.signErr), radio.ToneWarn)
 		return cmd
 	}
-	if err := m.chat.SetSig(r.send.ID, store.SigValid, m.ready.Self.PubKey[:]); err != nil {
+	if err := m.chat.SetSig(r.send.ID, store.SigValid, r.key); err != nil {
 		m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 	}
 	m.chatsChanged(sendConvo(r.send))

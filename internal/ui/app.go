@@ -413,6 +413,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.chatResult(msg))
 	case signedSentMsg:
 		cmds = append(cmds, m.signedSent(msg))
+	case unlockedMsg:
+		cmds = append(cmds, m.unlocked(msg))
 	case ackTimeoutMsg:
 		cmds = append(cmds, m.chatTimeout(msg))
 	case tea.PasteMsg:

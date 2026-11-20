@@ -1,11 +1,18 @@
 package ui
 
 import (
+	"bytes"
 	"crypto/ed25519"
+	"encoding/hex"
+	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/verdantran/meshcore-tui/internal/config"
 	"github.com/verdantran/meshcore-tui/internal/radio"
 	"github.com/verdantran/meshcore-tui/internal/signing"
 	"github.com/verdantran/meshcore-tui/internal/store"
@@ -94,5 +101,67 @@ func TestSignedV2(t *testing.T) {
 	h.datagram(idx, zedKey.datagramV2(zedRadio.pub, "#bristol", ts, "after revoking"))
 	if m := h.lastMessage(); m.Sig != store.SigRevoked || !strings.Contains(h.screen(), "revoked key") {
 		t.Fatalf("revoked = %+v\n%s", m.Sig, h.screen())
+	}
+}
+
+func TestSendingSignedV2(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	cfg, _ := config.Load(t.TempDir() + "/config.toml")
+	raw, err := os.ReadFile("../signing/testdata/v2-vectors.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v struct {
+		Inputs     struct{ Passphrase string } `json:"inputs"`
+		SigningPub string                      `json:"signing_pub"`
+		Keyfile    json.RawMessage             `json:"keyfile"`
+	}
+	if err := json.Unmarshal(raw, &v); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Messages.SigningKey = t.TempDir() + "/key.json"
+	if err := os.WriteFile(cfg.Messages.SigningKey, v.Keyfile, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.m.opt.Config = cfg
+	h.openConvo("#bristol")
+	h.keys("S")
+	h.key(tea.KeyEnter)
+	h.keys("hello all")
+	h.key(tea.KeyEnter)
+	if !strings.Contains(h.screen(), "passphrase ▸") || h.lastMessage().Text == "hello all" {
+		t.Fatalf("asks for the passphrase before sending:\n%s", h.screen())
+	}
+
+	// A wrong passphrase asks again; nothing is sent.
+	h.keys("not the right words")
+	h.key(tea.KeyEnter)
+	h.until("refused", func() bool { return h.m.chats.unlock != nil && h.m.chats.unlock.err != "" })
+	if h.lastMessage().Text == "hello all" {
+		t.Fatal("sent with a wrong passphrase")
+	}
+
+	// The right one sends it, signed with the v2 key, after the radio vouches for that key.
+	h.keys(v.Inputs.Passphrase)
+	h.key(tea.KeyEnter)
+	h.until("signed v2", func() bool {
+		m := h.lastMessage()
+		return m.Out && m.Text == "hello all" && m.Sig == store.SigValid
+	})
+	pub, _ := hex.DecodeString(v.SigningPub)
+	if m := h.lastMessage(); !bytes.Equal(m.SigKey, pub) {
+		t.Errorf("signed with %x, want the key file's key", m.SigKey)
+	}
+	if k := h.m.sigKeys()[[32]byte(pub)]; k.Radio != h.m.ready.Self.PubKey {
+		t.Errorf("our binding = %+v", k)
+	}
+
+	// Esc at the prompt gives the message back to edit.
+	h.keys("second")
+	h.key(tea.KeyEnter)
+	h.key(tea.KeyEscape)
+	if h.m.chats.unlock != nil || h.m.chats.input.text != "second" {
+		t.Errorf("esc: unlock=%v input=%q", h.m.chats.unlock, h.m.chats.input.text)
 	}
 }
