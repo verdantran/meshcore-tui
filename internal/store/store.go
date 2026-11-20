@@ -85,11 +85,13 @@ type Copy struct {
 type Sig int
 
 const (
-	Unsigned   Sig = iota
-	SigValid       // verified with the key in SigKey
-	SigBad         // a signature came, but it doesn't match the message
-	SigUnknown     // signed by a key we've never heard an advert from, so it can't be checked
-	SigStale       // a valid signature, but on a message sent long before it arrived, or already used: a replay
+	Unsigned     Sig = iota
+	SigValid         // verified with the key in SigKey
+	SigBad           // a signature came, but it doesn't match the message
+	SigUnknown       // signed by a key we've never heard an advert from, so it can't be checked
+	SigStale         // a valid signature, but on a message sent long before it arrived, or already used: a replay
+	SigRadioOnly     // a valid v1 signature from a radio that has a v2 signing key: the radio alone signed it
+	SigRevoked       // a valid v2 signature by a key its holder has revoked
 )
 
 type Summary struct {
@@ -133,6 +135,8 @@ CREATE TABLE IF NOT EXISTS pins (
 	name TEXT PRIMARY KEY, key BLOB NOT NULL, at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS node_status (
 	node BLOB NOT NULL, at INTEGER NOT NULL, room INTEGER NOT NULL, data BLOB NOT NULL);
+CREATE TABLE IF NOT EXISTS sig_keys (
+	key BLOB PRIMARY KEY, radio BLOB NOT NULL, ts INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS node_status_at ON node_status (node, at);
 `
 
@@ -405,6 +409,52 @@ func (s *Store) LastSeen(device string) (time.Time, error) {
 		return time.Time{}, err
 	}
 	return time.UnixMilli(at.Int64), nil
+}
+
+// SigKey is a v2 signing key and the radio that vouched for it (SIGNING.md, "Version 2").
+type SigKey struct {
+	Key, Radio [32]byte
+	TS         uint32
+	Revoked    bool
+}
+
+// SigKeys are the signing keys radios have vouched for, by key.
+func (s *Store) SigKeys() (map[[32]byte]SigKey, error) {
+	rows, err := s.db.Query(`SELECT key, radio, ts, revoked FROM sig_keys`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[[32]byte]SigKey{}
+	for rows.Next() {
+		var key, radio []byte
+		var k SigKey
+		if err := rows.Scan(&key, &radio, &k.TS, &k.Revoked); err != nil {
+			return nil, err
+		}
+		if len(key) != 32 || len(radio) != 32 {
+			continue
+		}
+		k.Key, k.Radio = [32]byte(key), [32]byte(radio)
+		out[k.Key] = k
+	}
+	return out, rows.Err()
+}
+
+// BindSigKey records a radio vouching for a signing key. A newer binding replaces an older one; a revoked key
+// stays revoked.
+func (s *Store) BindSigKey(k SigKey) error {
+	_, err := s.db.Exec(`INSERT INTO sig_keys (key, radio, ts) VALUES (?, ?, ?)
+		ON CONFLICT (key) DO UPDATE SET radio = excluded.radio, ts = excluded.ts
+		WHERE excluded.ts > sig_keys.ts AND sig_keys.revoked = 0`, k.Key[:], k.Radio[:], k.TS)
+	return err
+}
+
+// RevokeSigKey marks a signing key revoked for good, whether or not its binding has been heard.
+func (s *Store) RevokeSigKey(key [32]byte, ts uint32) error {
+	_, err := s.db.Exec(`INSERT INTO sig_keys (key, radio, ts, revoked) VALUES (?, ?, ?, 1)
+		ON CONFLICT (key) DO UPDATE SET revoked = 1`, key[:], make([]byte, 32), ts)
+	return err
 }
 
 // Pin is the key a display name is trusted to sign with.

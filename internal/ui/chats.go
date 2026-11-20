@@ -56,9 +56,10 @@ type chatsModel struct {
 
 	heard []heardMessage // message packets heard lately, for giving messages their paths
 
-	sigs     []pendingSig         // signatures waiting for their message
-	signFlip bool                 // ctrl+s: sign, or don't, against the channel's setting, for this message
-	pins     map[string]store.Pin // keys names are trusted to sign with; nil until read
+	sigs     []pendingSig              // signatures waiting for their message
+	sigKeys  map[[32]byte]store.SigKey // v2 signing keys radios have vouched for; nil until first wanted
+	signFlip bool                      // ctrl+s: sign, or don't, against the channel's setting, for this message
+	pins     map[string]store.Pin      // keys names are trusted to sign with; nil until read
 	pinsRev  int
 	names    nameIndex
 

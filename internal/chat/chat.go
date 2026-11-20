@@ -314,6 +314,11 @@ func (s *Service) SetSig(id int64, sig store.Sig, key []byte) error {
 
 func (s *Service) Pins() (map[string]store.Pin, error) { return s.store.Pins() }
 
+// SigKeys, BindSigKey and RevokeSigKey keep the v2 signing keys radios have vouched for.
+func (s *Service) SigKeys() (map[[32]byte]store.SigKey, error) { return s.store.SigKeys() }
+func (s *Service) BindSigKey(k store.SigKey) error             { return s.store.BindSigKey(k) }
+func (s *Service) RevokeSigKey(key [32]byte, ts uint32) error  { return s.store.RevokeSigKey(key, ts) }
+
 func (s *Service) Pin(name string, key [32]byte, at time.Time) error {
 	return s.store.SetPin(name, key, at)
 }
@@ -743,7 +748,7 @@ func sigText(m store.Message, verdict func(store.Message) string) string {
 	return ""
 }
 
-var sigNames = map[store.Sig]string{store.Unsigned: "none", store.SigValid: "valid", store.SigBad: "bad", store.SigUnknown: "unknown", store.SigStale: "stale"}
+var sigNames = map[store.Sig]string{store.Unsigned: "none", store.SigValid: "valid", store.SigBad: "bad", store.SigUnknown: "unknown", store.SigStale: "stale", store.SigRadioOnly: "radio-only", store.SigRevoked: "revoked"}
 
 var stateNames = map[store.State]string{store.Received: "", store.Pending: "pending", store.Sent: "sent", store.Delivered: "delivered", store.Failed: "failed"}
 
