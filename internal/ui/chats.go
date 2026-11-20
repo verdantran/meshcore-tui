@@ -56,9 +56,12 @@ type chatsModel struct {
 
 	heard []heardMessage // message packets heard lately, for giving messages their paths
 
-	sigs     []pendingSig         // signatures waiting for their message
-	signFlip bool                 // ctrl+s: sign, or don't, against the channel's setting, for this message
-	pins     map[string]store.Pin // keys names are trusted to sign with; nil until read
+	sigs     []pendingSig              // signatures waiting for their message
+	sigKeys  map[[32]byte]store.SigKey // v2 signing keys radios have vouched for; nil until first wanted
+	unlock   *unlocking                // asking for the signing key's passphrase before a signed send
+	bindSent map[int]time.Time         // when our binding last went out on each channel
+	signFlip bool                      // ctrl+s: sign, or don't, against the channel's setting, for this message
+	pins     map[string]store.Pin      // keys names are trusted to sign with; nil until read
 	pinsRev  int
 	names    nameIndex
 
@@ -343,6 +346,10 @@ func (m *Model) composeSend() tea.Cmd {
 		m.addLog(m.now, "SENDING UNSIGNED  "+err.Error(), radio.ToneWarn)
 		sign = false
 	}
+	if sign && m.keyfilePath() != "" && strings.TrimSpace(m.chats.input.text) != "" {
+		m.chats.unlock = &unlocking{text: m.chats.input.text, convo: cur.Convo}
+		return nil // the passphrase first; the message is composed once the key opens
+	}
 	_, send, err := m.chat.Compose(cur.Convo, m.chats.input.text, m.now)
 	if err != nil {
 		m.fail(err.Error())
@@ -419,6 +426,9 @@ func (m *Model) chatsKey(s string) (tea.Cmd, bool) {
 		if cmd, handled := m.readingKey(s); handled {
 			return cmd, true
 		}
+	}
+	if c.unlock != nil {
+		return m.unlockKey(s)
 	}
 	if c.writing {
 		if m.emojiKey(s) {
@@ -932,6 +942,15 @@ func (m *Model) convoPane(w, rows int) []string {
 	}
 	var compose string
 	switch {
+	case c.unlock != nil:
+		hint := th.Paint(th.Dim, false, " enter sign and send · esc back")
+		if c.unlock.busy {
+			hint = th.Paint(th.Yellow, false, " unlocking…")
+		} else if c.unlock.err != "" {
+			hint = th.Paint(th.Red, true, " "+c.unlock.err)
+		}
+		compose = th.Paint(th.Green, true, "✍ passphrase ▸ ") + c.unlock.pass.render(th, w-17-visibleWidth(hint), true)
+		compose = fit(compose, w-visibleWidth(hint)-1) + hint
 	case c.writing:
 		compose = th.Paint(th.Magenta, true, "▸ ") + c.input.render(th, w-3-visibleWidth(counter), false)
 		compose = fit(compose, w-visibleWidth(counter)-1) + " " + counter

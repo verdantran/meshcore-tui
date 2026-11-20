@@ -26,6 +26,8 @@ Checking is always on, since it costs nothing. A signed message shows one of the
 | `⚠ signed with Mallory's key` | Valid, by a key you know under another name |
 | `⚠ bad signature` | The signature doesn't match the message |
 | `signed by an unknown key` | From a key you've never heard advertise |
+| `⚠ radio-only signature` | Signed by Bob's radio itself, though Bob signs with a protected key (version 2): anyone who can reach that radio could have sent it |
+| `⚠ revoked key` | Signed with a version 2 key its holder has revoked |
 | `⚠ unsigned · Bob usually signs` | No signature 30 seconds after the message, from a name that's pinned; without this, an impersonator would simply not sign |
 
 ## Pinning names to keys
@@ -46,3 +48,27 @@ After the message, a 79-byte datagram goes to the same channel:
 The signature covers the tag `MeshCore-Companion signed channel v1`, the channel's hash (the first byte of SHA-256 of its name), the timestamp, and the message as typed, without the `Name: ` the radio puts in front of it. A datagram is checked against every full key the app knows that starts with its 8 bytes.
 
 Which channels you sign on is saved in the config as `sign_channel_ids`; see [Configuration](configuration.md).
+
+
+## Version 2: a protected signing key
+
+Version 1 signs with the radio's own key, so anyone holding the radio, or able to reach it, can sign as you. [Version 2](https://github.com/edleeman17/meshcore-companion/blob/main/SIGNING.md#version-2--a-protected-signing-key) signs with a separate key that is never on the radio. It's kept in a key file, encrypted, and opened with your passphrase for each signed message, then wiped.
+
+To sign with one, make the key in meshcore-companion (Radio → Signing key; it needs a passphrase as well as any passkey) and download the key file. Then set its path in the config:
+
+```toml
+[messages]
+signing_key_file = "/home/you/.config/meshcore-tui/signing-key.json"
+```
+
+Signed messages then ask for the passphrase on the compose line (`✍ passphrase ▸`) before they go. `esc` gives the message back to edit. The first signed message on a channel each day is preceded by the radio vouching for the key, so others can check it.
+
+Checking version 2 needs nothing set up. On the air:
+
+| Datagram | Bytes | Layout |
+|---|---|---|
+| `MC2` | 79 | the same as `MC1`, with the signing key's first 8 bytes; signed over `MeshCore-Companion signed channel v2`, the radio's first 8 key bytes, the channel hash, the timestamp and the text |
+| `MCB` | 103 | `MCB`, the signing key, a timestamp, and the radio's signature: the radio vouching for the key |
+| `MCR` | 103 | `MCR`, the signing key, a timestamp, and the key's own signature: a revocation |
+
+Pin the signing key, not the radio's: `K` on a version 2 message does that. Someone with your radio can bind a key of their own, but everyone who pinned yours then sees `⚠ not Bob's key`. The key file's format, and test vectors every implementation must reproduce, are in meshcore-companion's SIGNING.md.

@@ -56,9 +56,10 @@ type Config struct {
 	Messages struct {
 		DMRetries     int      `toml:"dm_retries"`
 		FloodFallback bool     `toml:"flood_fallback"`
-		KeepDays      int      `toml:"keep_days"`               // delete messages received longer ago than this; 0 keeps them all
-		SignIDs       []string `toml:"sign_channel_ids"`        // channels whose messages you send are signed (SIGNING.md), by ChannelID
-		SignChannels  []string `toml:"sign_channels,omitempty"` // the same by name, from before; moved to SignIDs once the radio's channels are known
+		KeepDays      int      `toml:"keep_days"`                  // delete messages received longer ago than this; 0 keeps them all
+		SignIDs       []string `toml:"sign_channel_ids"`           // channels whose messages you send are signed (SIGNING.md), by ChannelID
+		SignChannels  []string `toml:"sign_channels,omitempty"`    // the same by name, from before; moved to SignIDs once the radio's channels are known
+		SigningKey    string   `toml:"signing_key_file,omitempty"` // a v2 signing key file (SIGNING.md "Version 2"): signed messages use it, unlocked with its passphrase each time
 	} `toml:"messages"`
 	Notifications struct {
 		Events  []string `toml:"events"` // dm, mention

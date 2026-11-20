@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"maps"
@@ -40,6 +41,7 @@ const (
 type pendingSig struct {
 	idx   int
 	d     signing.Datagram
+	v2    bool // an MC2 signature, by a signing key a radio vouched for
 	at    time.Time
 	on    int64     // the message it was put on, if any
 	onSig store.Sig // and what it showed there
@@ -143,6 +145,124 @@ func (m *Model) toggleChannelSigning() {
 type signedSentMsg struct {
 	send    chat.Send
 	signErr error
+	key     []byte // the key the message is signed with: the radio's, or a v2 signing key
+}
+
+// unlocking is the composer asking for the signing key's passphrase. The typed message waits here.
+type unlocking struct {
+	text  string
+	convo store.Convo
+	pass  lineEdit
+	busy  bool
+	err   string
+}
+
+type unlockedMsg struct {
+	priv  ed25519.PrivateKey
+	err   error
+	text  string
+	convo store.Convo
+}
+
+func (m *Model) keyfilePath() string {
+	if m.opt.Config == nil {
+		return ""
+	}
+	return m.opt.Config.Messages.SigningKey
+}
+
+func (m *Model) unlockKey(s string) (tea.Cmd, bool) {
+	u := m.chats.unlock
+	if u.busy {
+		return nil, true
+	}
+	switch s {
+	case "esc":
+		m.chats.input = lineEdit{}
+		m.chats.input.insert(u.text)
+		m.chats.unlock = nil
+	case "enter":
+		u.busy, u.err = true, ""
+		pass, path, text, convo := u.pass.text, m.keyfilePath(), u.text, u.convo
+		u.pass = lineEdit{}
+		return func() tea.Msg {
+			k, err := signing.LoadKeyfile(path)
+			if err != nil {
+				return unlockedMsg{err: err, text: text, convo: convo}
+			}
+			priv, err := k.UnlockPassphrase(pass)
+			return unlockedMsg{priv: priv, err: err, text: text, convo: convo}
+		}, true
+	default:
+		u.pass.key(s)
+	}
+	return nil, true
+}
+
+// unlocked composes and sends the waiting message once the key has opened, or asks again.
+func (m *Model) unlocked(r unlockedMsg) tea.Cmd {
+	u := m.chats.unlock
+	if u == nil { // gave up meanwhile
+		signing.Wipe(r.priv)
+		return nil
+	}
+	if r.err != nil {
+		u.busy, u.err = false, r.err.Error()
+		return nil
+	}
+	m.chats.unlock = nil
+	_, send, err := m.chat.Compose(r.convo, r.text, m.now)
+	if err != nil {
+		signing.Wipe(r.priv)
+		m.fail(err.Error())
+		return nil
+	}
+	m.chats.input, m.chats.scroll, m.chats.signFlip, m.chats.emoji = lineEdit{}, 0, false, nil
+	m.refreshChats()
+	title := m.chat.Title(r.convo)
+	return m.signedSendV2Cmd(send, title, r.priv)
+}
+
+// signedSendV2Cmd sends a channel message signed with an unlocked v2 key, which it wipes after. Before the
+// first signed message on a channel each day, the radio's binding for the key goes out, so listeners can
+// check it.
+func (m *Model) signedSendV2Cmd(s chat.Send, channel string, priv ed25519.PrivateKey) tea.Cmd {
+	signer, _ := m.radio.(radio.Signer)
+	self := m.ready.Self.PubKey
+	pub := [32]byte(priv.Public().(ed25519.PublicKey))
+	if m.chats.bindSent == nil {
+		m.chats.bindSent = map[int]time.Time{}
+	}
+	bind := m.now.Sub(m.chats.bindSent[s.Idx]) > 24*time.Hour
+	if bind {
+		m.chats.bindSent[s.Idx] = m.now
+	}
+	bindTS := uint32(m.now.Unix())
+	if err := m.chat.BindSigKey(store.SigKey{Key: pub, Radio: self, TS: bindTS}); err == nil {
+		m.chats.sigKeys = nil // so our own signatures, and our radio's, read right here too
+	}
+	return func() tea.Msg {
+		defer signing.Wipe(priv)
+		ctx, cancel := context.WithTimeout(context.Background(), sendLimit)
+		defer cancel()
+		if bind {
+			rsig, err := signer.Sign(ctx, signing.BindInput(self, pub, bindTS))
+			if err == nil {
+				err = signer.SendChannelData(ctx, s.Idx, signing.DataType, signing.Binding{Key: pub, TS: bindTS, Sig: rsig}.Bytes())
+			}
+			if err != nil {
+				return sendResultMsg{send: s, err: fmt.Errorf("the radio didn't vouch for the signing key: %w", err)}
+			}
+		}
+		ts, err := signer.SendChannelAt(ctx, s.Idx, s.Text)
+		if err != nil {
+			return sendResultMsg{send: s, err: err}
+		}
+		d := signing.DatagramV2{TS: ts, KeyID: [8]byte(pub[:8])}
+		copy(d.Sig[:], ed25519.Sign(priv, signing.CanonicalV2(self, channel, ts, s.Text)))
+		err = signer.SendChannelData(ctx, s.Idx, signing.DataType, d.Bytes())
+		return signedSentMsg{s, err, pub[:]}
+	}
 }
 
 // signedSendCmd sends a channel message, then its signature: the radio signs the message with its own key.
@@ -159,7 +279,7 @@ func (m *Model) signedSendCmd(s chat.Send, channel string) tea.Cmd {
 		if err == nil {
 			err = signer.SendChannelData(ctx, s.Idx, signing.DataType, signing.Datagram{TS: ts, Sig: sig, KeyID: [8]byte(m.ready.Self.PubKey[:8])}.Bytes())
 		}
-		return signedSentMsg{s, err}
+		return signedSentMsg{s, err, m.ready.Self.PubKey[:]}
 	}
 }
 
@@ -169,7 +289,7 @@ func (m *Model) signedSent(r signedSentMsg) tea.Cmd {
 		m.addLog(m.now, "SENT UNSIGNED  the message went, but its signature didn't: "+radio.Explain(r.signErr), radio.ToneWarn)
 		return cmd
 	}
-	if err := m.chat.SetSig(r.send.ID, store.SigValid, m.ready.Self.PubKey[:]); err != nil {
+	if err := m.chat.SetSig(r.send.ID, store.SigValid, r.key); err != nil {
 		m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
 	}
 	m.chatsChanged(sendConvo(r.send))
@@ -232,7 +352,10 @@ func (m *Model) knownKeys() [][32]byte {
 
 // check verifies a signature over a message with every known key it could be. A valid one is stale when the
 // message is old or the signature has already vouched for another.
-func (m *Model) check(d signing.Datagram, channel string, msg store.Message) (store.Sig, []byte) {
+func (m *Model) check(d signing.Datagram, v2 bool, channel string, msg store.Message) (store.Sig, []byte) {
+	if v2 {
+		return m.checkV2(signing.DatagramV2(d), channel, msg)
+	}
 	tried := false
 	for _, k := range m.knownKeys() {
 		if !d.Matches(k) {
@@ -240,6 +363,9 @@ func (m *Model) check(d signing.Datagram, channel string, msg store.Message) (st
 		}
 		tried = true
 		if d.Verify(k, channel, msg.Text) {
+			if m.hasV2(k) {
+				return store.SigRadioOnly, k[:] // its owner signs with a protected key; this proves only the radio
+			}
 			fresh := sigFresh
 			if _, ok := m.chats.queued[msg.ID]; ok {
 				fresh = sigQueued
@@ -266,6 +392,83 @@ func (m *Model) check(d signing.Datagram, channel string, msg store.Message) (st
 	return store.SigBad, d.KeyID[:]
 }
 
+// sigKeys are the v2 signing keys radios have vouched for, read from the store the first time they're wanted.
+func (m *Model) sigKeys() map[[32]byte]store.SigKey {
+	if m.chats.sigKeys == nil && m.chat != nil {
+		k, err := m.chat.SigKeys()
+		if err != nil {
+			m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
+		}
+		if k == nil {
+			k = map[[32]byte]store.SigKey{}
+		}
+		m.chats.sigKeys = k
+	}
+	return m.chats.sigKeys
+}
+
+// hasV2 reports whether a radio has vouched for a signing key that's still trusted.
+func (m *Model) hasV2(radioKey [32]byte) bool {
+	for _, k := range m.sigKeys() {
+		if k.Radio == radioKey && !k.Revoked {
+			return true
+		}
+	}
+	return false
+}
+
+// checkV2 verifies a v2 signature with the signing key it names and the radio that key is bound to. The key
+// recorded is the signing key, so pinning a name pins that.
+func (m *Model) checkV2(d signing.DatagramV2, channel string, msg store.Message) (store.Sig, []byte) {
+	tried := false
+	for _, k := range m.sigKeys() {
+		if !d.Matches(k.Key) || k.Radio == ([32]byte{}) {
+			continue
+		}
+		tried = true
+		if !d.Verify(k.Key, k.Radio, channel, msg.Text) {
+			continue
+		}
+		if k.Revoked {
+			return store.SigRevoked, k.Key[:]
+		}
+		if u, ok := m.chats.usedSigs[d.Sig]; ok && u.id != msg.ID || msg.RecvAt.Sub(msg.SentAt).Abs() > sigQueued {
+			return store.SigStale, k.Key[:]
+		}
+		return store.SigValid, k.Key[:]
+	}
+	if !tried {
+		return store.SigUnknown, d.KeyID[:]
+	}
+	return store.SigBad, d.KeyID[:]
+}
+
+// onKeyData takes a binding (a radio vouching for a signing key) or a revocation. A binding counts only if it
+// verifies against a radio we know.
+func (m *Model) onKeyData(data []byte) bool {
+	if b, ok := signing.ParseBinding(data); ok {
+		for _, r := range m.knownKeys() {
+			if b.Verify(r) {
+				if err := m.chat.BindSigKey(store.SigKey{Key: b.Key, Radio: r, TS: b.TS}); err != nil {
+					m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
+				}
+				m.chats.sigKeys = nil
+				return true
+			}
+		}
+		return true // from a radio not heard yet: its next advert lets a later copy count
+	}
+	if r, ok := signing.ParseRevocation(data); ok {
+		if err := m.chat.RevokeSigKey(r.Key, r.TS); err != nil {
+			m.addLog(m.now, "CHAT STORE  "+err.Error(), radio.ToneWarn)
+		}
+		m.chats.sigKeys = nil
+		m.addLog(m.now, fmt.Sprintf("SIGNING KEY REVOKED  key %s: its holder says it's no longer to be trusted", radio.KeyHex(r.Key[:4])), radio.ToneWarn)
+		return true
+	}
+	return false
+}
+
 func (m *Model) channelName(idx int) (string, bool) {
 	for _, ch := range m.chat.Channels() {
 		if ch.Idx == idx {
@@ -281,9 +484,17 @@ func (m *Model) onChannelData(e radio.ChannelData) {
 	if e.Type != signing.DataType || m.chat == nil {
 		return
 	}
-	d, ok := signing.Parse(e.Data)
-	if !ok {
+	if m.onKeyData(e.Data) {
 		return
+	}
+	d, ok := signing.Parse(e.Data)
+	v2 := false
+	if !ok {
+		var d2 signing.DatagramV2
+		if d2, ok = signing.ParseV2(e.Data); !ok {
+			return
+		}
+		d, v2 = signing.Datagram(d2), true
 	}
 	live := m.chats.sigs[:0]
 	for _, p := range m.chats.sigs {
@@ -294,7 +505,7 @@ func (m *Model) onChannelData(e radio.ChannelData) {
 	if len(live) >= sigHeld {
 		live = append(live[:0], live[len(live)-sigHeld+1:]...)
 	}
-	m.chats.sigs = append(live, pendingSig{idx: e.Idx, d: d, at: m.now})
+	m.chats.sigs = append(live, pendingSig{idx: e.Idx, d: d, v2: v2, at: m.now})
 	for sig, u := range m.chats.usedSigs {
 		if m.now.Sub(u.at) > sigHold+sigFresh {
 			delete(m.chats.usedSigs, sig)
@@ -304,7 +515,7 @@ func (m *Model) onChannelData(e radio.ChannelData) {
 }
 
 func sigRank(s store.Sig) int {
-	return slices.Index([]store.Sig{store.Unsigned, store.SigBad, store.SigUnknown, store.SigStale, store.SigValid}, s)
+	return slices.Index([]store.Sig{store.Unsigned, store.SigBad, store.SigUnknown, store.SigStale, store.SigRevoked, store.SigRadioOnly, store.SigValid}, s)
 }
 
 // applySig checks a signature against the channel's messages sent at its timestamp, recording the outcome
@@ -326,7 +537,7 @@ func (m *Model) applySig(p *pendingSig) {
 		if msg.Sig == store.SigStale {
 			continue // a replay stays one, even once its signature's been forgotten
 		}
-		s, k := m.check(p.d, name, msg)
+		s, k := m.check(p.d, p.v2, name, msg)
 		failed := s == store.SigBad || s == store.SigUnknown
 		if failed && (p.on != 0 || msg.Sig != store.Unsigned) || sigRank(s) <= sigRank(msg.Sig) || sigRank(s) <= sigRank(sig) {
 			continue
@@ -353,6 +564,10 @@ func (m *Model) applySig(p *pendingSig) {
 		m.addLog(m.now, fmt.Sprintf("SIGNATURE  %s's message in %s has a signature that doesn't match it", best.Sender, name), radio.ToneFail)
 	case sig == store.SigStale:
 		m.addLog(m.now, fmt.Sprintf("SIGNATURE  %s's message in %s is an old one sent again", best.Sender, name), radio.ToneFail)
+	case sig == store.SigRadioOnly:
+		m.addLog(m.now, fmt.Sprintf("SIGNATURE  %s's message in %s was signed by their radio alone, not their signing key", best.Sender, name), radio.ToneFail)
+	case sig == store.SigRevoked:
+		m.addLog(m.now, fmt.Sprintf("SIGNATURE  %s's message in %s was signed with a revoked key", best.Sender, name), radio.ToneFail)
 	case sig == store.SigValid && m.pinnedOther(best.Sender, key):
 		m.addLog(m.now, fmt.Sprintf("SIGNATURE  a message as %s in %s was signed by a different key from theirs", best.Sender, name), radio.ToneFail)
 	}
@@ -575,6 +790,10 @@ func (j judge) verdict(msg store.Message) (string, theme.RGB, bool) {
 		return "signed by an unknown key", th.Yellow, false
 	case store.SigStale:
 		return "⚠ old signature", th.Red, true
+	case store.SigRadioOnly:
+		return "⚠ radio-only signature", th.Red, true
+	case store.SigRevoked:
+		return "⚠ revoked key", th.Red, true
 	}
 	if pinned && msg.Convo.IsChannel() && msg.RecvAt.After(p.At) && j.now.Sub(msg.RecvAt) > sigWait {
 		return "⚠ unsigned · " + msg.Sender + " usually signs", th.Red, true
