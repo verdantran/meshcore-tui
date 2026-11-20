@@ -943,7 +943,7 @@ func (m *Model) convoPane(w, rows int) []string {
 	var compose string
 	switch {
 	case c.unlock != nil:
-		hint := th.Paint(th.Dim, false, " enter signs and sends · esc back")
+		hint := th.Paint(th.Dim, false, " enter sign and send · esc back")
 		if c.unlock.busy {
 			hint = th.Paint(th.Yellow, false, " unlocking…")
 		} else if c.unlock.err != "" {
